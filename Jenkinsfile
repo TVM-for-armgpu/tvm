@@ -56,13 +56,12 @@ ci_arm = "tlcpack/ci-arm:v0.01"
 // tvm libraries
 tvm_runtime = "build/libtvm_runtime.so, build/config.cmake"
 tvm_lib = "build/libtvm.so, " + tvm_runtime
-tvm_verilator = "3rdparty/vta-hw/apps/verilator/libverilator.so"
 // LLVM upstream lib
 tvm_multilib = "build/libtvm.so, " +
                "build/libvta_tsim.so, " +
                "build/libvta_fsim.so, " +
-               tvm_runtime +
-               tvm_verilator
+               "3rdparty/vta-hw/apps/verilator/libverilator.so, " +
+               tvm_runtime
 
 // command to start a docker container
 docker_run = 'docker/bash.sh'
