@@ -233,3 +233,6 @@ conda/pkg
 # nix files
 .envrc
 *.nix
+install/*
+tvm.si4project/*
+build_orig/*

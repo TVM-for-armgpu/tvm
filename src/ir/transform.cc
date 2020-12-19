@@ -27,7 +27,7 @@
 #include <tvm/runtime/container.h>
 #include <tvm/runtime/device_api.h>
 #include <tvm/runtime/registry.h>
-
+#include <tvm/tir/stmt_functor.h>
 #include <stack>
 #include <unordered_set>
 
@@ -381,6 +381,7 @@ IRModule SequentialNode::operator()(IRModule mod, const PassContext& pass_ctx) c
       mod = GetPass(it)(std::move(mod), pass_ctx);
     }
     mod = pass(std::move(mod), pass_ctx);
+    //::tvm::tir::call_py_func(mod, false);
   }
   return mod;
 }

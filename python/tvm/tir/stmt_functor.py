@@ -57,6 +57,17 @@ def post_order_visit(stmt, fvisit):
     """
     return _ffi_api.PostOrderVisit(stmt, fvisit)
 
+def prepost_order_visit(stmt, fvisit,evisit,is_stmt):
+    """Recursively visit the ir in post DFS order node, apply fvisit
+       Each node is guaranteed to be visited only once.
+
+    Parameters
+    ----------
+    fvisit: function
+        The visitor function.
+    """
+    return _ffi_api.PrePostOrderVisit(stmt, fvisit,evisit,is_stmt)
+
 
 def substitute(node, vmap):
     """Substitute the var specified by vmap.

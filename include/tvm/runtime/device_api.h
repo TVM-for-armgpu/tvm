@@ -58,6 +58,12 @@ constexpr int kTempAllocaAlignment = 128;
 /*! \brief Maximum size that can be allocated on stack */
 constexpr int kMaxStackAlloca = 1024;
 
+// data_shape, for two demention data arr
+struct DataShape {
+  size_t x_size;
+  size_t y_size;
+  DataShape(size_t xs, size_t ys) : x_size(xs), y_size(ys) {}
+};
 /*!
  *  \brief TVM Runtime Device API, abstracts the device
  *  specific interface for memory management.
@@ -90,6 +96,12 @@ class TVM_DLL DeviceAPI {
    */
   virtual void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                                DLDataType type_hint) = 0;
+  virtual void* AllocDataSpace123(TVMContext ctx, DataShape nbytes, size_t alignment,
+                               DLDataType type_hint) {
+    std::cout << "api not inplemented\n";
+    abort();
+    return nullptr;
+  }
   /*!
    * \brief Free a data space on device.
    * \param ctx The device context to perform operation.
@@ -112,6 +124,13 @@ class TVM_DLL DeviceAPI {
   virtual void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
                               size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
                               DLDataType type_hint, TVMStreamHandle stream) = 0;
+  virtual void CopyDataFromTo123(const void* from, size_t from_offset, void* to, size_t to_offset,
+                              DataShape data_shape, TVMContext ctx_from, TVMContext ctx_to,
+                              DLDataType type_hint, TVMStreamHandle stream) {
+    std::cout << "api not inplemented\n";
+    abort();
+    return;
+  }
   /*!
    * \brief Create a new stream of execution.
    *

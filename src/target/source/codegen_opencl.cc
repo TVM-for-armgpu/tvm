@@ -37,14 +37,23 @@ CodeGenOpenCL::CodeGenOpenCL() { restrict_keyword_ = "restrict"; }
 
 void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
   CodeGenC::InitFuncState(f);
+  int i = 0;
   for (Var arg : f->params) {
     if (arg.dtype().is_handle()) {
-      alloc_storage_scope_[arg.get()] = "global";
+      if (i++ != 0) {
+        alloc_storage_scope_[arg.get()] = "image";
+      } else {
+        alloc_storage_scope_[arg.get()] = "global";
+      }
     }
   }
 }
 
-void CodeGenOpenCL::PrintFuncPrefix() { stream << "__kernel void"; }
+void CodeGenOpenCL::PrintFuncPrefix() {
+  stream << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
+            "CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;\n";
+  stream << "__kernel void";
+}
 
 std::string CodeGenOpenCL::Finish() {
   // inject extension enable pragma for fp16 and fp64
@@ -210,6 +219,8 @@ void CodeGenOpenCL::PrintStorageScope(const std::string& scope, std::ostream& os
     os << "__global ";
   } else if (scope == "shared") {
     os << "__local ";
+  } else if (scope == "image") {
+    os << "__read_only ";
   }
 }
 
@@ -279,7 +290,87 @@ void CodeGenOpenCL::VisitExpr_(const FloatImmNode* op, std::ostream& os) {  // N
     CodeGenC::VisitExpr_(op, os);
   }
 }
+// Print a reference expression to a buffer.
+std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr index) {
+  std::ostringstream os;
+  std::string vid = GetVarID(buffer);
+  std::string scope;
+  if (alloc_storage_scope_.count(buffer)) {
+    scope = alloc_storage_scope_.at(buffer);
+  }
+  if (scope != "image") {
+    return CodeGenC::GetBufferRef(t, buffer, index);
+  }
+  bool is_vol = IsVolatile(buffer);
+  if (t.lanes() == 1) {
+    if (!HandleTypeMatch(buffer, t) || is_vol) {
+      os << "((";
+      if (is_vol) {
+        os << "volatile ";
+      }
+      // Scope may not be part of type.
+      if (!scope.empty() && IsScopePartOfType()) {
+        PrintStorageScope(scope, os);
+      }
+      PrintType(t, os);
+      // os << "*)" << vid << ')';
+    } else {
+      // os << vid;
+    }
+    // os << "[(";
+    const AddNode* ad = static_cast<const AddNode*>(index.get());
 
+    // PrintExpr(index, os);
+    // os << ")";
+    if (t.bits() == 4 || (t.bits() == 1 && t.is_int())) {
+      os << " / " << (32 / t.bits());
+    }
+    // os << ']';
+    os << "read_imagef(" << vid << ",sampler,"
+       << "(int2)(";
+    PrintExpr(ad->b, os);
+    os << ",";
+    PrintExpr(ad->a, os);
+    os << ")).x";
+  } else {
+    // Buffer declared as vector type.
+    // optimize for case where it is in register,
+    if (HandleTypeMatch(buffer, t) && !is_vol) {
+      // optimize for constant access
+      if (auto* ptr = index.as<tir::IntImmNode>()) {
+        int64_t offset = ptr->value;
+        ICHECK_EQ(offset % t.lanes(), 0) << "Find unaligned vector load to a vector type";
+        os << vid << '[' << (offset / t.lanes()) << ']';
+        return os.str();
+      }
+    }
+    os << "((";
+    if (is_vol) {
+      os << "volatile ";
+    }
+    if (!scope.empty() && IsScopePartOfType()) {
+      PrintStorageScope(scope, os);
+    }
+    PrintType(t, os);
+    os << "*)(";
+    if (!HandleTypeMatch(buffer, t.element_of())) {
+      os << '(';
+      if (!scope.empty() && IsScopePartOfType()) {
+        PrintStorageScope(scope, os);
+      }
+      PrintType(t.element_of(), os);
+      os << "*)";
+    }
+    os << vid << " + (";
+    PrintExpr(index, os);
+    os << ")";
+    if (t.bits() == 4 || (t.bits() == 1 && t.is_int())) {
+      os << " / " << (32 / t.bits());
+    }
+    os << "))[0]";
+  }
+  return os.str();
+}
 runtime::Module BuildOpenCL(IRModule mod, Target target) {
   using tvm::runtime::Registry;
   bool output_ssa = false;

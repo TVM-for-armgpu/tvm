@@ -253,7 +253,7 @@ def numpyasarray(np_data):
     return arr, shape
 
 
-def empty(shape, dtype="float32", ctx=context(1, 0)):
+def empty(shape, dtype="float32", ctx=context(1, 0), opencl_image=0):
     """Create an empty array given shape and device
 
     Parameters
@@ -275,7 +275,7 @@ def empty(shape, dtype="float32", ctx=context(1, 0)):
     shape = c_array(tvm_shape_index_t, shape)
     ndim = ctypes.c_int(len(shape))
     handle = TVMArrayHandle()
-    dtype = DataType(dtype)
+    dtype = DataType(dtype, opencl_image)
     check_call(
         _LIB.TVMArrayAlloc(
             shape,
@@ -283,6 +283,7 @@ def empty(shape, dtype="float32", ctx=context(1, 0)):
             ctypes.c_int(dtype.type_code),
             ctypes.c_int(dtype.bits),
             ctypes.c_int(dtype.lanes),
+            #ctypes.c_int(dtype.lanes+dtype.opencl_image),
             ctx.device_type,
             ctx.device_id,
             ctypes.byref(handle),
@@ -495,7 +496,7 @@ cl = opencl
 mtl = metal
 
 
-def array(arr, ctx=cpu(0)):
+def array(arr, ctx=cpu(0), opencl_image=0):
     """Create an array from source arr.
 
     Parameters
@@ -513,7 +514,7 @@ def array(arr, ctx=cpu(0)):
     """
     if not isinstance(arr, (np.ndarray, NDArray)):
         arr = np.array(arr)
-    return empty(arr.shape, arr.dtype, ctx).copyfrom(arr)
+    return empty(arr.shape, arr.dtype, ctx, opencl_image).copyfrom(arr)
 
 
 # Register back to FFI

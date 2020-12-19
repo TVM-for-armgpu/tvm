@@ -65,16 +65,25 @@ inline size_t GetDataAlignment(const DLTensor& arr) {
 }
 
 void ArrayCopyFromBytes(DLTensor* handle, const void* data, size_t nbytes) {
+  static int c_i = 0;
   TVMContext cpu_ctx;
   cpu_ctx.device_type = kDLCPU;
   cpu_ctx.device_id = 0;
   size_t arr_size = GetDataSize(*handle);
   ICHECK_EQ(arr_size, nbytes) << "ArrayCopyFromBytes: size mismatch";
   ICHECK(IsContiguous(*handle)) << "ArrayCopyFromBytes only support contiguous array for now";
-  DeviceAPI::Get(handle->ctx)
-      ->CopyDataFromTo(data, 0, handle->data, static_cast<size_t>(handle->byte_offset), nbytes,
-                       cpu_ctx, handle->ctx, handle->dtype, nullptr);
-  // Synchronize in case data become unavailable later.
+  //if (handle->dtype.opencl_image == 32768) {
+  if (0){
+    //DeviceAPI::Get(handle->ctx)
+    //    ->CopyDataFromTo(data, 0, handle->data, static_cast<size_t>(handle->byte_offset),
+    //                     DataShape(handle->shape[0], handle->shape[1]), cpu_ctx, handle->ctx,
+    //                     handle->dtype, nullptr);
+  } else {
+    c_i = 0;
+    DeviceAPI::Get(handle->ctx)
+        ->CopyDataFromTo(data, 0, handle->data, static_cast<size_t>(handle->byte_offset), nbytes,
+                         cpu_ctx, handle->ctx, handle->dtype, nullptr);
+  }
   DeviceAPI::Get(handle->ctx)->StreamSync(handle->ctx, nullptr);
 }
 
@@ -191,8 +200,17 @@ NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype, DLContext c
   // setup memory content
   size_t size = GetDataSize(ret.get_mutable()->dl_tensor);
   size_t alignment = GetDataAlignment(ret.get_mutable()->dl_tensor);
-  ret.get_mutable()->dl_tensor.data =
-      DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, size, alignment, ret->dtype);
+  static int c_ii = 0;
+  //if (dtype.opencl_image == 32768) {
+  if (0){
+    //DataShape dshape(shape[0], shape[1]);
+    //ret.get_mutable()->dl_tensor.data =
+    //    DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, dshape, alignment, ret->dtype);
+  } else {
+    c_ii = 0;
+    ret.get_mutable()->dl_tensor.data =
+        DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, size, alignment, ret->dtype);
+  }
   return ret;
 }
 
@@ -270,6 +288,8 @@ int TVMArrayAlloc(const tvm_index_t* shape, int ndim, int dtype_code, int dtype_
   dtype.code = static_cast<uint8_t>(dtype_code);
   dtype.bits = static_cast<uint8_t>(dtype_bits);
   dtype.lanes = static_cast<uint16_t>(dtype_lanes);
+  //dtype.lanes = static_cast<uint16_t>(dtype_lanes & (32768 ^ 0xffffffff));
+  //dtype.opencl_image = static_cast<uint32_t>(dtype_lanes & (32768));
   DLContext ctx;
   ctx.device_type = static_cast<DLDeviceType>(device_type);
   ctx.device_id = device_id;

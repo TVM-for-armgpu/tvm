@@ -94,8 +94,11 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
       if (it != alloc_storage_scope_.end()) {
         PrintStorageScope(it->second, stream);
       }
-
-      PrintType(GetType(v), stream);
+      if (it->second != "image") {
+        PrintType(GetType(v), stream);
+      } else {
+        stream << "image2d_t ";
+      }
       // Register handle data type
       // TODO(tvm-team): consider simply keep type info in the
       // type annotation(via a normalizing rewriting).
@@ -105,7 +108,7 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
         }
       }
 
-      if (no_alias && restrict_keyword_.length() != 0) {
+      if (it->second != "image" && no_alias && restrict_keyword_.length() != 0) {
         stream << ' ' << restrict_keyword_;
       }
     } else {

@@ -21,6 +21,8 @@
  */
 #include <tvm/runtime/registry.h>
 #include <tvm/tir/stmt_functor.h>
+#include <tvm/ir/module.h>
+#include <tvm/tir/function.h>
 
 #include <functional>
 
@@ -378,7 +380,70 @@ Stmt StmtMutator::VisitStmt_(const EvaluateNode* op) {
     return Stmt(n);
   }
 }
+// for debug ast==================
+// Implementations of IRTransform, PostOrderVisit and Substitute
+class IRPrePostOrderVisitor : public StmtExprVisitor {
+ public:
+  explicit IRPrePostOrderVisitor(std::function<void(const ObjectRef&)> f,
+                                 std::function<void(const ObjectRef&)> e)
+      : f_(f), e_(e) {}
 
+  void VisitExpr(const PrimExpr& node) final {
+    if (visited_.count(node.get()) != 0) return;
+    visited_.insert(node.get());
+    f_(node);
+    ExprVisitor::VisitExpr(node);
+    e_(node);
+  }
+
+  void VisitStmt(const Stmt& node) final {
+    if (visited_.count(node.get()) != 0) return;
+    visited_.insert(node.get());
+    StmtVisitor::VisitStmt(node);
+    f_(node);
+  }
+
+ private:
+  std::function<void(const ObjectRef&)> f_, e_;
+  std::unordered_set<const Object*> visited_;
+};
+
+void PrePostOrderVisit(const ObjectRef& node, std::function<void(const ObjectRef&)> fvisit,
+                       std::function<void(const ObjectRef&)> evisit, bool is_stmt) {
+  if (is_stmt) {
+    if (node.as<StmtNode>()) {
+      IRPrePostOrderVisitor visitor(fvisit, evisit);
+      visitor(Downcast<Stmt>(node));
+    } else {
+      IRPrePostOrderVisitor visitor(fvisit, evisit);
+      visitor(Downcast<PrimExpr>(node));
+    }
+    return;
+  }
+  auto mod = Downcast<::tvm::IRModule>(node);
+  for (auto kv : mod->functions) {
+    auto f = Downcast<::tvm::tir::PrimFunc>(kv.second);
+    Stmt nf = f->body;
+    if (nf.as<StmtNode>()) {
+      IRPrePostOrderVisitor visitor(fvisit, evisit);
+      visitor(Downcast<Stmt>(nf));
+    } else {
+      IRPrePostOrderVisitor visitor(fvisit, evisit);
+      visitor(Downcast<PrimExpr>(nf));
+    }
+  }
+}
+void call_py_func(ObjectRef a, bool b) {
+  using tvm::runtime::Registry;
+  const runtime::PackedFunc* f = Registry::Get("dump_ast");
+  if (f == nullptr) {
+    std::cout << "dump_ast not found\n";
+    return;
+  }
+  (*f)(a, b);
+}
+
+// end====
 // Implementations of IRTransform, PostOrderVisit and Substitute
 class IRApplyVisit : public StmtExprVisitor {
  public:
@@ -518,7 +583,11 @@ TVM_REGISTER_GLOBAL("tir.IRTransform").set_body_typed(IRTransform);
 TVM_REGISTER_GLOBAL("tir.PostOrderVisit").set_body_typed([](ObjectRef node, PackedFunc f) {
   tir::PostOrderVisit(node, [f](const ObjectRef& n) { f(n); });
 });
-
+TVM_REGISTER_GLOBAL("tir.PrePostOrderVisit")
+    .set_body_typed([](ObjectRef node, PackedFunc f, PackedFunc e, bool is_stmt) {
+      tir::PrePostOrderVisit(
+          node, [f](const ObjectRef& n) { f(n); }, [e](const ObjectRef& n) { e(n); }, is_stmt);
+    });
 TVM_REGISTER_GLOBAL("tir.Substitute")
     .set_body_typed([](ObjectRef node, Map<Var, PrimExpr> vmap) -> ObjectRef {
       if (node->IsInstance<StmtNode>()) {

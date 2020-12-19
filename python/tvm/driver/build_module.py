@@ -30,6 +30,7 @@ from tvm.target import codegen
 from tvm.te import tensor
 from tvm.te import schedule
 from tvm.target import Target
+from tvm.tir import stmt_functor
 
 
 def get_binds(args, compact=False, binds=None):
@@ -58,14 +59,19 @@ def get_binds(args, compact=False, binds=None):
     """
     binds = {} if binds is None else binds.copy()
     arg_list = []
-    for x in args:
+    for i,x in enumerate(args):
         if isinstance(x, tensor.Tensor):
             any_dim = any(isinstance(i, tvm.tir.Var) for i in x.shape)
             buffer_type = "auto_broadcast" if any_dim and not compact else ""
             if x not in binds:
-                buf = tvm.tir.decl_buffer(
-                    x.shape, dtype=x.dtype, name=x.name, buffer_type=buffer_type
-                )
+                if i == len(args)-1:
+                    buf = tvm.tir.decl_buffer(
+                        x.shape, dtype=x.dtype, name=x.name, buffer_type=buffer_type
+                    )
+                else:
+                    buf = tvm.tir.decl_buffer(
+                        x.shape, dtype=x.dtype, name=x.name, buffer_type=buffer_type,scope="image"
+                    )
                 binds[x] = buf
                 arg_list.append(buf)
             else:
@@ -118,7 +124,39 @@ def form_irmodule(sch, args, name, binds):
         func = func.with_attr("tir.noalias", True)
     return tvm.IRModule({name: func})
 
+@tvm.register_func("dump_ast")
+def dump_ast(mod,is_stmt=False):
+    stack = []
+    ast_node = []
+    ast_edge = []
+    count = [0]
 
+    def pre_func(stmt):
+        node_idx = count[0]
+        count[0] += 1
+
+        ast_node.append([node_idx, stmt])
+        if len(stack):
+            ast_edge.append([stack[-1], node_idx])
+
+        stack.append(node_idx)
+    def post_func(stmt):
+        del stack[-1]
+
+    stmt_functor.prepost_order_visit(mod, pre_func, post_func,is_stmt)
+
+    with open("graph.txt", "w") as f:
+        f.write("digraph {\n")
+        f.write("    node [shape=matrix]\n")
+        for node in ast_node:
+            ast_type = type(node[1])
+            ast_str = str(node[1]).replace("\n", "\\l").replace("\\n", "\\l").replace('"','\\"')
+            f.write("    node%d" % (node[0]))
+            f.write("[label=\"%s\n%s\"]" % (ast_type, ast_str))
+            f.write(";\n")
+        for edge in ast_edge:
+            f.write("    node%d -> node%d;\n" % (edge[0], edge[1]))
+        f.write("}\n")
 def lower(sch, args, name="main", binds=None, simple_mode=False):
     """Lowering step before build into target.
 

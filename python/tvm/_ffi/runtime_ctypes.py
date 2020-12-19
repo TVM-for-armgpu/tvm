@@ -65,6 +65,8 @@ class DataType(ctypes.Structure):
     """TVM datatype structure"""
 
     _fields_ = [("type_code", ctypes.c_uint8), ("bits", ctypes.c_uint8), ("lanes", ctypes.c_uint16)]
+    #_fields_ = [("type_code", ctypes.c_uint8), ("bits", ctypes.c_uint8), ("lanes", ctypes.c_uint16), ("opencl_image", ctypes.c_uint32)]
+
     CODE2STR = {
         DataTypeCode.INT: "int",
         DataTypeCode.UINT: "uint",
@@ -73,8 +75,9 @@ class DataType(ctypes.Structure):
         DataTypeCode.BFLOAT: "bfloat",
     }
 
-    def __init__(self, type_str):
+    def __init__(self, type_str, opencl_image=0):
         super(DataType, self).__init__()
+        #self.opencl_image = opencl_image
         if isinstance(type_str, np.dtype):
             type_str = str(type_str)
 

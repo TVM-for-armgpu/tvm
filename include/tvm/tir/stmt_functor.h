@@ -37,6 +37,10 @@
 
 namespace tvm {
 namespace tir {
+extern "C" {
+typedef void (*PyCFunc)(ObjectRef, bool);
+void call_py_func(ObjectRef a, bool b);
+}
 /*!
  * \brief Same as ExprFunctor except it is applied on statements
  * \tparam FType The function signature.

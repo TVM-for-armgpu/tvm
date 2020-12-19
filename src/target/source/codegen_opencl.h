@@ -57,7 +57,7 @@ class CodeGenOpenCL final : public CodeGenC {
   void VisitExpr_(const CallNode* op, std::ostream& os) final;       // NOLINT(*)
   void VisitExpr_(const BroadcastNode* op, std::ostream& os) final;  // NOLINT(*)
   void VisitExpr_(const FloatImmNode* op, std::ostream& os) final;   // NOLINT(*)
-
+  std::string GetBufferRef(DataType t, const VarNode* buffer, PrimExpr index) final;
  private:
   // whether enable fp16 and fp64 extension
   bool enable_fp16_{false};
