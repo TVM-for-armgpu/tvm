@@ -60,7 +60,7 @@ void StorageObj::Deleter(Object* obj) {
 
 inline void VerifyDataType(DLDataType dtype) {
   ICHECK_GE(dtype.lanes, 1);
-  if (dtype.code == kDLFloat) {
+  if (dtype.code == kDLFloat || dtype.code == kDLCLImgFloat) {
     ICHECK_EQ(dtype.bits % 8, 0);
   } else {
     // allow uint1 as a special flag for bool.

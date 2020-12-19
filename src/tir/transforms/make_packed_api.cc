@@ -146,7 +146,8 @@ PrimFunc MakePackedAPI(PrimFunc&& func, int num_unpacked_args) {
         ICHECK(t.is_float());
         std::ostringstream msg;
         msg << name_hint << ": Expect arg[" << i << "] to be float";
-        seq_check.emplace_back(AssertStmt(tcode == kDLFloat, tvm::tir::StringImm(msg.str()), nop));
+        seq_check.emplace_back(
+            AssertStmt(tcode == kDLCLImgFloat||tcode == kDLFloat, tvm::tir::StringImm(msg.str()), nop));
       }
     } else {
       args.push_back(v_arg);

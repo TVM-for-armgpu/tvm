@@ -125,7 +125,7 @@ inline ArgConvertCode GetArgConvertCode(DLDataType t) {
     if (t.bits == 32U) return INT64_TO_INT32;
   } else if (t.code == kDLUInt) {
     if (t.bits == 32U) return INT64_TO_UINT32;
-  } else if (t.code == kDLFloat) {
+  } else if (t.code == kDLFloat || t.code == kDLCLImgFloat) {
     if (t.bits == 64U) return FLOAT64_TO_FLOAT64;
     if (t.bits == 32U) return FLOAT64_TO_FLOAT32;
   } else if (t.code == kTVMOpaqueHandle) {

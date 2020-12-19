@@ -118,32 +118,15 @@ void OpenCLWorkspace::GetAttr(TVMContext ctx, DeviceAttrKind kind, TVMRetValue* 
 
 void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignment,
                                       DLDataType type_hint) {
-  static int c_i = 0;
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
   cl_mem mptr=0;
-  if (c_i++ == 2) {
-    c_i = 0;
     mptr = clCreateBuffer(this->context, CL_MEM_READ_WRITE, size, nullptr, &err_code);
-  } else {
-    cl_image_format fmt = {CL_R, CL_FLOAT};
-    cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
-                          1024,
-                          1024,
-                          0,
-                          0,  // depth, array size (unused)
-                          0,
-                          0,
-                          0,
-                          0,
-                          0};
-    mptr = clCreateImage(this->context, CL_MEM_READ_ONLY, &fmt, &desc, NULL, &err_code);
-  }
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }
-/*
+
 void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape dsize, size_t alignment,
                                       DLDataType type_hint) {
   this->Init();
@@ -163,7 +146,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape dsize, size_t al
   cl_mem mptr = clCreateImage(this->context, CL_MEM_READ_ONLY, &fmt, &desc, NULL, &err_code);
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
-}*/
+}
 void OpenCLWorkspace::FreeDataSpace(TVMContext ctx, void* ptr) {
   // We have to make sure that the memory object is not in the command queue
   // for some OpenCL platforms.
@@ -177,10 +160,7 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                      size_t to_offset, size_t size, TVMContext ctx_from,
                                      TVMContext ctx_to, DLDataType type_hint,
                                      TVMStreamHandle stream) {
-  static int c_i1 = 0, c_i2 = 0;
   this->Init();
-  size_t origin[3] = {0, 0, 0};
-  size_t region[3] = {1024, 1024, 1};
   ICHECK(stream == nullptr);
   if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {
     OPENCL_CALL(clEnqueueCopyBuffer(this->GetQueue(ctx_to),
@@ -188,75 +168,59 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                     static_cast<cl_mem>(to), from_offset, to_offset, size, 0,
                                     nullptr, nullptr));
   } else if (IsOpenCLDevice(ctx_from) && ctx_to.device_type == kDLCPU) {
-    if (1) {
-    
     OPENCL_CALL(clEnqueueReadBuffer(this->GetQueue(ctx_from),
                                     static_cast<cl_mem>((void*)from),  // NOLINT(*)
                                     CL_FALSE, from_offset, size, static_cast<char*>(to) + to_offset,
                                     0, nullptr, nullptr));
-    } else {
-
-      OPENCL_CALL(clEnqueueReadImage(this->GetQueue(ctx_from),
-                                     static_cast<cl_mem>((void*)from),  // NOLINT(*)
-                                     CL_FALSE, origin, region, 0, 0,
-                                     static_cast<char*>(to) + to_offset, 0, nullptr, nullptr));
-    }
     OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
   } else if (ctx_from.device_type == kDLCPU && IsOpenCLDevice(ctx_to)) {
-    if (c_i2++ == 2) {
-      OPENCL_CALL(clEnqueueWriteBuffer(
-          this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE, to_offset, size,
-          static_cast<const char*>(from) + from_offset, 0, nullptr, nullptr));
-    } else {
-      OPENCL_CALL(clEnqueueWriteImage(
-          this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE, origin, region, 0, 0,
-          static_cast<const char*>(from) + from_offset, 0, nullptr, nullptr));
-
-    }
+    OPENCL_CALL(clEnqueueWriteBuffer(
+        this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE, to_offset, size,
+        static_cast<const char*>(from) + from_offset, 0, nullptr, nullptr));
     OPENCL_CALL(clFinish(this->GetQueue(ctx_to)));
   } else {
     LOG(FATAL) << "Expect copy from/to OpenCL or between OpenCL";
   }
 }
 
-//void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void* to,
-//                                     size_t to_offset, DataShape dsize, TVMContext ctx_from,
-//                                     TVMContext ctx_to, DLDataType type_hint,
-//                                     TVMStreamHandle stream) {
-//  this->Init();
-//  size_t size = dsize.x_size * dsize.y_size;
-//    size_t origin[3] = {
-//        0,
-//        0,
-//    };
-//    size_t region[3] = {dsize.x_size, dsize.y_size, 1};
-//  ICHECK(stream == nullptr);
-//  if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {
-//    OPENCL_CALL(clEnqueueCopyBuffer(this->GetQueue(ctx_to),
-//                                    static_cast<cl_mem>((void*)from),  // NOLINT(*)
-//                                    static_cast<cl_mem>(to), from_offset, to_offset, size, 0,
-//                                    nullptr, nullptr));
-//  } else if (IsOpenCLDevice(ctx_from) && ctx_to.device_type == kDLCPU) {
-//    /* Copy the input data to the input image */
+void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void* to,
+                                     size_t to_offset, DataShape dsize, TVMContext ctx_from,
+                                     TVMContext ctx_to, DLDataType type_hint,
+                                     TVMStreamHandle stream) {
+  this->Init();
+  size_t size = dsize.x_size * dsize.y_size;
+    size_t origin[3] = {
+        0,
+        0,
+    };
+    size_t region[3] = {dsize.x_size, dsize.y_size, 1};
+  ICHECK(stream == nullptr);
+  if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {
+    OPENCL_CALL(clEnqueueCopyBuffer(this->GetQueue(ctx_to),
+                                    static_cast<cl_mem>((void*)from),  // NOLINT(*)
+                                    static_cast<cl_mem>(to), from_offset, to_offset, size, 0,
+                                    nullptr, nullptr));
+  } else if (IsOpenCLDevice(ctx_from) && ctx_to.device_type == kDLCPU) {
+    /* Copy the input data to the input image */
 
-//    OPENCL_CALL(clEnqueueReadImage(this->GetQueue(ctx_from),
-//                                   static_cast<cl_mem>((void*)from),  // NOLINT(*)
-//                                   CL_FALSE, origin, region, 0, 0,
-//                                   static_cast<char*>(to) + to_offset, 0, nullptr, nullptr));
-//    OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
-//  } else if (ctx_from.device_type == kDLCPU && IsOpenCLDevice(ctx_to)) {
-//    /* Copy the input data to the input image */
-//    CHECK_LE(dsize.x_size, CL_DEVICE_IMAGE2D_MAX_WIDTH);
-//    CHECK_LE(dsize.y_size, CL_DEVICE_IMAGE2D_MAX_HEIGHT);
-//    OPENCL_CALL(clEnqueueWriteImage(
-//        this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE, origin, region, 0, 0,
-//        static_cast<const char*>(from) + from_offset, 0, nullptr, nullptr));
-//
-//    OPENCL_CALL(clFinish(this->GetQueue(ctx_to)));
-//  } else {
-//    LOG(FATAL) << "Expect copy from/to OpenCL or between OpenCL";
-//  }
-//}
+    OPENCL_CALL(clEnqueueReadImage(this->GetQueue(ctx_from),
+                                   static_cast<cl_mem>((void*)from),  // NOLINT(*)
+                                   CL_FALSE, origin, region, 0, 0,
+                                   static_cast<char*>(to) + to_offset, 0, nullptr, nullptr));
+    OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
+  } else if (ctx_from.device_type == kDLCPU && IsOpenCLDevice(ctx_to)) {
+    /* Copy the input data to the input image */
+    CHECK_LE(dsize.x_size, CL_DEVICE_IMAGE2D_MAX_WIDTH);
+    CHECK_LE(dsize.y_size, CL_DEVICE_IMAGE2D_MAX_HEIGHT);
+    OPENCL_CALL(clEnqueueWriteImage(
+        this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE, origin, region, 0, 0,
+        static_cast<const char*>(from) + from_offset, 0, nullptr, nullptr));
+
+    OPENCL_CALL(clFinish(this->GetQueue(ctx_to)));
+  } else {
+    LOG(FATAL) << "Expect copy from/to OpenCL or between OpenCL";
+  }
+}
 
 void OpenCLWorkspace::StreamSync(TVMContext ctx, TVMStreamHandle stream) {
   ICHECK(stream == nullptr);

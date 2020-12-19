@@ -211,7 +211,8 @@ void NDArrayDataToC(::tvm::runtime::NDArray arr, int indent_chars, std::ostream&
       }
       break;
 
-    case runtime::DataType::TypeCode::kFloat: {
+    case runtime::DataType::TypeCode::kFloat: 
+    case runtime::DataType::TypeCode::kCLImgFloat: {
       os.fill(' ');
       os.setf(std::ios::left, std::ios::adjustfield);
       if (arr_type.bits() == 16) {

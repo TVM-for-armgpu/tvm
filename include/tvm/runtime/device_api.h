@@ -96,7 +96,7 @@ class TVM_DLL DeviceAPI {
    */
   virtual void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                                DLDataType type_hint) = 0;
-  virtual void* AllocDataSpace123(TVMContext ctx, DataShape nbytes, size_t alignment,
+  virtual void* AllocDataSpace(TVMContext ctx, DataShape nbytes, size_t alignment,
                                DLDataType type_hint) {
     std::cout << "api not inplemented\n";
     abort();
@@ -124,7 +124,7 @@ class TVM_DLL DeviceAPI {
   virtual void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
                               size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
                               DLDataType type_hint, TVMStreamHandle stream) = 0;
-  virtual void CopyDataFromTo123(const void* from, size_t from_offset, void* to, size_t to_offset,
+  virtual void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
                               DataShape data_shape, TVMContext ctx_from, TVMContext ctx_to,
                               DLDataType type_hint, TVMStreamHandle stream) {
     std::cout << "api not inplemented\n";

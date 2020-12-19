@@ -126,6 +126,7 @@ typedef enum {
   kTVMNNVMLast = 20U,
   // The following section of code is used for non-reserved types.
   kTVMExtReserveEnd = 64U,
+  kTVMArgCLImgFloat = kDLCLImgFloat,
   kTVMExtEnd = 128U,
 } TVMArgTypeCode;
 

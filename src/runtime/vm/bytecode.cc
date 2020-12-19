@@ -501,6 +501,8 @@ void DLDatatypePrint(std::ostream& os, const DLDataType& dtype) {
       break;
     case kDLFloat:
       os << "float";
+    case kDLCLImgFloat:
+      os << "climgfloat";
       break;
   }
 

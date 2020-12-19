@@ -369,6 +369,9 @@ class TVMPODValue_ {
     if (type_code_ == kDLInt) {
       return static_cast<double>(value_.v_int64);
     }
+    if (type_code_ == kDLCLImgFloat) {
+      return static_cast<double>(value_.v_int64);
+    }
     TVM_CHECK_TYPE_CODE(type_code_, kDLFloat);
     return value_.v_float64;
   }
@@ -1000,6 +1003,8 @@ inline const char* ArgTypeCode2Str(int type_code) {
       return "uint";
     case kDLFloat:
       return "float";
+    case kDLCLImgFloat:
+      return "climgfloat";
     case kTVMStr:
       return "str";
     case kTVMBytes:

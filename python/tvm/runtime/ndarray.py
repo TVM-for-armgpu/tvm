@@ -147,7 +147,10 @@ class NDArray(NDArrayBase):
                     source_array.shape, shape
                 )
             )
-        source_array = np.ascontiguousarray(source_array, dtype=dtype)
+        if dtype == "climgfloat32":
+            source_array = np.ascontiguousarray(source_array, dtype="float32")
+        else:
+            source_array = np.ascontiguousarray(source_array, dtype=dtype)
         assert source_array.flags["C_CONTIGUOUS"]
         data = source_array.ctypes.data_as(ctypes.c_void_p)
         nbytes = ctypes.c_size_t(source_array.size * source_array.dtype.itemsize)
@@ -283,7 +286,6 @@ def empty(shape, dtype="float32", ctx=context(1, 0), opencl_image=0):
             ctypes.c_int(dtype.type_code),
             ctypes.c_int(dtype.bits),
             ctypes.c_int(dtype.lanes),
-            #ctypes.c_int(dtype.lanes+dtype.opencl_image),
             ctx.device_type,
             ctx.device_id,
             ctypes.byref(handle),
@@ -514,7 +516,10 @@ def array(arr, ctx=cpu(0), opencl_image=0):
     """
     if not isinstance(arr, (np.ndarray, NDArray)):
         arr = np.array(arr)
-    return empty(arr.shape, arr.dtype, ctx, opencl_image).copyfrom(arr)
+    if opencl_image:
+        return empty(arr.shape, "climgfloat32", ctx, opencl_image).copyfrom(arr)
+    else:
+        return empty(arr.shape, arr.dtype, ctx, opencl_image).copyfrom(arr)
 
 
 # Register back to FFI

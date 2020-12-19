@@ -59,25 +59,25 @@ class DataTypeCode(object):
     FLOAT = 2
     HANDLE = 3
     BFLOAT = 4
+    CLIMGFLOAT = 127
 
 
 class DataType(ctypes.Structure):
     """TVM datatype structure"""
 
     _fields_ = [("type_code", ctypes.c_uint8), ("bits", ctypes.c_uint8), ("lanes", ctypes.c_uint16)]
-    #_fields_ = [("type_code", ctypes.c_uint8), ("bits", ctypes.c_uint8), ("lanes", ctypes.c_uint16), ("opencl_image", ctypes.c_uint32)]
 
     CODE2STR = {
         DataTypeCode.INT: "int",
         DataTypeCode.UINT: "uint",
         DataTypeCode.FLOAT: "float",
+        DataTypeCode.CLIMGFLOAT: "climgfloat",
         DataTypeCode.HANDLE: "handle",
         DataTypeCode.BFLOAT: "bfloat",
     }
 
     def __init__(self, type_str, opencl_image=0):
         super(DataType, self).__init__()
-        #self.opencl_image = opencl_image
         if isinstance(type_str, np.dtype):
             type_str = str(type_str)
 
@@ -98,6 +98,9 @@ class DataType(ctypes.Structure):
         elif head.startswith("uint"):
             self.type_code = DataTypeCode.UINT
             head = head[4:]
+        elif head.startswith("climgfloat"):
+            self.type_code = DataTypeCode.CLIMGFLOAT
+            head = head[10:]
         elif head.startswith("float"):
             self.type_code = DataTypeCode.FLOAT
             head = head[5:]

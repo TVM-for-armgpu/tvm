@@ -70,7 +70,7 @@ def get_binds(args, compact=False, binds=None):
                     )
                 else:
                     buf = tvm.tir.decl_buffer(
-                        x.shape, dtype=x.dtype, name=x.name, buffer_type=buffer_type,scope="image"
+                        x.shape, dtype=x.dtype, name=x.name, buffer_type=buffer_type
                     )
                 binds[x] = buf
                 arg_list.append(buf)

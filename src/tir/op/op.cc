@@ -869,7 +869,7 @@ TIR_REGISTER_PURE_BINARY_OP("tir.ldexp");
 TVM_REGISTER_GLOBAL("node._const").set_body([](TVMArgs args, TVMRetValue* ret) {
   if (args[0].type_code() == kDLInt) {
     *ret = tir::make_const(args[1], args[0].operator int64_t(), args[2]);
-  } else if (args[0].type_code() == kDLFloat) {
+  } else if (args[0].type_code() == kDLFloat || args[0].type_code() == kDLCLImgFloat) {
     *ret = tir::make_const(args[1], args[0].operator double(), args[2]);
   } else {
     LOG(FATAL) << "only accept int or float";  // FIXME

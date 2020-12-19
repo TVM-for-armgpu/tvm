@@ -251,7 +251,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
       if (index.size() > 0) {
         PrimExpr offset = index[0];
         for (size_t i = 1; i < index.size(); ++i) {
-          if (n->scope == "image") {
+          if (n->dtype.is_climgfloat()) {
             offset = MergeMulMod(&ana, offset + index[i]);
           } else {
             offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);

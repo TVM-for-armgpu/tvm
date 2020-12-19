@@ -35,12 +35,26 @@ namespace codegen {
 
 CodeGenOpenCL::CodeGenOpenCL() { restrict_keyword_ = "restrict"; }
 
+static int GetValueType(const Type& type) {  // NOLINT(*)
+  if (auto* ptr = type.as<PrimTypeNode>()) {
+    return ptr->dtype.code();
+  } else if (auto* ptr = type.as<PointerTypeNode>()) {
+    return GetValueType(ptr->element_type);
+  } else if (IsVoidType(type)) {
+    return NULL;
+  } else {
+    LOG(FATAL) << "Type " << type << " does not have a corresponding C Type";
+    return 0;
+  }
+}
+
 void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
   CodeGenC::InitFuncState(f);
   int i = 0;
   for (Var arg : f->params) {
     if (arg.dtype().is_handle()) {
-      if (i++ != 0) {
+      int vcode = GetValueType(GetType(arg));
+      if (kDLCLImgFloat == vcode) {
         alloc_storage_scope_[arg.get()] = "image";
       } else {
         alloc_storage_scope_[arg.get()] = "global";
@@ -111,7 +125,7 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
     return;
   }
   bool fail = false;
-  if (t.is_float()) {
+  if (t.is_float() || t.code() == 150) {
     switch (t.bits()) {
       case 16:
         os << "half";

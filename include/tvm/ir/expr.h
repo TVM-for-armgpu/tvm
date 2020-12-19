@@ -504,7 +504,7 @@ struct PackedFuncValueConverter<PrimExpr> {
     if (val.type_code() == kDLInt) {
       return PrimExpr(val.operator int());
     }
-    if (val.type_code() == kDLFloat) {
+    if (val.type_code() == kDLFloat || val.type_code() == kDLCLImgFloat) {
       return PrimExpr(static_cast<float>(val.operator double()));
     }
 
