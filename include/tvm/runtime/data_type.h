@@ -132,11 +132,14 @@ class DataType {
    * \return The comparison result.
    */
   bool operator==(const DataType& other) const {
-    if ((data_.code == kCLImgFloat || data_.code == kFloat) &&
-        (other.data_.code == kCLImgFloat || other.data_.code == kFloat)) {
-      return true;
+    bool cv = false;
+    if ((data_.code == kCLImgFloat && other.data_.code == kFloat) ||
+        (data_.code == kFloat && other.data_.code == kCLImgFloat)||
+        data_.code == other.data_.code) {
+      cv = true;
     }
-    return data_.code == other.data_.code && data_.bits == other.data_.bits &&
+
+    return cv && data_.bits == other.data_.bits &&
            data_.lanes == other.data_.lanes;
   }
   /*!

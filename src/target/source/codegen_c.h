@@ -275,7 +275,7 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   // binding of let variables. Enables duplicate var defs that map to same value
   std::unordered_map<Var, const LetNode*, ObjectPtrHash, ObjectPtrEqual> let_binding_;
 };
-
+int GetValueType(const Type& type);
 }  // namespace codegen
 }  // namespace tvm
 #endif  // TVM_TARGET_SOURCE_CODEGEN_C_H_

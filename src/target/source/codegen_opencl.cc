@@ -35,19 +35,6 @@ namespace codegen {
 
 CodeGenOpenCL::CodeGenOpenCL() { restrict_keyword_ = "restrict"; }
 
-static int GetValueType(const Type& type) {  // NOLINT(*)
-  if (auto* ptr = type.as<PrimTypeNode>()) {
-    return ptr->dtype.code();
-  } else if (auto* ptr = type.as<PointerTypeNode>()) {
-    return GetValueType(ptr->element_type);
-  } else if (IsVoidType(type)) {
-    return NULL;
-  } else {
-    LOG(FATAL) << "Type " << type << " does not have a corresponding C Type";
-    return 0;
-  }
-}
-
 void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
   CodeGenC::InitFuncState(f);
   int i = 0;
