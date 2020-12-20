@@ -71,6 +71,19 @@ void CodeGenC::ReserveKeywordsAsUnique() {
   GetUniqueName("return");
 }
 
+int GetValueType(const Type& type) {  // NOLINT(*)
+  if (auto* ptr = type.as<PrimTypeNode>()) {
+    return ptr->dtype.code();
+  } else if (auto* ptr = type.as<PointerTypeNode>()) {
+    return GetValueType(ptr->element_type);
+  } else if (IsVoidType(type)) {
+    return NULL;
+  } else {
+    LOG(FATAL) << "Type " << type << " does not have a corresponding C Type";
+    return 0;
+  }
+}
+
 void CodeGenC::AddFunction(const PrimFunc& f) {
   // clear previous generated state.
   this->InitFuncState(f);
@@ -94,11 +107,8 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
       if (it != alloc_storage_scope_.end()) {
         PrintStorageScope(it->second, stream);
       }
-      if (it->second != "image") {
-        PrintType(GetType(v), stream);
-      } else {
-        stream << "image2d_t ";
-      }
+      
+       PrintType(GetType(v), stream);
       // Register handle data type
       // TODO(tvm-team): consider simply keep type info in the
       // type annotation(via a normalizing rewriting).
@@ -107,8 +117,8 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
           RegisterHandleType(v.get(), prim->dtype);
         }
       }
-
-      if (it->second != "image" && no_alias && restrict_keyword_.length() != 0) {
+      int vt_code = GetValueType(GetType(v));
+      if ((kDLCLImgFloat != vt_code) && no_alias && restrict_keyword_.length() != 0) {
         stream << ' ' << restrict_keyword_;
       }
     } else {
@@ -362,6 +372,10 @@ void CodeGenC::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
     return;
   }
   if (t.is_float()) {
+    if (t.is_climgfloat()) {
+      os << "image2d_t";
+      return;
+    }
     if (t.bits() == 32) {
       os << "float";
       return;
