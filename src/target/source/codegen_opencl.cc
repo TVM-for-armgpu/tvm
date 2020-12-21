@@ -112,7 +112,11 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
     return;
   }
   bool fail = false;
-  if (t.is_float() || t.code() == 150) {
+  if (in_para_stm && t.is_climgfloat()) {
+    os << "image2d_t";
+    return;
+  }
+  if (t.is_float()) {
     switch (t.bits()) {
       case 16:
         os << "half";
@@ -319,7 +323,7 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
       // os << vid;
     }
     // os << "[(";
-    const AddNode* ad = static_cast<const AddNode*>(index.get());
+    //const AddNode* ad = static_cast<const AddNode*>(index.get());
 
     // PrintExpr(index, os);
     // os << ")";
@@ -329,10 +333,10 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     // os << ']';
     os << "read_imagef(" << vid << ",sampler,"
        << "(int2)(";
-    PrintExpr(ad->b, os);
-    os << ",";
-    PrintExpr(ad->a, os);
-    os << ")).x";
+    std::ostringstream indexexp_os;
+    PrintExpr(index, indexexp_os);
+    os << indexexp_os.str() << "%(get_image_dim(" << vid << ").x),";
+    os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))).x";
   } else {
     // Buffer declared as vector type.
     // optimize for case where it is in register,
@@ -372,6 +376,7 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
   }
   return os.str();
 }
+
 runtime::Module BuildOpenCL(IRModule mod, Target target) {
   using tvm::runtime::Registry;
   bool output_ssa = false;

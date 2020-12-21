@@ -372,10 +372,6 @@ void CodeGenC::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
     return;
   }
   if (t.is_float()) {
-    if (t.is_climgfloat()) {
-      os << "image2d_t";
-      return;
-    }
     if (t.bits() == 32) {
       os << "float";
       return;
@@ -415,7 +411,13 @@ void CodeGenC::PrintType(const Type& type, std::ostream& os) {  // NOLINT(*)
   if (auto* ptr = type.as<PrimTypeNode>()) {
     return PrintType(ptr->dtype, os);
   } else if (auto* ptr = type.as<PointerTypeNode>()) {
-    PrintType(ptr->element_type, os);
+    std::ostringstream ss;
+    PrintType(ptr->element_type, ss);
+    std::string printstr = ss.str();
+    os << printstr;
+    if (printstr == "image2d_t") {
+      return;
+    }
     os << '*';
   } else if (IsVoidType(type)) {
     os << "void";
