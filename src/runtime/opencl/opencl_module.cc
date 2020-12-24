@@ -71,6 +71,10 @@ class OpenCLWrappedFunc {
     for (cl_uint i = 0; i < work_dim; ++i) {
       wl.work_size[i] *= wl.work_size[i + 3];
     }
+    for (int i = 0; i < 6; ++i) {
+      std::cout << wl.work_size[i]<<",";
+    }
+    std::cout << "\nwork_dim=" << work_dim<<"\n";
     // launch kernel
     OPENCL_CALL(clEnqueueNDRangeKernel(queue, kernel, work_dim, nullptr, wl.work_size,
                                        wl.work_size + 3, 0, nullptr, nullptr));

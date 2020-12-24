@@ -74,7 +74,7 @@ void ArrayCopyFromBytes(DLTensor* handle, const void* data, size_t nbytes) {
   if (handle->dtype.code == kDLCLImgFloat && handle->ctx.device_type == kDLOpenCL) {
     DeviceAPI::Get(handle->ctx)
         ->CopyDataFromTo(data, 0, handle->data, static_cast<size_t>(handle->byte_offset),
-                         DataShape(handle->shape[0], handle->shape[1]), cpu_ctx, handle->ctx,
+                         DataShape(handle->shape, handle->ndim), cpu_ctx, handle->ctx,
                          handle->dtype, nullptr);
   } else {
     DeviceAPI::Get(handle->ctx)
@@ -199,7 +199,7 @@ NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype, DLContext c
   size_t alignment = GetDataAlignment(ret.get_mutable()->dl_tensor);
   static int c_ii = 0;
   if (dtype.code == kDLCLImgFloat && ctx.device_type == kDLOpenCL) {
-    DataShape dshape(shape[0], shape[1]);
+    DataShape dshape(shape);
     ret.get_mutable()->dl_tensor.data =
         DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, dshape, alignment, ret->dtype);
   } else {

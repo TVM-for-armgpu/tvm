@@ -133,9 +133,14 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape dsize, size_t al
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
   cl_image_format fmt = {CL_R, CL_FLOAT};
+  size_t width = dsize.shape[0];
+  size_t height = dsize.shape[1];
+  for (size_t i = 2; i < dsize.shape.size();++i) {
+    width *= dsize.shape[i];
+  }
   cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
-                        dsize.y_size,
-                        dsize.x_size,
+                        height,
+                        width,
                         0,
                         0,  // depth, array size (unused)
                         0,
@@ -143,7 +148,8 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape dsize, size_t al
                         0,
                         0,
                         0};
-  cl_mem mptr = clCreateImage(this->context, CL_MEM_READ_ONLY, &fmt, &desc, NULL, &err_code);
+  cl_mem_flags mf = CL_MEM_READ_ONLY;
+  cl_mem mptr = clCreateImage(this->context, mf, &fmt, &desc, NULL, &err_code);
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }
@@ -188,12 +194,17 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                      TVMContext ctx_to, DLDataType type_hint,
                                      TVMStreamHandle stream) {
   this->Init();
-  size_t size = dsize.x_size * dsize.y_size;
+  size_t width = dsize.shape[0];
+  size_t height = dsize.shape[1];
+  for (size_t i = 2; i < dsize.shape.size(); ++i) {
+    width *= dsize.shape[i];
+  }
+  size_t size = width * height;
   size_t origin[3] = {
       0,
       0,
   };
-  size_t region[3] = {dsize.y_size, dsize.x_size, 1};
+  size_t region[3] = {height, width, 1};
   ICHECK(stream == nullptr);
   if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {
     OPENCL_CALL(clEnqueueCopyBuffer(this->GetQueue(ctx_to),
@@ -210,8 +221,8 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
     OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
   } else if (ctx_from.device_type == kDLCPU && IsOpenCLDevice(ctx_to)) {
     /* Copy the input data to the input image */
-    CHECK_LE(dsize.y_size, CL_DEVICE_IMAGE2D_MAX_WIDTH);
-    CHECK_LE(dsize.x_size, CL_DEVICE_IMAGE2D_MAX_HEIGHT);
+    CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_WIDTH) << "image height is too long";
+    CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_HEIGHT) << "image width is too long";
     OPENCL_CALL(clEnqueueWriteImage(
         this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE, origin, region, 0, 0,
         static_cast<const char*>(from) + from_offset, 0, nullptr, nullptr));

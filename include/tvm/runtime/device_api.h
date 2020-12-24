@@ -60,9 +60,13 @@ constexpr int kMaxStackAlloca = 1024;
 
 // data_shape, for two demention data arr
 struct DataShape {
-  size_t x_size;
-  size_t y_size;
-  DataShape(size_t xs, size_t ys) : x_size(xs), y_size(ys) {}
+  std::vector<int64_t> shape;
+  DataShape(std::vector<int64_t> lshape) :shape(lshape){}
+  DataShape(int64_t* arr, int ndim) {
+    for (int i = 0; i < ndim;++i) {
+      shape.push_back(arr[i]);
+    }
+  }
 };
 /*!
  *  \brief TVM Runtime Device API, abstracts the device

@@ -697,7 +697,16 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
   int lanes = op->dtype.lanes();
   // delcare type.
   if (op->dtype.lanes() == 1) {
-    std::string ref = GetBufferRef(op->dtype, op->buffer_var.get(), op->index);
+    const VarNode* buffer = op->buffer_var.get();
+    std::string ref = GetBufferRef(op->dtype, buffer, op->index);
+    std::string scope;
+    if (alloc_storage_scope_.count(buffer)) {
+      scope = alloc_storage_scope_.at(buffer);
+    }
+    if (scope.compare(0, sizeof("image")-1, "image") == 0) {
+      std::string vid = GetVarID(op->buffer_var.get());
+      ref = "read_imagef(" + vid + ",sampler," + ref + ").x";
+    }
     HandleVolatileLoads(ref, op, os);
   } else {
     ICHECK(is_one(op->predicate)) << "predicated load is not supported";
@@ -742,7 +751,18 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     std::string value = this->PrintExpr(op->value);
     std::string ref = this->GetBufferRef(t, op->buffer_var.get(), op->index);
     this->PrintIndent();
-    stream << ref << " = " << value << ";\n";
+
+    const VarNode* buffer = op->buffer_var.get();
+    std::string scope;
+    if (alloc_storage_scope_.count(buffer)) {
+      scope = alloc_storage_scope_.at(buffer);
+    }
+    if (scope.compare(0, sizeof("image")-1, "image") == 0) {
+        std::string vid = GetVarID(op->buffer_var.get());
+        stream << "write_imagef(" << vid << "," << ref << " , (float4)(" << value << "));\n";
+    } else {
+      stream << ref << " = " << value << ";\n";
+    }
   } else {
     ICHECK(is_one(op->predicate)) << "Predicated store is not supported";
     arith::PVar<PrimExpr> base;

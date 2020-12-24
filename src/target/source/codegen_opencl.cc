@@ -38,16 +38,22 @@ CodeGenOpenCL::CodeGenOpenCL() { restrict_keyword_ = "restrict"; }
 void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
   CodeGenC::InitFuncState(f);
   int i = 0;
+  //need to judge if this arg var is for output or input
+  //const VarNode* last_arg;
   for (Var arg : f->params) {
     if (arg.dtype().is_handle()) {
       int vcode = GetValueType(GetType(arg));
+      //last_arg = arg.get();
       if (kDLCLImgFloat == vcode) {
-        alloc_storage_scope_[arg.get()] = "image";
+        alloc_storage_scope_[arg.get()] = "imager";
       } else {
         alloc_storage_scope_[arg.get()] = "global";
       }
     }
   }
+  //if (alloc_storage_scope_[last_arg] == "imager") {
+    //alloc_storage_scope_[last_arg] = "imagew";
+  //}
 }
 
 void CodeGenOpenCL::PrintFuncPrefix() {
@@ -224,8 +230,10 @@ void CodeGenOpenCL::PrintStorageScope(const std::string& scope, std::ostream& os
     os << "__global ";
   } else if (scope == "shared") {
     os << "__local ";
-  } else if (scope == "image") {
+  } else if (scope == "imager") {
     os << "__read_only ";
+  } else if (scope == "imagew") {
+    os << "__write_only ";
   }
 }
 
@@ -303,7 +311,7 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
   if (alloc_storage_scope_.count(buffer)) {
     scope = alloc_storage_scope_.at(buffer);
   }
-  if (scope != "image") {
+  if (scope.compare(0,sizeof("image")-1, "image") != 0) {
     return CodeGenC::GetBufferRef(t, buffer, index);
   }
   bool is_vol = IsVolatile(buffer);
@@ -331,12 +339,15 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
       os << " / " << (32 / t.bits());
     }
     // os << ']';
-    os << "read_imagef(" << vid << ",sampler,"
-       << "(int2)(";
+    //os << "read_imagef(" << vid << ",sampler,"
+    os << "(int2)(";
     std::ostringstream indexexp_os;
     PrintExpr(index, indexexp_os);
     os << indexexp_os.str() << "%(get_image_dim(" << vid << ").x),";
-    os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))).x";
+    //os << indexexp_os.str() << "%(8),";
+    //os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))).x";
+    os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))";
+    //os << indexexp_os.str() << "/(8))";
   } else {
     // Buffer declared as vector type.
     // optimize for case where it is in register,
