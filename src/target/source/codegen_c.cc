@@ -118,7 +118,7 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
         }
       }
       int vt_code = GetValueType(GetType(v));
-      if ((kDLCLImgFloat != vt_code) && no_alias && restrict_keyword_.length() != 0) {
+      if ((kDLCLImgFloat != vt_code && kDLCLImgFloatW != vt_code) && no_alias && restrict_keyword_.length() != 0) {
         stream << ' ' << restrict_keyword_;
       }
     } else {

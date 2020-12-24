@@ -113,6 +113,7 @@ bool MatchRetValue(const ObjectRef& lhs, const TVMRetValue& rhs) {
       break;
     case kDLFloat:
     case kDLCLImgFloat:
+    case kDLCLImgFloatW:
       if (auto* val = lhs.as<FloatImmNode>()) {
         return val->value == rhs.operator double();
       }

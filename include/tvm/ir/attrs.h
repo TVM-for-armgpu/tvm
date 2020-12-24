@@ -431,7 +431,7 @@ inline void SetValue<std::string>(std::string* ptr, const TVMArgValue& val) {
 template <>
 inline void SetValue<double>(double* ptr, const TVMArgValue& val) {
   if (val.type_code() == kDLFloat || val.type_code() == kDLCLImgFloat ||
-      val.type_code() == kDLInt) {
+      val.type_code() == kDLCLImgFloatW ||val.type_code() == kDLInt) {
     *ptr = val.operator double();
   } else {
     ObjectRef expr = val;

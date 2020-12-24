@@ -38,22 +38,18 @@ CodeGenOpenCL::CodeGenOpenCL() { restrict_keyword_ = "restrict"; }
 void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
   CodeGenC::InitFuncState(f);
   int i = 0;
-  //need to judge if this arg var is for output or input
-  //const VarNode* last_arg;
   for (Var arg : f->params) {
     if (arg.dtype().is_handle()) {
       int vcode = GetValueType(GetType(arg));
-      //last_arg = arg.get();
       if (kDLCLImgFloat == vcode) {
         alloc_storage_scope_[arg.get()] = "imager";
+      } else if (kDLCLImgFloatW == vcode) {
+        alloc_storage_scope_[arg.get()] = "imagew";
       } else {
         alloc_storage_scope_[arg.get()] = "global";
       }
     }
   }
-  //if (alloc_storage_scope_[last_arg] == "imager") {
-    //alloc_storage_scope_[last_arg] = "imagew";
-  //}
 }
 
 void CodeGenOpenCL::PrintFuncPrefix() {

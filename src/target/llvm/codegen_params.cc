@@ -136,6 +136,7 @@ llvm::ConstantArray* NDArrayToLLVMArray(llvm::LLVMContext* ctx, ::tvm::runtime::
 
     case runtime::DataType::TypeCode::kFloat:
     case runtime::DataType::TypeCode::kCLImgFloat:
+    case runtime::DataType::TypeCode::kCLImgFloatW:
       switch (arr_type.bits()) {
         case 16:
           // NOTE: float16 is treated as uint16_t.

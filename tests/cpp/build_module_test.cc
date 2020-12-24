@@ -23,6 +23,7 @@
 #include <tvm/runtime/registry.h>
 #include <tvm/te/operation.h>
 #include <tvm/topi/cuda/injective.h>
+#include <tvm/node/repr_printer.h>
 
 #include <cmath>
 #include <string>
@@ -119,6 +120,15 @@ TEST(BuildModule, Heterogeneous) {
   auto lowered_s1 = lower(s1, args1, "elemwise_add", binds);
   auto lowered_s2 = lower(s2, args2, "elemwise_sub", binds);
   Map<tvm::Target, IRModule> inputs = {{target_cuda, lowered_s1}, {target_llvm, lowered_s2}};
+  for (const auto& it : inputs) {
+    for (auto kv : it.second->functions) {
+      auto f = Downcast<PrimFunc>(kv.second);
+      auto a = f->buffer_map;
+      Dump(a);
+      int a1 = 0;
+      a1++;
+    }
+  }
   auto module = build(inputs, Target());
 
   // Assertion for build.

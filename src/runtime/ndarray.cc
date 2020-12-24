@@ -40,7 +40,7 @@ namespace runtime {
 
 inline void VerifyDataType(DLDataType dtype) {
   ICHECK_GE(dtype.lanes, 1);
-  if (dtype.code == kDLFloat || dtype.code == kDLCLImgFloat) {
+  if (dtype.code == kDLFloat || dtype.code == kDLCLImgFloat|| dtype.code == kDLCLImgFloatW) {
     ICHECK_EQ(dtype.bits % 8, 0);
   } else {
     // allow uint1 as a special flag for bool.
@@ -71,7 +71,7 @@ void ArrayCopyFromBytes(DLTensor* handle, const void* data, size_t nbytes) {
   size_t arr_size = GetDataSize(*handle);
   ICHECK_EQ(arr_size, nbytes) << "ArrayCopyFromBytes: size mismatch";
   ICHECK(IsContiguous(*handle)) << "ArrayCopyFromBytes only support contiguous array for now";
-  if (handle->dtype.code == kDLCLImgFloat && handle->ctx.device_type == kDLOpenCL) {
+  if ((handle->dtype.code == kDLCLImgFloatW || handle->dtype.code == kDLCLImgFloat) && handle->ctx.device_type == kDLOpenCL) {
     DeviceAPI::Get(handle->ctx)
         ->CopyDataFromTo(data, 0, handle->data, static_cast<size_t>(handle->byte_offset),
                          DataShape(handle->shape, handle->ndim), cpu_ctx, handle->ctx,

@@ -54,6 +54,7 @@ class DataType {
     kFloat = kDLFloat,
     kHandle = TVMArgTypeCode::kTVMOpaqueHandle,
     kBFloat = kDLBfloat,
+    kCLImgFloatW = kDLCLImgFloatW,
     kCLImgFloat = kDLCLImgFloat,
     kCustomBegin = 129
   };
@@ -91,8 +92,9 @@ class DataType {
   /*! \return whether type is a scalar type. */
   bool is_bool() const { return code() == DataType::kUInt && bits() == 1; }
   /*! \return whether type is a float type. */
-  bool is_float() const { return code() == DataType::kFloat || code() == DataType::kCLImgFloat; }
+  bool is_float() const { return code() == DataType::kFloat || code() == DataType::kCLImgFloat|| code() == DataType::kCLImgFloatW; }
   bool is_climgfloat() const { return code() == DataType::kCLImgFloat; }
+  bool is_climgfloatw() const { return code() == DataType::kCLImgFloatW; }
   /*! \return whether type is a float16 type. */
   bool is_float16() const { return is_float() && bits() == 16; }
   /*! \return whether type is a bfloat16 type. */
@@ -133,8 +135,8 @@ class DataType {
    */
   bool operator==(const DataType& other) const {
     bool cv = false;
-    if ((data_.code == kCLImgFloat && other.data_.code == kFloat) ||
-        (data_.code == kFloat && other.data_.code == kCLImgFloat)||
+    if (((data_.code == kCLImgFloat||data_.code == kCLImgFloatW) && other.data_.code == kFloat) ||
+        (data_.code == kFloat && (other.data_.code == kCLImgFloat||other.data_.code == kCLImgFloatW))||
         data_.code == other.data_.code) {
       cv = true;
     }
@@ -299,6 +301,8 @@ inline const char* DLDataTypeCode2Str(DLDataTypeCode type_code) {
       return "float";
     case kDLCLImgFloat:
       return "climgfloat";
+    case kDLCLImgFloatW:
+      return "climgfloatw";
     case DataType::kHandle:
       return "handle";
     case kDLBfloat:
@@ -363,6 +367,10 @@ inline DLDataType String2DLDataType(std::string s) {
   } else if (s.substr(0, 10) == "climgfloat") {
     t.code = kDLCLImgFloat;
     scan = s.c_str() + 10;
+  } else if (s.substr(0, 10) == "climgfloatw") {
+    t.code = kDLCLImgFloatW;
+    scan = s.c_str() + 11;
+  
   } else if (s.substr(0, 6) == "handle") {
     t.code = kTVMOpaqueHandle;
     t.bits = 64;  // handle uses 64 bit by default.

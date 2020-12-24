@@ -400,7 +400,7 @@ static inline long double ToScalar(const runtime::NDArray& array, size_t i = 0) 
     } else if (array->dtype.bits == 64) {
       return reinterpret_cast<uint64_t*>(array->data)[i];
     }
-  } else if (array->dtype.code == kDLFloat || array->dtype.code == kDLCLImgFloat) {
+  } else if (array->dtype.code == kDLFloat || array->dtype.code == kDLCLImgFloat || array->dtype.code == kDLCLImgFloatW) {
     if (array->dtype.bits == 16) {
       return __extendXfYf2__<uint16_t, uint16_t, 10, float, uint32_t, 23>(
           reinterpret_cast<uint16_t*>(array->data)[i]);
