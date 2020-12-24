@@ -211,7 +211,7 @@ PrimFunc MakePackedAPI(PrimFunc&& func, int num_unpacked_args) {
     LOG(FATAL) << "Not all Vars are passed in api_args: " << os.str();
   }
 
-  func_ptr->buffer_map = Map<Var, Buffer>();
+  std::swap(func_ptr->clgen_buffer_map, func_ptr->buffer_map);
   func_ptr->checked_type_ = func_ptr->func_type_annotation();
   func_ptr->ret_type = PrimType(DataType::Int(32));
 

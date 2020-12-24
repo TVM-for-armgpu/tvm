@@ -339,11 +339,18 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     os << "(int2)(";
     std::ostringstream indexexp_os;
     PrintExpr(index, indexexp_os);
-    os << indexexp_os.str() << "%(get_image_dim(" << vid << ").x),";
-    //os << indexexp_os.str() << "%(8),";
+    ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
+        << "var buffer shape is essential for opencl var";
+
+    ICHECK(var_buffer_map_[vid]->shape.size() > 1)
+        << "var buffer shape of image memory must be at least 2 dimention";
+    PrimExpr width = var_buffer_map_[vid]->shape[1];
+
+    //os << indexexp_os.str() << "%(get_image_dim(" << vid << ").x),";
+    os << indexexp_os.str() << "%(" << width << "),";
     //os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))).x";
-    os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))";
-    //os << indexexp_os.str() << "/(8))";
+    //os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))";
+    os << indexexp_os.str() << "/(" << width << "))";
   } else {
     // Buffer declared as vector type.
     // optimize for case where it is in register,

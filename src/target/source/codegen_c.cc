@@ -35,6 +35,9 @@ using namespace tir;
 void CodeGenC::Init(bool output_ssa) { print_ssa_form_ = output_ssa; }
 
 void CodeGenC::InitFuncState(const PrimFunc& f) {
+  for (auto& kv : f->clgen_buffer_map) {
+    var_buffer_map_.Set(kv.first->name_hint, kv.second);
+  }
   alloc_storage_scope_.clear();
   handle_data_type_.clear();
   CodeGenSourceBase::ClearFuncState();

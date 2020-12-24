@@ -265,6 +265,9 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   const Op& builtin_call_extern_ = builtin::call_extern();
   const Op& builtin_call_pure_extern_ = builtin::call_pure_extern();
 
+ protected:
+  Map<const String, tvm::tir::Buffer> var_buffer_map_;
+  
  private:
   /*! \brief whether to print in SSA form */
   bool print_ssa_form_{false};

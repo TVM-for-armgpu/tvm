@@ -94,12 +94,20 @@ IRModule PrimFuncPassNode::operator()(IRModule mod, const PassContext& pass_ctx)
   IRModuleNode* mod_ptr = mod.CopyOnWrite();
   auto* func_dict = mod_ptr->functions.CopyOnWrite();
   // directly loop over the underlying dict
+  Map<tir::Var, Buffer> clgen_buffer_map1;
   for (auto& kv : *func_dict) {
     // only picks up tir::PrimFunc
     if (kv.second->IsInstance<PrimFuncNode>()) {
       // move out the function so that it is the only copy.
       PrimFunc func = Downcast<PrimFunc>(std::move(kv.second));
+      if (clgen_buffer_map1.empty()) {
+        clgen_buffer_map1=func->clgen_buffer_map;
+      }
       func = pass_func(std::move(func), mod, pass_ctx);
+      if (func.defined() && func->clgen_buffer_map.empty()) {
+        auto* fptr = func.CopyOnWrite();
+        fptr->clgen_buffer_map = clgen_buffer_map1;
+      }
       kv.second = std::move(func);
 
       if (!kv.second.defined()) {

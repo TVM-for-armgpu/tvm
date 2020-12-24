@@ -90,12 +90,14 @@ class PrimFuncNode : public BaseFuncNode {
    *  will make program analysis much easier.
    */
   Map<tir::Var, Buffer> buffer_map;
+  Map<tir::Var, Buffer> clgen_buffer_map;
 
   void VisitAttrs(tvm::AttrVisitor* v) {
     v->Visit("params", &params);
     v->Visit("body", &body);
     v->Visit("ret_type", &ret_type);
     v->Visit("buffer_map", &buffer_map);
+    v->Visit("clgen_buffer_map", &clgen_buffer_map);
     v->Visit("attrs", &attrs);
     v->Visit("span", &span);
     v->Visit("_checked_type_", &checked_type_);
