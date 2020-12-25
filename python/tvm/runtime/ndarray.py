@@ -179,7 +179,8 @@ class NDArray(NDArrayBase):
             shape = shape + (t.lanes,)
             t.lanes = 1
             dtype = str(t)
-        np_arr = np.empty(shape, dtype=dtype)
+        nptype = "float32" if dtype == "climgfloat32" else dtype
+        np_arr = np.empty(shape, dtype=nptype)
         assert np_arr.flags["C_CONTIGUOUS"]
         data = np_arr.ctypes.data_as(ctypes.c_void_p)
         nbytes = ctypes.c_size_t(np_arr.size * np_arr.dtype.itemsize)

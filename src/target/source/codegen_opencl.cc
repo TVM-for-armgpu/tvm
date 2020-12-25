@@ -37,7 +37,6 @@ CodeGenOpenCL::CodeGenOpenCL() { restrict_keyword_ = "restrict"; }
 
 void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
   CodeGenC::InitFuncState(f);
-  int i = 0;
   for (Var arg : f->params) {
     if (arg.dtype().is_handle()) {
       int vcode = GetValueType(GetType(arg));

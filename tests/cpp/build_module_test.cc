@@ -29,6 +29,7 @@
 #include <string>
 
 TEST(BuildModule, Basic) {
+  return;
   using namespace tvm;
   using namespace tvm::te;
   auto n = var("n");
@@ -94,18 +95,18 @@ TEST(BuildModule, Heterogeneous) {
 
   // The shape of input tensors.
   const int n = 4;
-  Array<PrimExpr> shape{n};
+  Array<PrimExpr> shape{n,n};
 
-  auto A = placeholder(shape, DataType::Float(32), "A");
-  auto B = placeholder(shape, DataType::Float(32), "B");
+  auto A = placeholder(shape, DataType::CLImgFloat(32), "A");
+  auto B = placeholder(shape, DataType::CLImgFloat(32), "B");
   auto C = placeholder(shape, DataType::Float(32), "C");
 
   auto elemwise_add = compute(
-      A->shape, [&A, &B](PrimExpr i) { return A[i] + B[i]; }, "elemwise_add");
+      A->shape, [&A, &B](PrimExpr i, PrimExpr j) { return A[i][j] + B[i][j]; }, "elemwise_add");
 
   auto copy = placeholder(shape, DataType::Float(32), "__copy");
   auto elemwise_sub = compute(
-      C->shape, [&copy, &C](PrimExpr i) { return copy[i] - C[i]; }, "elemwise_sub");
+      C->shape, [&copy, &C](PrimExpr i) { return copy[i][0] - C[i][0]; }, "elemwise_sub");
 
   With<Target> cuda_scope(target_cuda);
   auto s1 = topi::cuda::schedule_injective(target_cuda, {elemwise_add});
@@ -122,8 +123,13 @@ TEST(BuildModule, Heterogeneous) {
   Map<tvm::Target, IRModule> inputs = {{target_cuda, lowered_s1}, {target_llvm, lowered_s2}};
   for (const auto& it : inputs) {
     for (auto kv : it.second->functions) {
-      auto f = Downcast<PrimFunc>(kv.second);
+      auto f = Downcast<tvm::tir::PrimFunc>(kv.second);
       auto a = f->buffer_map;
+      for (auto kv : a) {
+        std::cout << kv.first->name_hint<<"\n";
+        auto abc = kv.second->shape;
+        Dump(abc);
+      }
       Dump(a);
       int a1 = 0;
       a1++;

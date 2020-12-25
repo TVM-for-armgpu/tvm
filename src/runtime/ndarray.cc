@@ -197,13 +197,11 @@ NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype, DLContext c
   // setup memory content
   size_t size = GetDataSize(ret.get_mutable()->dl_tensor);
   size_t alignment = GetDataAlignment(ret.get_mutable()->dl_tensor);
-  static int c_ii = 0;
   if (dtype.code == kDLCLImgFloat && ctx.device_type == kDLOpenCL) {
     DataShape dshape(shape);
     ret.get_mutable()->dl_tensor.data =
         DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, dshape, alignment, ret->dtype);
   } else {
-    c_ii = 0;
     ret.get_mutable()->dl_tensor.data =
         DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, size, alignment, ret->dtype);
   }
