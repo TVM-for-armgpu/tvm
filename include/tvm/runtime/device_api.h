@@ -59,14 +59,16 @@ constexpr int kTempAllocaAlignment = 128;
 constexpr int kMaxStackAlloca = 1024;
 
 // data_shape, for two demention data arr
-struct DataShape {
-  std::vector<int64_t> shape;
-  DataShape(std::vector<int64_t> lshape) :shape(lshape){}
-  DataShape(int64_t* arr, int ndim) {
-    for (int i = 0; i < ndim;++i) {
-      shape.push_back(arr[i]);
-    }
-  }
+#define DataShape DLTensor
+auto DataShapeDeleter = [](DataShape* ds) {
+  delete ds->shape;
+  delete ds;
+};
+
+struct ShapePOD {
+  int64_t shape[4];
+  int64_t itemsize;
+  int64_t ndim;
 };
 /*!
  *  \brief TVM Runtime Device API, abstracts the device
@@ -100,9 +102,9 @@ class TVM_DLL DeviceAPI {
    */
   virtual void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                                DLDataType type_hint) = 0;
-  virtual void* AllocDataSpace(TVMContext ctx, DataShape nbytes, size_t alignment,
+  virtual void* AllocDataSpace(TVMContext ctx, DataShape* nbytes, size_t alignment,
                                DLDataType type_hint) {
-    std::cout << "api not inplemented\n";
+    LOG(FATAL) << "api not inplemented\n";
     abort();
     return nullptr;
   }
@@ -129,9 +131,9 @@ class TVM_DLL DeviceAPI {
                               size_t num_bytes, TVMContext ctx_from, TVMContext ctx_to,
                               DLDataType type_hint, TVMStreamHandle stream) = 0;
   virtual void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset,
-                              DataShape data_shape, TVMContext ctx_from, TVMContext ctx_to,
+                              DataShape* data_shape, TVMContext ctx_from, TVMContext ctx_to,
                               DLDataType type_hint, TVMStreamHandle stream) {
-    std::cout << "api not inplemented\n";
+    LOG(FATAL) << "api not inplemented\n";
     abort();
     return;
   }

@@ -254,7 +254,9 @@ struct RPCReference {
       switch (tcode) {
         case kDLInt:
         case kDLUInt:
-        case kDLFloat: {
+        case kDLFloat: 
+        case kDLCLImgFloatW: 
+        case kDLCLImgFloat: {
           channel->template Write<int64_t>(value.v_int64);
           break;
         }
@@ -374,7 +376,9 @@ struct RPCReference {
       switch (tcodes[i]) {
         case kDLInt:
         case kDLUInt:
-        case kDLFloat: {
+        case kDLFloat: 
+        case kDLCLImgFloatW: 
+        case kDLCLImgFloat: {
           channel->template Read<int64_t>(&(value.v_int64));
           break;
         }

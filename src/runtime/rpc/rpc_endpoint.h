@@ -137,6 +137,11 @@ class RPCEndpoint {
    */
   void CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset, size_t nbytes,
                     TVMContext ctx_to, DLDataType type_hint);
+  void CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset, DataShape* nbytes,
+                    TVMContext ctx_to, DLDataType type_hint);
+  void CopyFromRemoteInternal(void* from, size_t from_offset, void* to,
+                                           size_t to_offset, ShapePOD data_size,
+                                           TVMContext ctx_from, DLDataType type_hint);
   /*!
    * \brief Copy bytes from remote array content.
    * \param from The source host data.
@@ -149,7 +154,11 @@ class RPCEndpoint {
    */
   void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, size_t nbytes,
                       TVMContext ctx_from, DLDataType type_hint);
-
+  void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, DataShape* nbytes,
+                      TVMContext ctx_from, DLDataType type_hint);
+  void CopyToRemoteInternal(void* from, size_t from_offset, void* to, size_t to_offset,
+                                         ShapePOD data_size, TVMContext ctx_to,
+                                         DLDataType type_hint);
   /*!
    * \brief Call a remote defined system function with arguments.
    * \param fcode The function code.

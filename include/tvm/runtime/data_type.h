@@ -178,6 +178,7 @@ class DataType {
    */
   static DataType Float(int bits, int lanes = 1) { return DataType(kDLFloat, bits, lanes); }
   static DataType CLImgFloat(int bits, int lanes = 1) { return DataType(kDLCLImgFloat, bits, lanes); }
+  static DataType CLImgFloatW(int bits, int lanes = 1) { return DataType(kDLCLImgFloatW, bits, lanes); }
   /*!
    * \brief Construct a bool type.
    * \param lanes The number of lanes

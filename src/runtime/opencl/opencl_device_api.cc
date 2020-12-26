@@ -127,16 +127,17 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
   return mptr;
 }
 
-void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape dsize, size_t alignment,
+void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t alignment,
                                       DLDataType type_hint) {
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
   cl_image_format fmt = {CL_R, CL_FLOAT};
-  size_t width = dsize.shape[0];
-  size_t height = dsize.shape[1];
-  for (size_t i = 2; i < dsize.shape.size();++i) {
-    width *= dsize.shape[i];
+  ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
+  size_t width = dsize->shape[0];
+  size_t height = dsize->shape[1];
+  for (size_t i = 2; i < dsize->ndim;++i) {
+    width *= dsize->shape[i];
   }
   cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
                         height,
@@ -190,16 +191,16 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
 }
 
 void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void* to,
-                                     size_t to_offset, DataShape dsize, TVMContext ctx_from,
+                                     size_t to_offset, DataShape* dsize, TVMContext ctx_from,
                                      TVMContext ctx_to, DLDataType type_hint,
                                      TVMStreamHandle stream) {
   this->Init();
-  size_t width = dsize.shape[0];
-  size_t height = dsize.shape[1];
-  for (size_t i = 2; i < dsize.shape.size(); ++i) {
-    width *= dsize.shape[i];
+  ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
+  size_t width = dsize->shape[0];
+  size_t height = dsize->shape[1];
+  for (size_t i = 2; i < dsize->ndim; ++i) {
+    width *= dsize->shape[i];
   }
-  size_t size = width * height;
   size_t origin[3] = {
       0,
       0,
@@ -207,9 +208,9 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
   size_t region[3] = {height, width, 1};
   ICHECK(stream == nullptr);
   if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {
-    OPENCL_CALL(clEnqueueCopyBuffer(this->GetQueue(ctx_to),
+    OPENCL_CALL(clEnqueueCopyImage(this->GetQueue(ctx_to),
                                     static_cast<cl_mem>((void*)from),  // NOLINT(*)
-                                    static_cast<cl_mem>(to), from_offset, to_offset, size, 0,
+                                   static_cast<cl_mem>(to), origin, origin, region, 0,
                                     nullptr, nullptr));
   } else if (IsOpenCLDevice(ctx_from) && ctx_to.device_type == kDLCPU) {
     /* Copy the input data to the input image */

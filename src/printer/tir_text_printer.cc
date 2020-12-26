@@ -548,6 +548,8 @@ Doc TIRTextPrinter::PrintConstScalar(DataType dtype, const T& data) {
         doc << "u";
         break;
       case kDLCLImgFloat:
+        doc << "cw";
+        break;
       case kDLCLImgFloatW:
         doc << "c";
         break;

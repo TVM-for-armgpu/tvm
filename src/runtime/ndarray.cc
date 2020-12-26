@@ -71,10 +71,12 @@ void ArrayCopyFromBytes(DLTensor* handle, const void* data, size_t nbytes) {
   size_t arr_size = GetDataSize(*handle);
   ICHECK_EQ(arr_size, nbytes) << "ArrayCopyFromBytes: size mismatch";
   ICHECK(IsContiguous(*handle)) << "ArrayCopyFromBytes only support contiguous array for now";
-  if ((handle->dtype.code == kDLCLImgFloatW || handle->dtype.code == kDLCLImgFloat) && handle->ctx.device_type == kDLOpenCL) {
+  if ((handle->dtype.code == kDLCLImgFloatW || handle->dtype.code == kDLCLImgFloat) &&
+      (handle->ctx.device_type % kRPCSessMask) == kDLOpenCL) {
+
     DeviceAPI::Get(handle->ctx)
         ->CopyDataFromTo(data, 0, handle->data, static_cast<size_t>(handle->byte_offset),
-                         DataShape(handle->shape, handle->ndim), cpu_ctx, handle->ctx,
+                         handle, cpu_ctx, handle->ctx,
                          handle->dtype, nullptr);
   } else {
     DeviceAPI::Get(handle->ctx)
@@ -91,9 +93,27 @@ void ArrayCopyToBytes(const DLTensor* handle, void* data, size_t nbytes) {
   size_t arr_size = GetDataSize(*handle);
   ICHECK_EQ(arr_size, nbytes) << "ArrayCopyToBytes: size mismatch";
   ICHECK(IsContiguous(*handle)) << "ArrayCopyToBytes only support contiguous array for now";
-  DeviceAPI::Get(handle->ctx)
-      ->CopyDataFromTo(handle->data, static_cast<size_t>(handle->byte_offset), data, 0, nbytes,
-                       handle->ctx, cpu_ctx, handle->dtype, nullptr);
+  if ((handle->dtype.code == kDLCLImgFloatW || handle->dtype.code == kDLCLImgFloat) &&
+      (handle->ctx.device_type % kRPCSessMask) == kDLOpenCL) {
+    std::shared_ptr<DataShape> dshape(new DataShape, DataShapeDeleter);
+    memset(dshape.get(), 0, sizeof(DataShape));
+    // DataShape *dshape = new DataShape;
+    dshape->ctx = handle->ctx;
+    dshape->dtype = handle->dtype;
+    dshape->ndim = handle->ndim;
+    dshape->shape = new int64_t[handle->ndim];
+    for (size_t i = 0; i < handle->ndim; ++i) {
+      dshape->shape[i] = handle->shape[i];
+    }
+
+    DeviceAPI::Get(handle->ctx)
+        ->CopyDataFromTo(handle->data, static_cast<size_t>(handle->byte_offset), data, 0, dshape.get(),
+                         handle->ctx, cpu_ctx, handle->dtype, nullptr);
+  } else {
+    DeviceAPI::Get(handle->ctx)
+        ->CopyDataFromTo(handle->data, static_cast<size_t>(handle->byte_offset), data, 0, nbytes,
+                         handle->ctx, cpu_ctx, handle->dtype, nullptr);
+  }
   // Synchronize in case data become unavailable later.
   DeviceAPI::Get(handle->ctx)->StreamSync(handle->ctx, nullptr);
 }
@@ -197,10 +217,20 @@ NDArray NDArray::Empty(std::vector<int64_t> shape, DLDataType dtype, DLContext c
   // setup memory content
   size_t size = GetDataSize(ret.get_mutable()->dl_tensor);
   size_t alignment = GetDataAlignment(ret.get_mutable()->dl_tensor);
-  if (dtype.code == kDLCLImgFloat && ctx.device_type == kDLOpenCL) {
-    DataShape dshape(shape);
+  if ((dtype.code == kDLCLImgFloatW || dtype.code == kDLCLImgFloat) &&
+      (ctx.device_type % kRPCSessMask) == kDLOpenCL) {
+    std::shared_ptr<DataShape> dshape(new DataShape, DataShapeDeleter);
+    memset(dshape.get(), 0, sizeof(DataShape));
+    //DataShape *dshape = new DataShape;
+    dshape->ctx = ctx;
+    dshape->dtype = dtype;
+    dshape->ndim = shape.size();
+    dshape->shape = new int64_t[shape.size()];
+    for (size_t i = 0; i < shape.size();++i) {
+      dshape->shape[i] = shape[i];
+    }
     ret.get_mutable()->dl_tensor.data =
-        DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, dshape, alignment, ret->dtype);
+        DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, dshape.get(), alignment, ret->dtype);
   } else {
     ret.get_mutable()->dl_tensor.data =
         DeviceAPI::Get(ret->ctx)->AllocDataSpace(ret->ctx, size, alignment, ret->dtype);
@@ -247,10 +277,16 @@ void NDArray::CopyFromTo(const DLTensor* from, DLTensor* to, TVMStreamHandle str
   // Use the context that is *not* a cpu context to get the correct device
   // api manager.
   TVMContext ctx = from->ctx.device_type != kDLCPU ? from->ctx : to->ctx;
-
-  DeviceAPI::Get(ctx)->CopyDataFromTo(from->data, static_cast<size_t>(from->byte_offset), to->data,
-                                      static_cast<size_t>(to->byte_offset), from_size, from->ctx,
-                                      to->ctx, from->dtype, stream);
+  if ((from->dtype.code == kDLCLImgFloatW || from->dtype.code == kDLCLImgFloat) &&
+      (from->ctx.device_type % kRPCSessMask) == kDLOpenCL) {
+    DeviceAPI::Get(ctx)->CopyDataFromTo(from->data, static_cast<size_t>(from->byte_offset),
+                                        to->data, static_cast<size_t>(to->byte_offset), to,
+                                        from->ctx, to->ctx, from->dtype, stream);
+  } else {
+    DeviceAPI::Get(ctx)->CopyDataFromTo(from->data, static_cast<size_t>(from->byte_offset),
+                                        to->data, static_cast<size_t>(to->byte_offset), from_size,
+                                        from->ctx, to->ctx, from->dtype, stream);
+  }
 }
 
 std::vector<int64_t> NDArray::Shape() const { return get_mutable()->shape_; }

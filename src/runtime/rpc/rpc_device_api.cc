@@ -43,6 +43,18 @@ class RPCDeviceAPI final : public DeviceAPI {
     GetSess(ctx)->GetDeviceAPI(remote_ctx)->GetAttr(remote_ctx, kind, rv);
   }
 
+   void* AllocDataSpace(TVMContext ctx, DataShape* dshape, size_t alignment,
+                       DLDataType type_hint) final {
+    auto sess = GetSess(ctx);
+    auto remote_ctx = RemoveRPCSessionMask(ctx);
+    void* data =
+        sess->GetDeviceAPI(remote_ctx)->AllocDataSpace(remote_ctx, dshape, alignment, type_hint);
+
+    RemoteSpace* space = new RemoteSpace();
+    space->data = data;
+    space->sess = std::move(sess);
+    return space;
+   }
   void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                        DLDataType type_hint) final {
     auto sess = GetSess(ctx);
@@ -65,6 +77,36 @@ class RPCDeviceAPI final : public DeviceAPI {
     }
     delete space;
   }
+  void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset, DataShape* dshape,
+                      TVMContext ctx_from, TVMContext ctx_to, DLDataType type_hint,
+                      TVMStreamHandle stream) final {
+    size_t size = GetDataSize(*dshape);
+    if (IsRPCSessionContext(ctx_from) && IsRPCSessionContext(ctx_to)) {
+      ICHECK(ctx_from.device_type == ctx_to.device_type)
+          << "Cannot copy across two different remote session";
+      auto remote_ctx_from = RemoveRPCSessionMask(ctx_from);
+      auto remote_ctx_to = RemoveRPCSessionMask(ctx_to);
+      auto remote_ctx = remote_ctx_from;
+      if (remote_ctx.device_type == kDLCPU) remote_ctx = remote_ctx_to;
+      GetSess(ctx_from)
+          ->GetDeviceAPI(remote_ctx)
+          ->CopyDataFromTo(static_cast<const RemoteSpace*>(from)->data, from_offset,
+                           static_cast<const RemoteSpace*>(to)->data, to_offset, dshape,
+                           remote_ctx_from, remote_ctx_to, type_hint, stream);
+    } else if (IsRPCSessionContext(ctx_from) && ctx_to.device_type == kDLCPU) {
+      auto remote_ctx_from = RemoveRPCSessionMask(ctx_from);
+      GetSess(ctx_from)->CopyFromRemote(static_cast<const RemoteSpace*>(from)->data, from_offset,
+                                        to, to_offset, dshape, remote_ctx_from, type_hint);
+    } else if (ctx_from.device_type == kDLCPU && IsRPCSessionContext(ctx_to)) {
+      auto remote_ctx_to = RemoveRPCSessionMask(ctx_to);
+      GetSess(ctx_to)->CopyToRemote(const_cast<void*>(from), from_offset,
+                                    static_cast<const RemoteSpace*>(to)->data, to_offset, dshape,
+                                    remote_ctx_to, type_hint);
+    } else {
+      LOG(FATAL) << "expect copy from/to remote or between remote";
+    }
+  }
+
   void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset, size_t size,
                       TVMContext ctx_from, TVMContext ctx_to, DLDataType type_hint,
                       TVMStreamHandle stream) final {

@@ -389,9 +389,13 @@ bool IsAllPositiveConstant(const Expr& expr) {
     const auto& dtype = tensor->dtype;
     if (dtype.lanes != 1) {
       return false;
-    } else if ((dtype.code == kDLFloat || dtype.code == kDLCLImgFloat|| dtype.code == kDLCLImgFloatW) && dtype.bits == 32) {
+    } else if ((dtype.code == kDLFloat || dtype.code == kDLCLImgFloat ||
+                dtype.code == kDLCLImgFloatW) &&
+               dtype.bits == 32) {
       return IsNDArrayAllGreaterEqual<float>(tensor, 0);
-    } else if (dtype.code == kDLFloat && dtype.bits == 64) {
+    } else if ((dtype.code == kDLFloat || dtype.code == kDLCLImgFloat ||
+                dtype.code == kDLCLImgFloatW) &&
+               dtype.bits == 64) {
       return IsNDArrayAllGreaterEqual<double>(tensor, 0);
     } else if (dtype.code == kDLInt && dtype.bits == 8) {
       return IsNDArrayAllGreaterEqual<int8_t>(tensor, 0);

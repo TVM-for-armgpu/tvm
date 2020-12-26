@@ -122,7 +122,10 @@ arm_compute::PadStrideInfo MakeACLPadStride(const std::vector<std::string>& pad,
 }
 
 arm_compute::DataType MakeACLDataType(const DLDataType& data_type) {
-  if (data_type.code == DLDataTypeCode::kDLFloat && data_type.bits == 32) {
+  if ((data_type.code == DLDataTypeCode::kDLFloat ||
+       data_type.code == DLDataTypeCode::kDLCLImgFloatW ||
+       data_type.code == DLDataTypeCode::kDLCLImgFloat) &&
+      data_type.bits == 32) {
     return arm_compute::DataType::F32;
   } else if (data_type.code == DLDataTypeCode::kDLUInt && data_type.bits == 8) {
     return arm_compute::DataType::QASYMM8;

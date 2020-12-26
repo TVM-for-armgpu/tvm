@@ -91,7 +91,7 @@ TEST(BuildModule, Heterogeneous) {
   }
 
   auto target_llvm = Target("llvm");
-  auto target_cuda = Target("cuda");
+  auto target_cuda = Target("opencl");
 
   // The shape of input tensors.
   const int n = 4;

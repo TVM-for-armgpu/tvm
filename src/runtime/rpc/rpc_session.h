@@ -138,6 +138,11 @@ class RPCSession {
   virtual void CopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
                             size_t remote_to_offset, size_t nbytes, TVMContext remote_ctx_to,
                             DLDataType type_hint) = 0;
+  virtual void CopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
+                            size_t remote_to_offset, DataShape* nbytes, TVMContext remote_ctx_to,
+                            DLDataType type_hint) {
+    LOG(FATAL) << "api not implemented";
+  }
   /*!
    * \brief Copy bytes from remote array content.
    * \param remote_from The source host data.
@@ -151,7 +156,11 @@ class RPCSession {
   virtual void CopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
                               size_t local_to_offset, size_t nbytes, TVMContext remote_ctx_from,
                               DLDataType type_hint) = 0;
-
+  virtual void CopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
+      size_t local_to_offset, DataShape* nbytes, TVMContext remote_ctx_from,
+      DLDataType type_hint) {
+    LOG(FATAL) << "api not implemented";
+  }
   /*!
    * \brief Free a remote function.
    * \param handle The remote handle, can be NDArray/PackedFunc/Module
@@ -238,7 +247,10 @@ class RPCSession {
   virtual void AsyncCopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
                                  size_t remote_to_offset, size_t nbytes, TVMContext remote_ctx_to,
                                  DLDataType type_hint, FAsyncCallback on_complete);
-
+  virtual void AsyncCopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
+                                 size_t remote_to_offset, DataShape* nbytes,
+                                 TVMContext remote_ctx_to,
+                                 DLDataType type_hint, FAsyncCallback on_complete);
   /*!
    * \brief Asynchrous version of CopyFromRemote.
    *
@@ -256,6 +268,10 @@ class RPCSession {
    */
   virtual void AsyncCopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
                                    size_t local_to_offset, size_t nbytes,
+                                   TVMContext remote_ctx_from, DLDataType type_hint,
+                                   FAsyncCallback on_complete);
+  virtual void AsyncCopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
+                                   size_t local_to_offset, DataShape* nbytes,
                                    TVMContext remote_ctx_from, DLDataType type_hint,
                                    FAsyncCallback on_complete);
   /*!

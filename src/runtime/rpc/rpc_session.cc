@@ -50,7 +50,6 @@ void RPCSession::AsyncCallFunc(PackedFuncHandle func, const TVMValue* arg_values
     this->SendException(callback, e.what());
   }
 }
-
 void RPCSession::AsyncCopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
                                    size_t remote_to_offset, size_t nbytes, TVMContext remote_ctx_to,
                                    DLDataType type_hint, RPCSession::FAsyncCallback callback) {
@@ -67,6 +66,38 @@ void RPCSession::AsyncCopyToRemote(void* local_from, size_t local_from_offset, v
   }
 }
 
+void RPCSession::AsyncCopyToRemote(void* local_from, size_t local_from_offset, void* remote_to,
+                                   size_t remote_to_offset, DataShape* nbytes, TVMContext remote_ctx_to,
+                                   DLDataType type_hint, RPCSession::FAsyncCallback callback) {
+  TVMValue value;
+  int32_t tcode = kTVMNullptr;
+  value.v_handle = nullptr;
+
+  try {
+    this->CopyToRemote(local_from, local_from_offset, remote_to, remote_to_offset, nbytes,
+                       remote_ctx_to, type_hint);
+    callback(RPCCode::kReturn, TVMArgs(&value, &tcode, 1));
+  } catch (const std::runtime_error& e) {
+    this->SendException(callback, e.what());
+  }
+}
+
+void RPCSession::AsyncCopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
+                                     size_t local_to_offset, DataShape* nbytes,
+                                     TVMContext remote_ctx_from, DLDataType type_hint,
+                                     RPCSession::FAsyncCallback callback) {
+  TVMValue value;
+  int32_t tcode = kTVMNullptr;
+  value.v_handle = nullptr;
+
+  try {
+    this->CopyFromRemote(remote_from, remote_from_offset, local_to, local_to_offset, nbytes,
+                         remote_ctx_from, type_hint);
+    callback(RPCCode::kReturn, TVMArgs(&value, &tcode, 1));
+  } catch (const std::runtime_error& e) {
+    this->SendException(callback, e.what());
+  }
+}
 void RPCSession::AsyncCopyFromRemote(void* remote_from, size_t remote_from_offset, void* local_to,
                                      size_t local_to_offset, size_t nbytes,
                                      TVMContext remote_ctx_from, DLDataType type_hint,

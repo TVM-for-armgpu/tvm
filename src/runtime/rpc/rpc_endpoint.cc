@@ -388,13 +388,18 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
 
   void HandleCopyFromRemote() {
     uint64_t handle, offset, num_bytes;
+    ShapePOD dshape;
     TVMContext ctx;
     DLDataType type_hint;
     this->Read(&handle);
     this->Read(&offset);
-    this->Read(&num_bytes);
+    this->Read(&dshape);
     this->Read(&ctx);
     this->Read(&type_hint);
+    num_bytes = dshape.itemsize;
+    for (int i = 0; i < dshape.ndim; ++i) {
+      num_bytes *= dshape.shape[i];
+    }
     size_t elem_bytes = (type_hint.bits * type_hint.lanes + 7) / 8;
 
     auto* sess = GetServingSession();
@@ -433,21 +438,40 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
       };
 
       this->SwitchToState(kWaitForAsyncCallback);
-      sess->AsyncCopyFromRemote(reinterpret_cast<void*>(handle), offset, data_ptr, 0, num_bytes,
+      if (dshape.ndim > 1) {
+        std::shared_ptr<DataShape> dtensorsp(new DataShape, DataShapeDeleter);
+        dtensorsp->shape = new int64_t[dshape.ndim];
+        dtensorsp->ndim = dshape.ndim;
+        dtensorsp->dtype = type_hint;
+        dtensorsp->ctx = ctx;
+        for (int i = 0; i < dshape.ndim; ++i) {
+          dtensorsp->shape[i] = dshape.shape[i];
+        }
+        sess->AsyncCopyFromRemote(reinterpret_cast<void*>(handle), offset, data_ptr, 0, dtensorsp.get(),
                                 ctx, type_hint, on_copy_complete);
+      } else {
+        sess->AsyncCopyFromRemote(reinterpret_cast<void*>(handle), offset, data_ptr, 0, num_bytes,
+                                  ctx, type_hint, on_copy_complete);
+      }
     }
   }
 
   void HandleCopyToRemote() {
     uint64_t handle, offset, num_bytes;
+    ShapePOD dshape;
     TVMContext ctx;
     DLDataType type_hint;
 
     this->Read(&handle);
     this->Read(&offset);
-    this->Read(&num_bytes);
+    this->Read(&dshape);
     this->Read(&ctx);
     this->Read(&type_hint);
+
+    num_bytes = dshape.itemsize;
+    for (int i = 0; i < dshape.ndim; ++i) {
+      num_bytes *= dshape.shape[i];
+    }
 
     size_t elem_bytes = (type_hint.bits * type_hint.lanes + 7) / 8;
     auto* sess = GetServingSession();
@@ -482,8 +506,21 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
       };
 
       this->SwitchToState(kWaitForAsyncCallback);
-      sess->AsyncCopyToRemote(temp_data, 0, reinterpret_cast<void*>(handle), offset, num_bytes, ctx,
-                              type_hint, on_copy_complete);
+      if (dshape.ndim > 1) {
+        std::shared_ptr<DataShape> dtensorsp(new DataShape, DataShapeDeleter);
+        dtensorsp->ndim = dshape.ndim; 
+        dtensorsp->shape = new int64_t[dshape.ndim];
+        dtensorsp->dtype = type_hint; 
+        dtensorsp->ctx = ctx; 
+        for (int i = 0; i < dshape.ndim; ++i) {
+          dtensorsp->shape[i] = dshape.shape[i];
+        }
+        sess->AsyncCopyToRemote(temp_data, 0, reinterpret_cast<void*>(handle), offset, dtensorsp.get(),
+                                ctx, type_hint, on_copy_complete);
+      } else {
+        sess->AsyncCopyToRemote(temp_data, 0, reinterpret_cast<void*>(handle), offset, num_bytes,
+                                ctx, type_hint, on_copy_complete);
+      }
     }
   }
 
@@ -817,49 +854,93 @@ void RPCEndpoint::CallFunc(RPCSession::PackedFuncHandle h, const TVMValue* arg_v
 
 void RPCEndpoint::CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset,
                                size_t data_size, TVMContext ctx_to, DLDataType type_hint) {
+  ShapePOD serial_shape;
+  serial_shape.ndim = 1;
+  serial_shape.shape[0] = data_size;
+  serial_shape.itemsize = 1;
+  CopyToRemoteInternal(from, from_offset, to, to_offset, serial_shape, ctx_to, type_hint);
+}
+void RPCEndpoint::CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset,
+                               DataShape* dshape, TVMContext ctx_to, DLDataType type_hint) {
+  ShapePOD serial_shape;
+  serial_shape.ndim = dshape->ndim;
+  for (int i = 0; i < dshape->ndim; ++i) {
+    serial_shape.shape[i] = dshape->shape[i];
+  }
+  serial_shape.itemsize = (dshape->dtype.bits * dshape->dtype.lanes + 7) / 8;
+  CopyToRemoteInternal(from, from_offset, to, to_offset, serial_shape, ctx_to, type_hint);
+}
+
+void RPCEndpoint::CopyToRemoteInternal(void* from, size_t from_offset, void* to, size_t to_offset,
+                               ShapePOD data_shape, TVMContext ctx_to, DLDataType type_hint) {
   std::lock_guard<std::mutex> lock(mutex_);
   RPCCode code = RPCCode::kCopyToRemote;
   uint64_t handle = reinterpret_cast<uint64_t>(to);
   uint64_t offset = static_cast<uint64_t>(to_offset);
-  uint64_t size = static_cast<uint64_t>(data_size);
+  uint64_t size = data_shape.itemsize;
+  for (int i = 0; i < data_shape.ndim; ++i) {
+    size *= data_shape.shape[i];
+  }
 
-  uint64_t packet_nbytes = sizeof(code) + sizeof(handle) + sizeof(offset) + sizeof(size) +
-                           sizeof(ctx_to) + sizeof(type_hint) + data_size;
+  uint64_t packet_nbytes = sizeof(code) + sizeof(handle) + sizeof(offset) + sizeof(data_shape) +
+                           sizeof(ctx_to) + sizeof(type_hint) + size;
 
   handler_->Write(packet_nbytes);
   handler_->Write(code);
   handler_->Write(handle);
   handler_->Write(offset);
-  handler_->Write(size);
+  handler_->Write(data_shape);
   handler_->Write(ctx_to);
   handler_->Write(type_hint);
-  handler_->WriteArray(reinterpret_cast<char*>(from) + from_offset, data_size);
+  handler_->WriteArray(reinterpret_cast<char*>(from) + from_offset, size);
 
   ICHECK(HandleUntilReturnEvent(true, [](TVMArgs) {}) == RPCCode::kReturn);
 }
 
 void RPCEndpoint::CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset,
+                                 DataShape* dshape, TVMContext ctx_from, DLDataType type_hint) {
+  ShapePOD serial_shape;
+  serial_shape.ndim = dshape->ndim;
+  for (int i = 0; i < dshape->ndim; ++i) {
+    serial_shape.shape[i] = dshape->shape[i];
+  }
+  serial_shape.itemsize = (dshape->dtype.bits * dshape->dtype.lanes + 7) / 8;
+  CopyFromRemoteInternal(from, from_offset, to, to_offset, serial_shape, ctx_from, type_hint);
+}
+void RPCEndpoint::CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset,
                                  size_t data_size, TVMContext ctx_from, DLDataType type_hint) {
+  ShapePOD serial_shape;
+  serial_shape.ndim = 1;
+  serial_shape.shape[0] = data_size;
+  serial_shape.itemsize = 1;
+  CopyFromRemoteInternal(from, from_offset, to, to_offset, serial_shape, ctx_from, type_hint);
+}
+  void RPCEndpoint::CopyFromRemoteInternal(void* from, size_t from_offset, void* to, size_t to_offset,
+                                         ShapePOD data_shape, TVMContext ctx_from,
+                                         DLDataType type_hint) {
   std::lock_guard<std::mutex> lock(mutex_);
   RPCCode code = RPCCode::kCopyFromRemote;
   uint64_t handle = reinterpret_cast<uint64_t>(from);
   uint64_t offset = static_cast<uint64_t>(from_offset);
-  uint64_t size = static_cast<uint64_t>(data_size);
+  uint64_t size = data_shape.itemsize;
+  for (int i = 0; i < data_shape.ndim; ++i) {
+    size *= data_shape.shape[i];
+  }
 
-  uint64_t packet_nbytes = sizeof(code) + sizeof(handle) + sizeof(offset) + sizeof(size) +
+  uint64_t packet_nbytes = sizeof(code) + sizeof(handle) + sizeof(offset) + sizeof(data_shape) +
                            sizeof(ctx_from) + sizeof(type_hint);
 
   handler_->Write(packet_nbytes);
   handler_->Write(code);
   handler_->Write(handle);
   handler_->Write(offset);
-  handler_->Write(size);
+  handler_->Write(data_shape);
   handler_->Write(ctx_from);
   handler_->Write(type_hint);
 
   TVMRetValue rv;
   ICHECK(HandleUntilReturnEvent(true, [](TVMArgs) {}) == RPCCode::kCopyAck);
-  handler_->ReadArray(reinterpret_cast<char*>(to) + to_offset, data_size);
+  handler_->ReadArray(reinterpret_cast<char*>(to) + to_offset, size);
   handler_->FinishCopyAck();
 }
 
@@ -897,11 +978,17 @@ void RPCDevGetAttr(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
 
 void RPCDevAllocData(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
   TVMContext ctx = args[0];
-  uint64_t nbytes = args[1];
   uint64_t alignment = args[2];
   DLDataType type_hint = args[3];
-  void* data = handler->GetDeviceAPI(ctx)->AllocDataSpace(ctx, nbytes, alignment, type_hint);
-  *rv = data;
+  if (args.type_codes[1] == kDLInt) {
+    uint64_t nbytes = args[1];
+    void* data = handler->GetDeviceAPI(ctx)->AllocDataSpace(ctx, nbytes, alignment, type_hint);
+    *rv = data;
+  } else {
+    DLTensor* nbytes = args[1];
+    void* data = handler->GetDeviceAPI(ctx)->AllocDataSpace(ctx, nbytes, alignment, type_hint);
+    *rv = data;
+  }
 }
 
 void RPCDevFreeData(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
@@ -915,7 +1002,6 @@ void RPCCopyAmongRemote(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
   uint64_t from_offset = args[1];
   void* to = args[2];
   uint64_t to_offset = args[3];
-  uint64_t size = args[4];
   TVMContext ctx_from = args[5];
   TVMContext ctx_to = args[6];
   DLDataType type_hint = args[7];
@@ -928,8 +1014,15 @@ void RPCCopyAmongRemote(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
     ICHECK(ctx_to.device_type == kDLCPU || ctx_to.device_type == ctx_from.device_type)
         << "Can not copy across different ctx types directly";
   }
-  handler->GetDeviceAPI(ctx)->CopyDataFromTo(from, from_offset, to, to_offset, size, ctx_from,
-                                             ctx_to, type_hint, stream);
+  if (args.type_codes[4] == kDLInt) {
+    uint64_t size = args[4];
+    handler->GetDeviceAPI(ctx)->CopyDataFromTo(from, from_offset, to, to_offset, size, ctx_from,
+                                               ctx_to, type_hint, stream);  
+  } else {
+    DLTensor* size = args[4];
+    handler->GetDeviceAPI(ctx)->CopyDataFromTo(from, from_offset, to, to_offset, size, ctx_from,
+                                               ctx_to, type_hint, stream);
+  }
 }
 
 void RPCEndpoint::EventHandler::HandleSyscall(RPCCode code) {
@@ -993,7 +1086,15 @@ class RPCClientSession : public RPCSession, public DeviceAPI {
                     TVMContext ctx_to, DLDataType type_hint) final {
     endpoint_->CopyToRemote(from, from_offset, to, to_offset, nbytes, ctx_to, type_hint);
   }
+  void CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset, DataShape* nbytes,
+                    TVMContext ctx_to, DLDataType type_hint) final {
+    endpoint_->CopyToRemote(from, from_offset, to, to_offset, nbytes, ctx_to, type_hint);
+  }
 
+  void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, DataShape* nbytes,
+                      TVMContext ctx_from, DLDataType type_hint) final {
+    endpoint_->CopyFromRemote(from, from_offset, to, to_offset, nbytes, ctx_from, type_hint);
+  }
   void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, size_t nbytes,
                       TVMContext ctx_from, DLDataType type_hint) final {
     endpoint_->CopyFromRemote(from, from_offset, to, to_offset, nbytes, ctx_from, type_hint);
@@ -1013,7 +1114,10 @@ class RPCClientSession : public RPCSession, public DeviceAPI {
       *rv = endpoint_->SysCallRemote(RPCCode::kDevGetAttr, ctx, static_cast<int>(kind));
     }
   }
-
+  void* AllocDataSpace(TVMContext ctx, DataShape* dshape, size_t alignment,
+                       DLDataType type_hint) final {
+    return endpoint_->SysCallRemote(RPCCode::kDevAllocData, ctx, dshape, alignment, type_hint);
+  }
   void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                        DLDataType type_hint) final {
     return endpoint_->SysCallRemote(RPCCode::kDevAllocData, ctx, nbytes, alignment, type_hint);
