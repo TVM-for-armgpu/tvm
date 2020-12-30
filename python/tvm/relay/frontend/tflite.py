@@ -325,6 +325,7 @@ class OperatorConverter(object):
             return {
                 TensorType.UINT8: np.uint8,
                 TensorType.INT8: np.int8,
+                TensorType.FLOAT16: np.float16,
                 TensorType.FLOAT32: np.float32,
                 TensorType.INT32: np.int32,
                 TensorType.INT64: np.int64,
@@ -362,6 +363,8 @@ class OperatorConverter(object):
             return "int8"
         if tensor_type == TensorType.UINT8:
             return "uint8"
+        if tensor_type == TensorType.FLOAT16:
+            return "float16"
         if tensor_type == TensorType.FLOAT32:
             return "float32"
         if tensor_type == TensorType.INT32:
@@ -508,13 +511,30 @@ class OperatorConverter(object):
         in_expr = self.get_expr(input_tensor_idx)
 
         # If the tensors are quantized, ensure that input/output qnn params are same.
-        if input_tensor.qnn_params:
+
+        input_tensor_type_str = self.get_tensor_type_str(input_tensor.tensor.Type())
+        if input_tensor.qnn_params and input_tensor_type_str == "int8":
+            # TFLite 2.x quantization spec requires qnn params to be same and dtype to be int8.
+            # For TFLite 1.x, dtype can be uint8 and qnn params can be different
             output_tensor = output_tensors[0]
             assert self.has_same_qnn_params(
                 input_tensor, output_tensor
             ), "TFLite reshape requires input and output scale and zero points to be equal"
 
         out = _op.reshape(in_expr, newshape=target_shape)
+        if input_tensor.qnn_params and input_tensor_type_str == "uint8":
+            output_tensor = output_tensors[0]
+            if not self.has_same_qnn_params(input_tensor, output_tensor):
+                output_tensor_type_str = self.get_tensor_type_str(output_tensor.tensor.Type())
+                out = _qnn.op.requantize(
+                    out,
+                    input_scale=input_tensor.qnn_params["scale"],
+                    input_zero_point=input_tensor.qnn_params["zero_point"],
+                    output_scale=output_tensor.qnn_params["scale"],
+                    output_zero_point=output_tensor.qnn_params["zero_point"],
+                    out_dtype=output_tensor_type_str,
+                )
+
         return out
 
     def _convert_resize(self, method, op):
@@ -1991,20 +2011,33 @@ class OperatorConverter(object):
         weight_tensor_type_str = self.get_tensor_type_str(weight_tensor_type)
 
         in_expr = self.get_expr(input_tensor_idx)
-        weight_value = self.get_tensor_value(weight_tensor)
 
-        # TFLite kernel layout:
-        # convolution:
-        # OC KH KW IC, we require KH KW IC OC (HWIO)
-        # depthwise convolution:
-        # 1 KH KW C(input_c * depth_multiplier), we require
-        # KH KW IC M (depth_multiplier) (HWOI)
-        if is_depthwise_conv:
-            weight_value = weight_value.reshape(kernel_h, kernel_w, input_c, depth_multiplier)
+        # TFLite converts float32 models to float16 models by introducing
+        # a Dequantize op in every op that contains a float32 values.
+        # (weights, biases, and constants etc. )
+        # So conv op may have weight and bias as tensors instead of values.
+        if self.has_expr(weight_tensor.tensor_idx):
+            weight_expr = self.get_expr(weight_tensor.tensor_idx)
+            if is_depthwise_conv:
+                weight_expr = _op.reshape(
+                    weight_expr, (kernel_h, kernel_w, input_c, depth_multiplier)
+                )
+            else:
+                weight_expr = _op.transpose(weight_expr, axes=(1, 2, 3, 0))
         else:
-            weight_value = weight_value.transpose((1, 2, 3, 0))
+            weight_value = self.get_tensor_value(weight_tensor)
+            # TFLite kernel layout:
+            # convolution:
+            # OC KH KW IC, we require KH KW IC OC (HWIO)
+            # depthwise convolution:
+            # 1 KH KW C(input_c * depth_multiplier), we require
+            # KH KW IC M (depth_multiplier) (HWOI)
+            if is_depthwise_conv:
+                weight_value = weight_value.reshape(kernel_h, kernel_w, input_c, depth_multiplier)
+            else:
+                weight_value = weight_value.transpose((1, 2, 3, 0))
 
-        weight_expr = self.exp_tab.new_const(weight_value, dtype=weight_tensor_type_str)
+            weight_expr = self.exp_tab.new_const(weight_value, dtype=weight_tensor_type_str)
 
         if padding == Padding.VALID:
             pass
@@ -2039,9 +2072,12 @@ class OperatorConverter(object):
             # bias tensor type should be INT32 (quantization) or FLOAT32
             assert bias_tensor_type in (TensorType.INT32, TensorType.FLOAT32)
             bias_tensor_type_str = self.get_tensor_type_str(bias_tensor_type)
-            bias_expr = self.exp_tab.new_const(
-                self.get_tensor_value(bias_tensor), dtype=bias_tensor_type_str
-            )
+            if self.has_expr(bias_tensor.tensor_idx):
+                bias_expr = self.get_expr(bias_tensor.tensor_idx)
+            else:
+                bias_expr = self.exp_tab.new_const(
+                    self.get_tensor_value(bias_tensor), dtype=bias_tensor_type_str
+                )
             channel_axis = 3
             out = _op.nn.bias_add(out, bias_expr, axis=channel_axis)
 
@@ -2505,19 +2541,30 @@ class OperatorConverter(object):
             raise ImportError("The tflite package must be installed")
 
         input_tensors = self.get_input_tensors(op)
-        assert len(input_tensors) >= 1, "input tensors should greater than 1"
-        in_exprs = [self.get_expr(input_tensor.tensor_idx) for input_tensor in input_tensors]
-
         output_tensors = self.get_output_tensors(op)
         assert len(output_tensors) == 1, "output tensors length should be 1"
+
+        if input_tensors[0].qnn_params:
+            output_tensor = output_tensors[0]
+            assert self.has_same_qnn_params(
+                input_tensors[0], output_tensor
+            ), "TFLite pack requires input and output scale and zero points to be equal"
+
+            for input_tensor in input_tensors:
+                assert self.has_same_qnn_params(
+                    input_tensors[0], input_tensor
+                ), "TFLite pack requires all input tensors to have same scale and zero point"
 
         assert op.BuiltinOptionsType() == BuiltinOptions.PackOptions
         op_options = op.BuiltinOptions()
         pack_options = PackOptions()
         pack_options.Init(op_options.Bytes, op_options.Pos)
         pack_axis = pack_options.Axis()
+        pack_values_count = pack_options.ValuesCount()
+        assert len(input_tensors) == pack_values_count, "Discordance in input values count"
 
-        in_exprs_reshaped = [_op.expand_dims(i, axis=pack_axis, num_newaxis=1) for i in in_exprs]
+        in_exprs = [self.get_tensor_expr(_) for _ in input_tensors]
+        in_exprs_reshaped = [_op.expand_dims(_, axis=pack_axis, num_newaxis=1) for _ in in_exprs]
         out = _op.concatenate(in_exprs_reshaped, pack_axis)
         return out
 
@@ -2870,10 +2917,22 @@ class OperatorConverter(object):
 
     def convert_dequantize(self, op):
         """Convert TFLite Dequantize"""
+        try:
+            from tflite.TensorType import TensorType
+        except ImportError:
+            raise ImportError("The tflite package must be installed")
 
         input_tensors = self.get_input_tensors(op)
         assert len(input_tensors) == 1, "input tensors length should be 1"
         input_tensor = input_tensors[0]
+
+        if input_tensor.tensor.Type() == TensorType.FLOAT16:
+            dtype = self.get_tensor_type_str(input_tensor.tensor.Type())
+            input_value = self.get_tensor_value(input_tensor)
+            in_expr = self.exp_tab.new_const(input_value, dtype=dtype)
+            out = relay.cast(in_expr, dtype="float32")
+            return out
+
         in_expr = self.get_expr(input_tensor.tensor_idx)
 
         # The input must be quantized

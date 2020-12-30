@@ -15,13 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 """
-Auto-scheduling a Neural Network for x86 CPU
-============================================
-**Author**: `Lianmin Zheng <https://github.com/merrymercy>`_
+Auto-scheduling a Neural Network for mali GPU
+=============================================
+**Author**: `Zhao Wu <https://github.com/FrozenGene>`_
 
 Auto-tuning for specific devices and workloads is critical for getting the
 best performance. This is a tutorial on how to tune a whole neural
-network for x86 CPU with the auto-scheduler.
+network for mali GPU with the auto-scheduler.
 
 To auto-tune a neural network, we partition the network into small subgraphs and 
 tune them independently. Each subgraph is treated as one search task.
@@ -50,6 +50,7 @@ import tvm
 from tvm import relay, auto_scheduler
 import tvm.relay.testing
 from tvm.contrib import graph_runtime
+import os
 
 #################################################################
 # Define a Network
@@ -131,14 +132,29 @@ def get_network(name, batch_size, layout="NHWC", dtype="float32"):
 
 
 # Define the neural network and compilation target.
-# If the target machine supports avx512 instructions, replace the
-# "llvm -mcpu=core-avx2" with "llvm -mcpu=skylake-avx512"
-network = "resnet-50"
+network = "mobilenet"
 batch_size = 1
 layout = "NHWC"
-target = tvm.target.Target("llvm -mcpu=core-avx2")
+# Set this to True if you use ndk tools for cross compiling
+use_ndk = True
+# Path to cross compiler
+os.environ["TVM_NDK_CC"] = "/usr/bin/aarch64-linux-gnu-g++"
+target_host = tvm.target.Target("llvm -mtriple=aarch64-linux-gnu")
+target = tvm.target.Target("opencl -device=mali")
 dtype = "float32"
 log_file = "%s-%s-B%d-%s.json" % (network, layout, batch_size, target.kind.name)
+
+
+#################################################################
+# Start an RPC Tracker and Register Devices to the Tracker
+# --------------------------------------------------------
+# Please refer to the "Start RPC Tracker" and "Register Devices to RPC Tracker" setions
+# in this :ref:`tutorial <tutorials-autotvm-start-rpc-tracker>` to start an RPC tracker
+# and register devices to the tracker.
+
+# Replace this with the device key in your tracker
+device_key = "rk3399"
+
 
 #################################################################
 # Extract Search Tasks
@@ -154,16 +170,41 @@ log_file = "%s-%s-B%d-%s.json" % (network, layout, batch_size, target.kind.name)
 # Extract tasks from the network
 print("Extract tasks...")
 mod, params, input_shape, output_shape = get_network(network, batch_size, layout, dtype=dtype)
-tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target)
+tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target, target_host)
 
 for idx, task in enumerate(tasks):
     print("========== Task %d  (workload key: %s) ==========" % (idx, task.workload_key))
     print(task.compute_dag)
+######################################################################
+# .. note:: How to get the hardware parameters from remote device
+#
+#   .. code-block:: python
+#
+#     from tvm.auto_scheduler.utils import request_remote
+#     remote = request_remote(device_key, "0.0.0.0", 9190)
+#     ctx = remote.cl()
+#     max_shared_memory_per_block = ctx.max_shared_memory_per_block
+#     # There is no explicit local memory limition
+#     # so we can use INT32_MAX to disalbe the check on local_memory.
+#     max_local_memory_per_block = 2147483647 # INT32_MAX
+#     max_threads_per_block = ctx.max_threads_per_block
+#     max_vthread_extent = int(ctx.warp_size / 4) if int(ctx.warp_size / 4) > 1 else ctx.warp_size
+#     warp_size = ctx.warp_size
+#     hardware_params = auto_scheduler.HardwareParams(-1, 16, 64,
+#                                                     max_shared_memory_per_block, max_local_memory_per_block,
+#                                                     max_threads_per_block, max_vthread_extent, warp_size)
+#
+#  Now you could pass it to search task and tune
+#
+#   .. code-block:: python
+#
+#     tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target, target_host, hardware_params)
+#
 
 #################################################################
-# Begin Tuning
-# ------------
-# Now, we set some options for tuning and launch the search tasks
+# Tuning and Evaluate
+# -------------------
+# Now, we set some options for tuning, launch the search tasks and evaluate the end-to-end performance
 #
 # * :code:`num_measure_trials` is the number of measurement trials we can use during the tuning.
 #   You can set it to a small number (e.g., 200) for a fast demonstrative run.
@@ -179,23 +220,60 @@ for idx, task in enumerate(tasks):
 #
 
 
-def run_tuning():
+def tune_and_evaluate():
     print("Begin tuning...")
     tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
     tune_option = auto_scheduler.TuningOptions(
         num_measure_trials=200,  # change this to 20000 to achieve the best performance
-        runner=auto_scheduler.LocalRunner(repeat=10, enable_cpu_cache_flush=True),
+        builder=auto_scheduler.LocalBuilder(build_func="ndk" if use_ndk else "default"),
+        runner=auto_scheduler.RPCRunner(
+            device_key, host="0.0.0.0", port=9190, repeat=3, timeout=50
+        ),
         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
     )
 
     tuner.tune(tune_option)
 
+    # Compile the whole network
+    print("Compile...")
+    with auto_scheduler.ApplyHistoryBest(log_file):
+        with tvm.transform.PassContext(
+            opt_level=3, config={"relay.backend.use_auto_scheduler": True}
+        ):
+            lib = relay.build(mod, target=target, target_host=target_host, params=params)
 
-# We do not run the tuning in our webpage server since it takes too long.
+    # Create graph runtime
+    print("=============== Request Remote ===============")
+    from tvm.auto_scheduler.utils import request_remote
+
+    remote = request_remote(device_key, "0.0.0.0", 9190)
+    ctx = remote.cl()
+    from tvm.contrib import utils, ndk
+
+    temp = utils.tempdir()
+    filename = "deploy_lib.so"
+    path_lib = temp.relpath(filename)
+    lib.export_library(path_lib, ndk.create_shared)
+    remote.upload(path_lib)
+    loaded_lib = remote.load_module(filename)
+    module = graph_runtime.GraphModule(loaded_lib["default"](ctx))
+    data = (np.random.uniform(size=input_shape)).astype(dtype)
+    data_tvm = tvm.nd.array(data)
+    module.set_input("data", data_tvm)
+
+    # Evaluate
+    print("Evaluate inference time cost...")
+    ftimer = module.module.time_evaluator("run", ctx, repeat=3, min_repeat_ms=500)
+    prof_res = np.array(ftimer().results) * 1e3  # convert to millisecond
+    print(
+        "Mean inference time (std dev): %.2f ms (%.2f ms)" % (np.mean(prof_res), np.std(prof_res))
+    )
+
+
+# We do not run the tuning in our webpage server since server doesn't have mali gpu.
 # Uncomment the following line to run it by yourself.
 
-# run_tuning()
-
+# tune_and_evaluate()
 
 ######################################################################
 # .. note:: Explain the printed information during tuning
@@ -265,33 +343,6 @@ def run_tuning():
 #   you should be able to do the compilation (the secion below).
 #
 
-
-#################################################################
-# Compile and Evaluate
-# --------------------
-# After auto-tuning, we can compile the network with the best schedules we found.
-# All measurement records are dumped into the log file during auto-tuning,
-# so we can read the log file and load the best schedules.
-
-# Compile with the history best
-print("Compile...")
-with auto_scheduler.ApplyHistoryBest(log_file):
-    with tvm.transform.PassContext(opt_level=3, config={"relay.backend.use_auto_scheduler": True}):
-        lib = relay.build(mod, target=target, params=params)
-
-# Create graph runtime
-ctx = tvm.context(str(target), 0)
-module = graph_runtime.GraphModule(lib["default"](ctx))
-data_tvm = tvm.nd.array((np.random.uniform(size=input_shape)).astype(dtype))
-module.set_input("data", data_tvm)
-
-# Evaluate
-print("Evaluate inference time cost...")
-ftimer = module.module.time_evaluator("run", ctx, repeat=3, min_repeat_ms=500)
-prof_res = np.array(ftimer().results) * 1e3  # convert to millisecond
-print("Mean inference time (std dev): %.2f ms (%.2f ms)" % (np.mean(prof_res), np.std(prof_res)))
-
-
 #################################################################
 # Other Tips
 # ----------
@@ -304,7 +355,7 @@ print("Mean inference time (std dev): %.2f ms (%.2f ms)" % (np.mean(prof_res), n
 #    add a new argument :code:`load_log_file` when creating the task scheduler
 #    in function :code:`run_tuning`. Say,
 #    :code:`tuner = auto_scheduler.TaskScheduler(tasks, task_weights, load_log_file=log_file)`
-# 4. If you have multiple target CPUs, you can use all of them for measurements to
+# 4. If you have multiple target GPUs, you can use all of them for measurements to
 #    parallelize the measurements. Check this :ref:`section <tutorials-autotvm-scale-up-rpc-tracker>`
 #    to learn how to use the RPC Tracker and RPC Server.
 #    To use the RPC Tracker in auto-scheduler, replace the runner in :code:`TuningOptions`
