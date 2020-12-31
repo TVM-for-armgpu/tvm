@@ -245,15 +245,20 @@ class RPCRunner(Runner):
     def set_task(self, task):
         self.task = task
 
-        if check_remote(task.target, self.key, self.host, self.port):
-            logger.info("Get devices for measurement successfully!")
-        else:
-            raise RuntimeError(
-                "Cannot get remote devices from the tracker. "
-                "Please check the status of tracker by "
-                "'python -m tvm.exec.query_rpc_tracker --port [THE PORT YOU USE]' "
-                "and make sure you have free devices on the queue status."
-            )
+        while True:
+            if check_remote(task.target, self.key, self.host, self.port):
+                logger.info("Get devices for measurement successfully!")
+                break
+            else:
+                logger.info("failed to Get devices for measurement, retrying......")
+                time.sleep(5)
+                continue
+                raise RuntimeError(
+                    "Cannot get remote devices from the tracker. "
+                    "Please check the status of tracker by "
+                    "'python -m tvm.exec.query_rpc_tracker --port [THE PORT YOU USE]' "
+                    "and make sure you have free devices on the queue status."
+                )
 
         if self.check_correctness:
             # use llvm cpu to generate a reference input/output

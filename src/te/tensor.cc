@@ -62,12 +62,13 @@ Tensor Operation::output(size_t i) const {
   node->op = *this;
   node->value_index = i;
   node->dtype = (*this)->output_dtype(i);
+  node->shape = (*this)->output_shape(i);
   // climagefloat is only valid for placehoderop, we need to cast to float for the intermediate tensor
   if ((node->dtype.is_climgfloat() || node->dtype.is_climgfloatw()) &&
       node->op->type_index() != PlaceholderOpNode::RuntimeTypeIndex()) {
     node->dtype = DataType::Float(node->dtype.bits(), node->dtype.lanes());
+    ICHECK_GE(node->shape.size(), 2) << "climgfloat type of tensor must be at least 2 dimention";
   }
-  node->shape = (*this)->output_shape(i);
   return Tensor(node);
 }
 
