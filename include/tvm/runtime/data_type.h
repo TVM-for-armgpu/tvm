@@ -301,7 +301,7 @@ inline const char* DLDataTypeCode2Str(DLDataTypeCode type_code) {
     case kDLFloat:
       return "float";
     case kDLCLImgFloat:
-      return "climgfloat";
+      return "climgfloatr";
     case kDLCLImgFloatW:
       return "climgfloatw";
     case DataType::kHandle:
@@ -368,9 +368,9 @@ inline DLDataType String2DLDataType(std::string s) {
   } else if (s.substr(0, 11) == "climgfloatw") {
     t.code = kDLCLImgFloatW;
     scan = s.c_str() + 11;
-  } else if (s.substr(0, 10) == "climgfloat") {
+  } else if (s.substr(0, 11) == "climgfloatr") {
     t.code = kDLCLImgFloat;
-    scan = s.c_str() + 10;
+    scan = s.c_str() + 11;
   } else if (s.substr(0, 6) == "handle") {
     t.code = kTVMOpaqueHandle;
     t.bits = 64;  // handle uses 64 bit by default.

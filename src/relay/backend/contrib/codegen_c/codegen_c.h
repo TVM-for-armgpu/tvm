@@ -280,7 +280,7 @@ class CodegenCBase {
     } else if (runtime::TypeMatch(ttype->dtype, kDLCLImgFloatW, 32)) {
       dtype = "climgfloatw";
     } else if (runtime::TypeMatch(ttype->dtype, kDLCLImgFloat, 32)) {
-      dtype = "climgfloat";
+      dtype = "climgfloatr";
     } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 32)) {
       dtype = "int";
     } else if (runtime::TypeMatch(ttype->dtype, kDLInt, 64)) {

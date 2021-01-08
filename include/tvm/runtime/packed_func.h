@@ -1004,7 +1004,7 @@ inline const char* ArgTypeCode2Str(int type_code) {
     case kDLFloat:
       return "float";
     case kDLCLImgFloat:
-      return "climgfloat";
+      return "climgfloatr";
     case kDLCLImgFloatW:
       return "climgfloatw";
     case kTVMStr:

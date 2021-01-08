@@ -133,7 +133,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
-  cl_image_format fmt = {CL_R, CL_FLOAT};
+  cl_image_format fmt = {CL_RGBA, CL_FLOAT};
   ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
   size_t height = dsize->shape[0];
   size_t width = dsize->shape[1];
