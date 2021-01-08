@@ -78,7 +78,7 @@ class DataType(ctypes.Structure):
         DataTypeCode.BFLOAT: "bfloat",
     }
 
-    def __init__(self, type_str, opencl_image=0):
+    def __init__(self, type_str):
         super(DataType, self).__init__()
         if isinstance(type_str, np.dtype):
             type_str = str(type_str)

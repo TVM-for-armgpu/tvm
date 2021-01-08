@@ -139,7 +139,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   size_t width = dsize->shape[1];
 
   if (dsize->ndim > 2) {
-    width *= std::max(long long(1), dsize->shape[2]/4);
+    width *= std::max(int64_t(1), dsize->shape[2] / 4);
   }
   if (dsize->ndim > 3) {
     height *= dsize->shape[3];
@@ -212,7 +212,7 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
   size_t width = dsize->shape[1];
 
   if (dsize->ndim > 2) {
-    width *= std::max(long long(1), dsize->shape[2] / 4);
+    width *= std::max(int64_t(1), dsize->shape[2] / 4);
   }
   if (dsize->ndim > 3) {
     height *= dsize->shape[3];

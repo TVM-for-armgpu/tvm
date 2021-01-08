@@ -80,7 +80,6 @@ class RPCDeviceAPI final : public DeviceAPI {
   void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset, DataShape* dshape,
                       TVMContext ctx_from, TVMContext ctx_to, DLDataType type_hint,
                       TVMStreamHandle stream) final {
-    size_t size = GetDataSize(*dshape);
     if (IsRPCSessionContext(ctx_from) && IsRPCSessionContext(ctx_to)) {
       ICHECK(ctx_from.device_type == ctx_to.device_type)
           << "Cannot copy across two different remote session";

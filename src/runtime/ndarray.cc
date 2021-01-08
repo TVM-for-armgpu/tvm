@@ -102,7 +102,7 @@ void ArrayCopyToBytes(const DLTensor* handle, void* data, size_t nbytes) {
     dshape->dtype = handle->dtype;
     dshape->ndim = handle->ndim;
     dshape->shape = new int64_t[handle->ndim];
-    for (size_t i = 0; i < handle->ndim; ++i) {
+    for (int i = 0; i < handle->ndim; ++i) {
       dshape->shape[i] = handle->shape[i];
     }
 
