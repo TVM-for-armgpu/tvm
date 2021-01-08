@@ -365,13 +365,12 @@ inline DLDataType String2DLDataType(std::string s) {
   } else if (s.substr(0, 5) == "float") {
     t.code = kDLFloat;
     scan = s.c_str() + 5;
+  } else if (s.substr(0, 11) == "climgfloatw") {
+    t.code = kDLCLImgFloatW;
+    scan = s.c_str() + 11;
   } else if (s.substr(0, 10) == "climgfloat") {
     t.code = kDLCLImgFloat;
     scan = s.c_str() + 10;
-  } else if (s.substr(0, 10) == "climgfloatw") {
-    t.code = kDLCLImgFloatW;
-    scan = s.c_str() + 11;
-  
   } else if (s.substr(0, 6) == "handle") {
     t.code = kTVMOpaqueHandle;
     t.bits = 64;  // handle uses 64 bit by default.

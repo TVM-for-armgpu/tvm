@@ -147,7 +147,7 @@ class NDArray(NDArrayBase):
                     source_array.shape, shape
                 )
             )
-        if dtype == "climgfloat32":
+        if dtype in ["climgfloatw32","climgfloat32"]:
             source_array = np.ascontiguousarray(source_array, dtype="float32")
         else:
             source_array = np.ascontiguousarray(source_array, dtype=dtype)
@@ -179,7 +179,7 @@ class NDArray(NDArrayBase):
             shape = shape + (t.lanes,)
             t.lanes = 1
             dtype = str(t)
-        nptype = "float32" if dtype == "climgfloat32" else dtype
+        nptype = "float32" if dtype in ["climgfloatw32","climgfloat32"] else dtype
         np_arr = np.empty(shape, dtype=nptype)
         assert np_arr.flags["C_CONTIGUOUS"]
         data = np_arr.ctypes.data_as(ctypes.c_void_p)
@@ -517,8 +517,10 @@ def array(arr, ctx=cpu(0), opencl_image=0):
     """
     if not isinstance(arr, (np.ndarray, NDArray)):
         arr = np.array(arr)
-    if opencl_image:
+    if opencl_image == 1:
         return empty(arr.shape, "climgfloat32", ctx, opencl_image).copyfrom(arr)
+    elif opencl_image == 2:
+        return empty(arr.shape, "climgfloatw32", ctx, opencl_image).copyfrom(arr)
     else:
         return empty(arr.shape, arr.dtype, ctx, opencl_image).copyfrom(arr)
 

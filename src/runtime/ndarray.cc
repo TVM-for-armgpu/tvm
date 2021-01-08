@@ -278,7 +278,8 @@ void NDArray::CopyFromTo(const DLTensor* from, DLTensor* to, TVMStreamHandle str
   // api manager.
   TVMContext ctx = from->ctx.device_type != kDLCPU ? from->ctx : to->ctx;
   if ((from->dtype.code == kDLCLImgFloatW || from->dtype.code == kDLCLImgFloat) &&
-      (from->ctx.device_type % kRPCSessMask) == kDLOpenCL) {
+          ((from->ctx.device_type % kRPCSessMask) == kDLOpenCL ||
+      (to->ctx.device_type % kRPCSessMask) == kDLOpenCL)) {
     DeviceAPI::Get(ctx)->CopyDataFromTo(from->data, static_cast<size_t>(from->byte_offset),
                                         to->data, static_cast<size_t>(to->byte_offset), to,
                                         from->ctx, to->ctx, from->dtype, stream);

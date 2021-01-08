@@ -250,7 +250,7 @@ class RPCRunner(Runner):
                 logger.info("Get devices for measurement successfully!")
                 break
             else:
-                logger.info("failed to Get devices for measurement, retrying......")
+                logger.warn("failed to Get devices for measurement, retrying......")
                 time.sleep(5)
                 continue
                 raise RuntimeError(

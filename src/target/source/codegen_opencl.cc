@@ -52,9 +52,12 @@ void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
 }
 
 void CodeGenOpenCL::PrintFuncPrefix() {
+  stream << "__kernel void";
+}
+
+void CodeGenOpenCL::PrintGlobalSamplerDeclare() {
   stream << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
             "CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;\n";
-  stream << "__kernel void";
 }
 
 std::string CodeGenOpenCL::Finish() {
@@ -113,7 +116,17 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
     return;
   }
   bool fail = false;
-  if (in_para_stm && t.is_climgfloat()) {
+  if (in_para_stm && (t.is_climgfloat() || t.is_climgfloatw())) {
+    if (t.lanes() != 4) {
+      LOG(WARNING) << "you are using " << t << "*" << t.lanes()
+                   << " as opencl image object type!!!!!!!";
+      if (t.lanes() != 1) {
+        LOG(FATAL) << "Cannot convert type " << t << "*" << t.lanes()
+                   << " to OpenCL image object type, only " << t << "*"
+                   << "4 is support ";
+        return;
+      }
+    }
     os << "image2d_t";
     return;
   }
@@ -179,6 +192,40 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
 
 void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr base,
                                  std::ostream& os) {  // NOLINT(*)
+  do {
+    if (t.is_climgfloat()) {
+      std::string vid = GetVarID(buffer);
+      if (var_buffer_map_.find(vid) == var_buffer_map_.end()) {
+        break;
+      }
+      if (!HandleTypeMatch(buffer, t.element_of())) {
+        os << '(';
+        auto it = alloc_storage_scope_.find(buffer);
+        if (it != alloc_storage_scope_.end()) {
+          PrintStorageScope(it->second, os);
+        }
+        PrintType(t.element_of(), os);
+        os << "*)";
+      }
+
+      os << vid << ",sampler, ";
+      std::ostringstream osindex;
+      PrintExpr(base, osindex);
+
+      ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
+          << "var buffer shape is essential for opencl var:" << vid;
+      ICHECK(var_buffer_map_[vid]->shape.size() > 1)
+          << "var buffer shape of image memory must be at least 2 dimention";
+      PrimExpr width = var_buffer_map_[vid]->shape[1];
+      PrimExpr channel = IntImm(DataType::Int(32), 4);
+      if (var_buffer_map_[vid]->shape.size() > 2) {
+        width = width * var_buffer_map_[vid]->shape[2];
+      }
+      os << "(int2)(" << osindex.str() << "%(" << width / channel << ")," << osindex.str() << "/("
+         << width << "))";
+      return;
+    }
+  } while (0);
   if (!HandleTypeMatch(buffer, t.element_of())) {
     os << '(';
     auto it = alloc_storage_scope_.find(buffer);
@@ -193,7 +240,11 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
 }
 std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExpr base) {
   std::ostringstream os;
-  os << "vload" << t.lanes() << "(0, ";
+  if (t.is_climgfloat()) {
+    os << "read_imagef(";
+  } else {
+    os << "vload" << t.lanes() << "(0, ";
+  }
   PrintVecAddr(buffer, t, base, os);
   os << ")";
   return os.str();
@@ -344,12 +395,17 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     ICHECK(var_buffer_map_[vid]->shape.size() > 1)
         << "var buffer shape of image memory must be at least 2 dimention";
     PrimExpr width = var_buffer_map_[vid]->shape[1];
-
-    //os << indexexp_os.str() << "%(get_image_dim(" << vid << ").x),";
-    os << indexexp_os.str() << "%(" << width << "),";
-    //os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))).x";
-    //os << indexexp_os.str() << "/(get_image_dim(" << vid << ").x))";
-    os << indexexp_os.str() << "/(" << width << "))";
+    //how many elements in image object,default is CL_RGBA by 4
+    PrimExpr channel = IntImm(DataType::Int(32), 4);
+    if (var_buffer_map_[vid]->shape.size() > 2) {
+      width = width * var_buffer_map_[vid]->shape[2] ;
+    }
+    n_count++;
+    //os << indexexp_os.str() << "%(uint)(" << width << "*64"<< "),";
+    os << "xyindex" << n_count << "%(" << width / channel << "),";
+    //os << indexexp_os.str() << "/(uint)(" << width << "*64" << "))";
+    os << "xyindex" << n_count << "/(" << width << "))";
+    need_declar_value_ = "int xyindex" + std::to_string(n_count) + "=" + indexexp_os.str() + ";\n";
   } else {
     // Buffer declared as vector type.
     // optimize for case where it is in register,
@@ -395,7 +451,7 @@ runtime::Module BuildOpenCL(IRModule mod, Target target) {
   bool output_ssa = false;
   CodeGenOpenCL cg;
   cg.Init(output_ssa);
-
+  cg.PrintGlobalSamplerDeclare();
   for (auto kv : mod->functions) {
     ICHECK(kv.second->IsInstance<PrimFuncNode>()) << "CodeGenOpenCL: Can only take PrimFunc";
     auto f = Downcast<PrimFunc>(kv.second);

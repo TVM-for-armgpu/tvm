@@ -51,7 +51,7 @@ class LocalSession : public RPCSession {
   void CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset, size_t nbytes,
                     TVMContext ctx_to, DLDataType type_hint) override;
   void CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset, DataShape* nbytes,
-                    TVMContext ctx_to, DLDataType type_hint);
+                    TVMContext ctx_to, DLDataType type_hint) override;
   void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, size_t nbytes,
                       TVMContext ctx_from, DLDataType type_hint) override;
   void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, DataShape* nbytes,

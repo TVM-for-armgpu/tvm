@@ -736,11 +736,32 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
           PrintType(elem_type, value_temp);
           value_temp << "*)" << vid << ')';
         } else {
-          value_temp << vid;
+          if (elem_type.is_climgfloat()) {
+            value_temp << "read_imagef(" << vid << ",sampler,";
+          } else {
+            value_temp << vid;
+          }
         }
-        value_temp << '[';
-        PrintVecElemLoad(sindex, op->index.dtype(), i, value_temp);
-        value_temp << ']';
+        std::ostringstream index_temp;
+        PrintVecElemLoad(sindex, op->index.dtype(), i, index_temp);
+        if (elem_type.is_climgfloat()) {
+          ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
+              << "var buffer shape is essential for opencl var:" << vid;
+          ICHECK(var_buffer_map_[vid]->shape.size() > 1)
+              << "var buffer shape of image memory must be at least 2 dimention";
+          PrimExpr width = var_buffer_map_[vid]->shape[1];
+          PrimExpr Int4elmem = IntImm(DataType::Int(32), 4);
+          if (var_buffer_map_[vid]->shape.size() > 2) {
+            width = width * var_buffer_map_[vid]->shape[2] / Int4elmem;
+          }
+
+          value_temp << "(int2)(" << index_temp.str() << "%(" << width << ")," << index_temp.str()
+                     << "/(" << width << "))).x";
+        } else {
+          value_temp << '[';
+          value_temp << index_temp.str();
+          value_temp << ']';
+        }
         PrintVecElemLoadExpr(op->dtype, i, value_temp.str(), svalue_expr);
       }
       os << svalue_expr.str();
@@ -749,6 +770,7 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
 }
 
 void CodeGenC::VisitStmt_(const StoreNode* op) {
+  std::string vid = GetVarID(op->buffer_var.get());
   DataType t = op->value.dtype();
   if (t.lanes() == 1) {
     std::string value = this->PrintExpr(op->value);
@@ -760,8 +782,17 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     if (alloc_storage_scope_.count(buffer)) {
       scope = alloc_storage_scope_.at(buffer);
     }
+    // read_image
+    if (value.find("xyindex") != std::string::npos) {
+      stream << need_declar_value_;
+      need_declar_value_ = "";
+    }
+    // write_image
+    else if (ref.find("xyindex") != std::string::npos) {
+      stream << need_declar_value_;
+      need_declar_value_ = "";
+    }
     if (scope.compare(0, sizeof("image")-1, "image") == 0) {
-        std::string vid = GetVarID(op->buffer_var.get());
         stream << "write_imagef(" << vid << "," << ref << " , (float4)(" << value << "));\n";
     } else {
       stream << ref << " = " << value << ";\n";
@@ -782,7 +813,6 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
       // store elements seperately
       std::string index = SSAGetID(PrintExpr(op->index), op->index.dtype());
       std::string value = SSAGetID(PrintExpr(op->value), op->value.dtype());
-      std::string vid = GetVarID(op->buffer_var.get());
       for (int i = 0; i < t.lanes(); ++i) {
         this->PrintIndent();
         DataType elem_type = t.element_of();

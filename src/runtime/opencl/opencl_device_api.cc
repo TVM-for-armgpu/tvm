@@ -20,6 +20,7 @@
 /*!
  * \file opencl_device_api.cc
  */
+#include <algorithm>
 #include <dmlc/thread_local.h>
 #include <tvm/runtime/registry.h>
 
@@ -134,14 +135,24 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   cl_int err_code;
   cl_image_format fmt = {CL_R, CL_FLOAT};
   ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
-  size_t width = dsize->shape[0];
-  size_t height = dsize->shape[1];
-  for (size_t i = 2; i < dsize->ndim;++i) {
-    width *= dsize->shape[i];
+  size_t height = dsize->shape[0];
+  size_t width = dsize->shape[1];
+
+  if (dsize->ndim > 2) {
+    width *= std::max(long long(1), dsize->shape[2]/4);
   }
+  if (dsize->ndim > 3) {
+    height *= dsize->shape[3];
+  }
+  cl_mem_flags mf = CL_MEM_READ_ONLY;
+  if (type_hint.code == kDLCLImgFloatW) {
+    mf = CL_MEM_WRITE_ONLY;
+  }
+  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH) << "image width is wider than the image object limit";
+  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT) << "image height is higher than the image object limit";
   cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
-                        height,
                         width,
+                        height,
                         0,
                         0,  // depth, array size (unused)
                         0,
@@ -149,7 +160,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
                         0,
                         0,
                         0};
-  cl_mem_flags mf = CL_MEM_READ_ONLY;
+
   cl_mem mptr = clCreateImage(this->context, mf, &fmt, &desc, NULL, &err_code);
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
@@ -168,6 +179,7 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                      TVMContext ctx_to, DLDataType type_hint,
                                      TVMStreamHandle stream) {
   this->Init();
+  ICHECK(type_hint.code < kDLCLImgFloatW) << "opencl image datatype should not call this function<CopyDataFromTo>";
   ICHECK(stream == nullptr);
   if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {
     OPENCL_CALL(clEnqueueCopyBuffer(this->GetQueue(ctx_to),
@@ -196,16 +208,23 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                      TVMStreamHandle stream) {
   this->Init();
   ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
-  size_t width = dsize->shape[0];
-  size_t height = dsize->shape[1];
-  for (size_t i = 2; i < dsize->ndim; ++i) {
-    width *= dsize->shape[i];
+  size_t height = dsize->shape[0];
+  size_t width = dsize->shape[1];
+
+  if (dsize->ndim > 2) {
+    width *= std::max(long long(1), dsize->shape[2] / 4);
+  }
+  if (dsize->ndim > 3) {
+    height *= dsize->shape[3];
   }
   size_t origin[3] = {
       0,
       0,
+      0,
   };
-  size_t region[3] = {height, width, 1};
+  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH) << "image width is wider than the limit";
+  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT) << "image height is higher than the limit";
+  size_t region[3] = {width, height, 1};
   ICHECK(stream == nullptr);
   if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {
     OPENCL_CALL(clEnqueueCopyImage(this->GetQueue(ctx_to),
@@ -221,9 +240,10 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                    static_cast<char*>(to) + to_offset, 0, nullptr, nullptr));
     OPENCL_CALL(clFinish(this->GetQueue(ctx_from)));
   } else if (ctx_from.device_type == kDLCPU && IsOpenCLDevice(ctx_to)) {
+    if (type_hint.code == kDLCLImgFloatW) {
+      return;
+    }
     /* Copy the input data to the input image */
-    CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_WIDTH) << "image height is too long";
-    CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_HEIGHT) << "image width is too long";
     OPENCL_CALL(clEnqueueWriteImage(
         this->GetQueue(ctx_to), static_cast<cl_mem>(to), CL_FALSE, origin, region, 0, 0,
         static_cast<const char*>(from) + from_offset, 0, nullptr, nullptr));

@@ -59,6 +59,7 @@ class DataTypeCode(object):
     FLOAT = 2
     HANDLE = 3
     BFLOAT = 4
+    CLIMGFLOATW = 126
     CLIMGFLOAT = 127
 
 
@@ -71,6 +72,7 @@ class DataType(ctypes.Structure):
         DataTypeCode.INT: "int",
         DataTypeCode.UINT: "uint",
         DataTypeCode.FLOAT: "float",
+        DataTypeCode.CLIMGFLOATW: "climgfloatw",
         DataTypeCode.CLIMGFLOAT: "climgfloat",
         DataTypeCode.HANDLE: "handle",
         DataTypeCode.BFLOAT: "bfloat",
@@ -98,6 +100,9 @@ class DataType(ctypes.Structure):
         elif head.startswith("uint"):
             self.type_code = DataTypeCode.UINT
             head = head[4:]
+        elif head.startswith("climgfloatw"):
+            self.type_code = DataTypeCode.CLIMGFLOATW
+            head = head[11:]
         elif head.startswith("climgfloat"):
             self.type_code = DataTypeCode.CLIMGFLOAT
             head = head[10:]
