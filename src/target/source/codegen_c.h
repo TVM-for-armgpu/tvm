@@ -268,7 +268,6 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
  protected:
   Map<const String, tvm::tir::Buffer> var_buffer_map_;
   std::string need_declar_value_;
-  int n_count = 0;
  private:
   /*! \brief whether to print in SSA form */
   bool print_ssa_form_{false};

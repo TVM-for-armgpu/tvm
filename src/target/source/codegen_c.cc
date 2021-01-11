@@ -72,6 +72,7 @@ void CodeGenC::ReserveKeywordsAsUnique() {
   GetUniqueName("enum");
   GetUniqueName("union");
   GetUniqueName("return");
+  GetUniqueName("xyindex");
 }
 
 int GetValueType(const Type& type) {  // NOLINT(*)

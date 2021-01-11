@@ -20,7 +20,6 @@
 /*!
  * \file opencl_device_api.cc
  */
-#include <algorithm>
 #include <dmlc/thread_local.h>
 #include <tvm/runtime/registry.h>
 
@@ -134,12 +133,15 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
   cl_image_format fmt = {CL_RGBA, CL_FLOAT};
+  if (type_hint.bits == 16) {
+    fmt.image_channel_data_type = CL_HALF_FLOAT;
+  }
   ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
   size_t height = dsize->shape[0];
   size_t width = dsize->shape[1];
 
   if (dsize->ndim > 2) {
-    width *= std::max(int64_t(1), dsize->shape[2] / 4);
+    width *= (3+dsize->shape[2]) / 4;
   }
   if (dsize->ndim > 3) {
     height *= dsize->shape[3];
@@ -212,7 +214,7 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
   size_t width = dsize->shape[1];
 
   if (dsize->ndim > 2) {
-    width *= std::max(int64_t(1), dsize->shape[2] / 4);
+    width *= (3 + dsize->shape[2]) / 4;
   }
   if (dsize->ndim > 3) {
     height *= dsize->shape[3];

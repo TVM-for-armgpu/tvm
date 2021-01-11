@@ -193,7 +193,7 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
 void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr base,
                                  std::ostream& os) {  // NOLINT(*)
   do {
-    if (t.is_climgfloat()) {
+    if (t.is_climgfloat() || t.is_climgfloatw()) {
       std::string vid = GetVarID(buffer);
       if (var_buffer_map_.find(vid) == var_buffer_map_.end()) {
         break;
@@ -207,8 +207,10 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
         PrintType(t.element_of(), os);
         os << "*)";
       }
-
-      os << vid << ",sampler, ";
+      os << vid << ",";
+      if (t.is_climgfloat()) {
+        os << "sampler, ";
+      }
       std::ostringstream osindex;
       PrintExpr(base, osindex);
 
@@ -253,8 +255,23 @@ std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExp
 void CodeGenOpenCL::PrintVecStore(const VarNode* buffer, DataType t, PrimExpr base,
                                   const std::string& value) {
   this->PrintIndent();
-  stream << "vstore" << t.lanes() << "(" << value << ", 0, ";
-  PrintVecAddr(buffer, t, base, stream);
+  std::ostringstream os;
+  
+  int climgw = 0;
+  std::string vid = GetVarID(buffer);
+  if (var_buffer_map_.count(vid)) {
+    climgw = var_buffer_map_[vid]->dtype.is_climgfloatw();
+  }
+  if (climgw||buffer->dtype.is_climgfloatw()) {
+    stream << "write_imagef(";
+    // don't know why t's type was eliminated
+    PrintVecAddr(buffer, var_buffer_map_[vid]->dtype, base, stream);
+    stream << "," << value;
+  } else {
+    stream << "vstore" << t.lanes() << "(" << value << ", 0, ";
+    PrintVecAddr(buffer, t, base, stream);
+  }
+
   stream << ");\n";
 }
 
@@ -400,12 +417,12 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     if (var_buffer_map_[vid]->shape.size() > 2) {
       width = width * var_buffer_map_[vid]->shape[2] ;
     }
-    n_count++;
+    std::string xyindex = GetUniqueName("xyindex");
     //os << indexexp_os.str() << "%(uint)(" << width << "*64"<< "),";
-    os << "xyindex" << n_count << "%(" << width / channel << "),";
+    os << xyindex << "%(" << width / channel << "),";
     //os << indexexp_os.str() << "/(uint)(" << width << "*64" << "))";
-    os << "xyindex" << n_count << "/(" << width << "))";
-    need_declar_value_ = "int xyindex" + std::to_string(n_count) + "=" + indexexp_os.str() + ";\n";
+    os << xyindex << "/(" << width << "))";
+    need_declar_value_ = "int "+ xyindex + "=" + indexexp_os.str() + ";\n";
   } else {
     // Buffer declared as vector type.
     // optimize for case where it is in register,
