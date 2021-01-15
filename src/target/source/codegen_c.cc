@@ -784,14 +784,11 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
       scope = alloc_storage_scope_.at(buffer);
     }
     // read_image
-    if (value.find("xyindex") != std::string::npos) {
-      stream << need_declar_value_;
-      need_declar_value_ = "";
-    }
     // write_image
-    else if (ref.find("xyindex") != std::string::npos) {
+    if (ref.find("xyindex") != std::string::npos) {
       stream << need_declar_value_;
       need_declar_value_ = "";
+      this->PrintIndent();
     }
     if (scope.compare(0, sizeof("image")-1, "image") == 0) {
         stream << "write_imagef(" << vid << "," << ref << " , (float4)(" << value << "));\n";

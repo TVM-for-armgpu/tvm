@@ -397,6 +397,9 @@ def thread_axis(dom=None, tag="", name="", span=None):
     """
     if isinstance(dom, string_types):
         tag, dom = dom, None
+    if isinstance(dom, tuple):
+        dom = tuple(int(idom) for idom in dom)
+
     if not tag:
         raise ValueError("tag must be given as Positional or keyword argument")
     name = name if name else tag

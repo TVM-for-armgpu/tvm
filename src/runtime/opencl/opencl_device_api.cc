@@ -127,25 +127,48 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
   return mptr;
 }
 
+void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
+  ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
+  height = dsize->shape[0];
+  width = (dsize->shape[1] + 3) / 4;
+  ICHECK(width == dsize->shape[1] / 4 || dsize->shape[1] < 4);
+  if (dsize->ndim > 2) {
+    width *= dsize->shape[2];
+  }
+
+  // TODO: figure out a elegant solution to orignize data layout
+  //only works for filter kernel
+  if (dsize->shape[1] < 4) {
+    width = dsize->shape[1];
+    if (dsize->ndim > 2) {
+      ICHECK(dsize->shape[2] % 4 == 0) << "can't store to image object with CL_RGBA";
+      width *= dsize->shape[2];
+    }
+    if (width < 4) {
+      width += 3;
+    }
+    width /= 4;
+  }
+  if (dsize->ndim > 3) {
+    height *= dsize->shape[3];
+  }
+
+  return;
+}
+
 void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t alignment,
                                       DLDataType type_hint) {
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
-  cl_image_format fmt = {CL_RGBA, CL_FLOAT};
+  cl_image_format fmt = {CL_RGBA, CL_HALF_FLOAT};
   if (type_hint.bits == 16) {
     fmt.image_channel_data_type = CL_HALF_FLOAT;
   }
-  ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
-  size_t height = dsize->shape[0];
-  size_t width = dsize->shape[1];
+  size_t height = 0, width = 0;
+  get_image_t_size(dsize, height, width);
 
-  if (dsize->ndim > 2) {
-    width *= (3+dsize->shape[2]) / 4;
-  }
-  if (dsize->ndim > 3) {
-    height *= dsize->shape[3];
-  }
+
   cl_mem_flags mf = CL_MEM_READ_ONLY;
   if (type_hint.code == kDLCLImgFloatW) {
     mf = CL_MEM_WRITE_ONLY;
@@ -210,15 +233,9 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                      TVMStreamHandle stream) {
   this->Init();
   ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
-  size_t height = dsize->shape[0];
-  size_t width = dsize->shape[1];
+  size_t height = 0, width = 0;
+  get_image_t_size(dsize, height, width);
 
-  if (dsize->ndim > 2) {
-    width *= (3 + dsize->shape[2]) / 4;
-  }
-  if (dsize->ndim > 3) {
-    height *= dsize->shape[3];
-  }
   size_t origin[3] = {
       0,
       0,

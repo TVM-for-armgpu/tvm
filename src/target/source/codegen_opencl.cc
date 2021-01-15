@@ -257,19 +257,24 @@ void CodeGenOpenCL::PrintVecStore(const VarNode* buffer, DataType t, PrimExpr ba
   this->PrintIndent();
   std::ostringstream os;
   
-  int climgw = 0;
   std::string vid = GetVarID(buffer);
+  DataType nt = t;
   if (var_buffer_map_.count(vid)) {
-    climgw = var_buffer_map_[vid]->dtype.is_climgfloatw();
+    nt = var_buffer_map_[vid]->dtype;
   }
-  if (climgw||buffer->dtype.is_climgfloatw()) {
+  if (value.find("xyindex") != std::string::npos) {
+    stream << need_declar_value_;
+    need_declar_value_ = "";
+    this->PrintIndent();
+  }
+  if (nt.is_climgfloatw() ||  t.is_climgfloatw()) {
     stream << "write_imagef(";
     // don't know why t's type was eliminated
-    PrintVecAddr(buffer, var_buffer_map_[vid]->dtype, base, stream);
+    PrintVecAddr(buffer, nt, base, stream);
     stream << "," << value;
   } else {
     stream << "vstore" << t.lanes() << "(" << value << ", 0, ";
-    PrintVecAddr(buffer, t, base, stream);
+    PrintVecAddr(buffer, nt, base, stream);
   }
 
   stream << ");\n";
