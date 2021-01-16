@@ -223,7 +223,8 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       if (var_buffer_map_[vid]->shape.size() > 2) {
         width = var_buffer_map_[vid]->shape[2];
       }
-      os << "(int2)(" << osindex.str() << "%(" << width / channel << ")," << osindex.str() << "/("
+      os << "(int2)(" << osindex.str() << "/" << channel << "%(" << width / channel << "),"
+         << osindex.str() << "/("
          << width << "))";
       return;
     }
@@ -424,7 +425,7 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     }
     std::string xyindex = GetUniqueName("xyindex");
     //os << indexexp_os.str() << "%(uint)(" << width << "*64"<< "),";
-    os << xyindex << "%(" << width / channel << "),";
+    os << xyindex << "/" << channel << "%(" << width / channel << "),";
     //os << indexexp_os.str() << "/(uint)(" << width << "*64" << "))";
     os << xyindex << "/(" << width << "))";
     need_declar_value_ = "int "+ xyindex + "=" + indexexp_os.str() + ";\n";
