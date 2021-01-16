@@ -129,6 +129,15 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
 
 void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
   ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
+
+  if (dsize->ndim > 2) {
+    width = dsize->shape[2] / 4;
+    height = dsize->shape[1] * dsize->shape[0];
+  } else {
+    width = dsize->shape[1];
+    height = dsize->shape[0]/4;
+  }
+  return;
   height = dsize->shape[0];
   width = (dsize->shape[1] + 3) / 4;
   ICHECK(width == dsize->shape[1] / 4 || dsize->shape[1] < 4);
@@ -173,8 +182,8 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   if (type_hint.code == kDLCLImgFloatW) {
     mf = CL_MEM_WRITE_ONLY;
   }
-  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH) << "image width is wider than the image object limit";
-  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT) << "image height is higher than the image object limit";
+  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH*2) << "image width is wider than the image object limit";
+  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT*2) << "image height is higher than the image object limit";
   cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
                         width,
                         height,
@@ -241,8 +250,8 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
       0,
       0,
   };
-  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH) << "image width is wider than the limit";
-  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT) << "image height is higher than the limit";
+  //CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH) << "image width is wider than the limit";
+  //CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT) << "image height is higher than the limit";
   size_t region[3] = {width, height, 1};
   ICHECK(stream == nullptr);
   if (IsOpenCLDevice(ctx_from) && IsOpenCLDevice(ctx_to)) {

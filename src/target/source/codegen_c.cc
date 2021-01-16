@@ -751,12 +751,13 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
           ICHECK(var_buffer_map_[vid]->shape.size() > 1)
               << "var buffer shape of image memory must be at least 2 dimention";
           PrimExpr width = var_buffer_map_[vid]->shape[1];
-          PrimExpr Int4elmem = IntImm(DataType::Int(32), 4);
+          PrimExpr channel = IntImm(DataType::Int(32), 4);
           if (var_buffer_map_[vid]->shape.size() > 2) {
-            width = width * var_buffer_map_[vid]->shape[2] / Int4elmem;
+            width = var_buffer_map_[vid]->shape[2];
           }
 
-          value_temp << "(int2)(" << index_temp.str() << "%(" << width << ")," << index_temp.str()
+          value_temp << "(int2)(" << index_temp.str() << "%(" << width / channel << "),"
+                     << index_temp.str()
                      << "/(" << width << "))).x";
         } else {
           value_temp << '[';
@@ -785,7 +786,7 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     }
     // read_image
     // write_image
-    if (ref.find("xyindex") != std::string::npos) {
+    if (ref.find("xyindex") != std::string::npos || value.find("xyindex") != std::string::npos) {
       stream << need_declar_value_;
       need_declar_value_ = "";
       this->PrintIndent();

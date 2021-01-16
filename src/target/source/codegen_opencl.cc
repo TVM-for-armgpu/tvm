@@ -221,7 +221,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       PrimExpr width = var_buffer_map_[vid]->shape[1];
       PrimExpr channel = IntImm(DataType::Int(32), 4);
       if (var_buffer_map_[vid]->shape.size() > 2) {
-        width = width * var_buffer_map_[vid]->shape[2];
+        width = var_buffer_map_[vid]->shape[2];
       }
       os << "(int2)(" << osindex.str() << "%(" << width / channel << ")," << osindex.str() << "/("
          << width << "))";
@@ -420,7 +420,7 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     //how many elements in image object,default is CL_RGBA by 4
     PrimExpr channel = IntImm(DataType::Int(32), 4);
     if (var_buffer_map_[vid]->shape.size() > 2) {
-      width = width * var_buffer_map_[vid]->shape[2] ;
+      width = var_buffer_map_[vid]->shape[2] ;
     }
     std::string xyindex = GetUniqueName("xyindex");
     //os << indexexp_os.str() << "%(uint)(" << width << "*64"<< "),";
