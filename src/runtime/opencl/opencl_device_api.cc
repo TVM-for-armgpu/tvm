@@ -134,8 +134,8 @@ void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
     width = dsize->shape[2] / 4;
     height = dsize->shape[1] * dsize->shape[0];
   } else {
-    width = dsize->shape[1];
-    height = dsize->shape[0]/4;
+    width = dsize->shape[1] / 4;
+    height = dsize->shape[0];
   }
   return;
   height = dsize->shape[0];
@@ -170,7 +170,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
-  cl_image_format fmt = {CL_RGBA, CL_HALF_FLOAT};
+  cl_image_format fmt = {CL_RGBA, CL_FLOAT};
   if (type_hint.bits == 16) {
     fmt.image_channel_data_type = CL_HALF_FLOAT;
   }
@@ -182,8 +182,8 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   if (type_hint.code == kDLCLImgFloatW) {
     mf = CL_MEM_WRITE_ONLY;
   }
-  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH*2) << "image width is wider than the image object limit";
-  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT*2) << "image height is higher than the image object limit";
+  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH*16) << "image width is wider than the image object limit";
+  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT*16) << "image height is higher than the image object limit";
   cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
                         width,
                         height,

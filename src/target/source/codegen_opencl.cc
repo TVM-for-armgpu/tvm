@@ -118,8 +118,8 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
   bool fail = false;
   if (in_para_stm && (t.is_climgfloat() || t.is_climgfloatw())) {
     if (t.lanes() != 4) {
-      LOG(WARNING) << "you are using " << t << "*" << t.lanes()
-                   << " as opencl image object type!!!!!!!";
+      //LOG(WARNING) << "you are using " << t << "*" << t.lanes()
+      //             << " as opencl image object type!!!!!!!";
       if (t.lanes() != 1) {
         LOG(FATAL) << "Cannot convert type " << t << "*" << t.lanes()
                    << " to OpenCL image object type, only " << t << "*"
