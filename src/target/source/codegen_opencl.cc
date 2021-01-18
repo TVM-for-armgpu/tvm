@@ -54,9 +54,29 @@ void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
 void CodeGenOpenCL::PrintFuncPrefix() {
   stream << "__kernel void";
 }
+void CodeGenOpenCL::PreFunctionBody(const PrimFunc& f) {
+  in_para_stm = false;
+  stream << R"(
+    const int w_pack2 = get_global_id(0);
+    const int h_pack2 = get_global_id(1);
+    const int k_pack4 = get_global_id(2);
+    const int w = w_pack2 << 1;
+    const int h = h_pack2 << 1;
 
+
+    const int group_id0 = get_group_id(0);
+    const int group_id1 = get_group_id(1);
+    const int group_id2 = get_group_id(2);
+
+    const int local_id0 = get_local_id(0);
+    const int local_id1 = get_local_id(1);
+    const int local_id2 = get_local_id(2);
+
+    )";
+}
 void CodeGenOpenCL::PrintGlobalSamplerDeclare() {
-  stream << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
+  stream << "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n" 
+      << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
             "CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;\n";
 }
 
@@ -97,9 +117,11 @@ void CodeGenOpenCL::BindThreadIndex(const IterVar& iv) {
   runtime::ThreadScope ts = runtime::ThreadScope::Create(iv->thread_tag);
   std::ostringstream os;
   if (ts.rank == 1) {
-    os << "get_local_id(" << ts.dim_index << ")";
+    //os << "get_local_id(" << ts.dim_index << ")";
+    os << "local_id" << ts.dim_index;
   } else {
-    os << "get_group_id(" << ts.dim_index << ")";
+    //os << "get_group_id(" << ts.dim_index << ")";
+    os << "group_id" << ts.dim_index;
   }
   var_idmap_[iv->var.get()] = CastFromTo(os.str(), DataType::UInt(64), iv->var.dtype());
 }
@@ -223,9 +245,18 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       if (var_buffer_map_[vid]->shape.size() > 2) {
         width = var_buffer_map_[vid]->shape[2];
       }
-      os << "(int2)(" << osindex.str() << "/" << channel << "%(" << width / channel << "),"
-         << osindex.str() << "/("
-         << width << "))";
+      if (vid == "A") {
+        os << "(int2)((w + ax1), (h + ax2_outer) + rc_outer *("<< width / channel <<") )";
+      }
+      else if (vid == "W") {
+        os << "(int2)(k_pack4, rc_outer*4 + ax0)";
+      }
+      else if (vid == "B") {
+        os << "(int2)((w + yy_inner), (h + xx_p4_inner_outer) + k_pack4 *(" << width / channel << "))";
+      } else {
+        os << "(int2)(" << osindex.str() << "/" << channel << "%(" << width / channel << "),"
+           << osindex.str() << "/(" << width << "))";
+      }
       return;
     }
   } while (0);
