@@ -178,7 +178,15 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
     scope = alloc_storage_scope_.at(buffer);
   }
   bool is_vol = IsVolatile(buffer);
+
   if (t.lanes() == 1) {
+    if (auto* ptr = index.as<tir::RampNode>()) {
+      int64_t lanes = ptr->lanes;
+      auto stride = ptr->stride;
+      auto base = ptr->base;
+      os << vid << '[' << base << ']';
+      return os.str();
+    }
     if (!HandleTypeMatch(buffer, t) || is_vol) {
       os << "((";
       if (is_vol) {
