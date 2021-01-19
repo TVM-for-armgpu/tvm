@@ -204,7 +204,6 @@ def lower(sch, args, name="main", binds=None, simple_mode=False):
         mod = sch
 
     pass_list = lower_phase0
-    #print(mod)
     # Phase 1
     pass_list += [
         tvm.tir.transform.InjectPrefetch(),

@@ -20,18 +20,18 @@
 import logging
 import tvm
 from tvm import te
-from . import utils,ndk
+from . import utils
 from .. import rpc
 
 
 def _convert_to_remote(func, remote):
     """ convert module function to remote rpc function"""
     temp = utils.tempdir()
-    path_dso = temp.relpath("tmp_func.so")
-    func.export_library(path_dso,ndk.create_shared)
+    path_dso = temp.relpath("tmp_func.tar")
+    func.export_library(path_dso)
 
     remote.upload(path_dso)
-    func = remote.load_module("tmp_func.so")
+    func = remote.load_module("tmp_func.tar")
     return func
 
 
@@ -247,25 +247,23 @@ def measure_compute_mad(
 
         a = ib.allocate(dtype, (1), name="a", scope="local")
         b = ib.allocate(dtype, (1), name="b", scope="local")
-        c = ib.allocate(dtype, (1), name="c", scope="local")
 
         a[0] = outs[0].vload(idx, dtype)
         b[0] = outs[0].vload(idx, dtype)
-        c[0] = outs[0].vload(idx, dtype)
 
         if base_type.find("float") != -1:
 
-            def mad_func(x,z, y):
-                return x * z + y
+            def mad_func(x, y):
+                return x * x + y
 
         else:
 
-            def mad_func(x,z, y):
-                return y * z + x
+            def mad_func(x, y):
+                return y * y + x
 
         for _ in range(item_per_thread // 4 // lanes):
-            a[0] = mad_func(a[0], b[0],c[0])
-            b[0] = mad_func(b[0], a[0],c[0])
+            a[0] = mad_func(a[0], b[0])
+            b[0] = mad_func(b[0], a[0])
 
         ib.emit(outs[0].vstore(idx, b[0]))
         return ib.get()
@@ -317,7 +315,7 @@ def measure_compute_all_types(
     """
     result = []
     for base_type in ["float", "int"]:
-        for bits in [16, 32]:
+        for bits in [16, 32, 64]:
             for lanes in [1, 2, 4, 8, 16]:
                 if base_type == "int" and bits != 32:  # only measure int32
                     continue
@@ -360,9 +358,7 @@ def measure_peak_all(target, target_host, host, port):
     """
 
     target = tvm.target.Target(target)
-    #remote = rpc.connect(host, port)
-    tracker = rpc.connect_tracker("127.0.0.1", 9090)
-    remote = tracker.request("android", priority=0, session_timeout=60)
+    remote = rpc.connect(host, port)
     n_times = 20
 
     bandwidth_total_item = 1 << 25

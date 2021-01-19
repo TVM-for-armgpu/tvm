@@ -29,8 +29,8 @@ from tvm.contrib import utils, ndk
 import numpy as np
 
 # Set to be address of tvm proxy.
-tracker_host = '127.0.0.1'
-tracker_port = 9090
+tracker_host = os.environ["TVM_TRACKER_HOST"]
+tracker_port = int(os.environ["TVM_TRACKER_PORT"])
 key = "android"
 
 # Change target configuration.
