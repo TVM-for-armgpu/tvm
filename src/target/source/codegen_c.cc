@@ -587,14 +587,18 @@ void CodeGenC::VisitExpr_(const NotNode* op, std::ostream& os) {  // NOLINT(*)
 
 void CodeGenC::PrintCallExtern(Type ret_type, String global_symbol, const Array<PrimExpr>& args,
                                bool skip_first_arg, std::ostream& os) {  // NOLINT(*)
-  os << global_symbol << "(";
+  if (global_symbol != "mul_must_be_replace") {
+    os << global_symbol << "(";
+  }
   for (size_t i = static_cast<size_t>(skip_first_arg); i < args.size(); ++i) {
     this->PrintExpr(args[i], os);
     if (i < args.size() - 1) {
       os << ", ";
     }
   }
-  os << ")";
+  if (global_symbol != "mul_must_be_replace") {
+    os << ")";
+  }
 }
 
 void CodeGenC::VisitExpr_(const CallNode* op, std::ostream& os) {  // NOLINT(*)

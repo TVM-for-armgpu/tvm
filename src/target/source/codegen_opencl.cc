@@ -75,8 +75,7 @@ void CodeGenOpenCL::PreFunctionBody(const PrimFunc& f) {
     )";
 }
 void CodeGenOpenCL::PrintGlobalSamplerDeclare() {
-  stream << "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n" 
-      << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
+  stream << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
             "CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;\n";
 }
 
@@ -245,13 +244,13 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       if (var_buffer_map_[vid]->shape.size() > 2) {
         width = var_buffer_map_[vid]->shape[2];
       }
-      if (vid == "A") {
+      if (vid == "Axxxx") {
         os << "(int2)((w + ax1), (h + ax2_outer) + rc_outer *("<< width / channel <<") )";
       }
-      else if (vid == "W") {
+      else if (vid == "Wxxxxx") {
         os << "(int2)(k_pack4, rc_outer*4 + ax0)";
       }
-      else if (vid == "B") {
+      else if (vid == "Bxxxx") {
         os << "(int2)((w + yy_inner), (h + xx_p4_inner_outer) + k_pack4 *(" << width / channel << "))";
       } else {
         os << "(int2)(" << osindex.str() << "/" << channel << "%(" << width / channel << "),"
