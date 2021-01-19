@@ -31,12 +31,11 @@ import numpy as np
 # Set to be address of tvm proxy.
 tracker_host = '127.0.0.1'
 tracker_port = 9090
-key = "android"
+key = "x86"
 
 # Change target configuration.
 # Run `adb shell cat /proc/cpuinfo` to find the arch.
-arch = "arm64"
-target = "llvm -mtriple=%s-linux-android" % arch
+target = "llvm "
 
 # whether enable to execute test on OpenCL target
 test_opencl = False
@@ -64,7 +63,7 @@ def test_rpc_module():
     s[B].pragma(xi, "parallel_barrier_when_finish")
     f = tvm.build(s, [A, B], target, name="myadd_cpu")
     path_dso_cpu = temp.relpath("cpu_lib.so")
-    f.export_library(path_dso_cpu, ndk.create_shared)
+    f.export_library(path_dso_cpu)
 
     # Execute the portable graph on cpu target
     print("Run CPU test ...")
@@ -88,7 +87,7 @@ def test_rpc_module():
         # If we don't want to do metal and only use cpu, just set target to be target
         f = tvm.build(s, [A, B], "opencl", target_host=target, name="myadd")
         path_dso_cl = temp.relpath("dev_lib_cl.so")
-        f.export_library(path_dso_cl, ndk.create_shared)
+        f.export_library(path_dso_cl)
 
         print("Run GPU(OpenCL Flavor) test ...")
         ctx = remote.cl(0)
@@ -111,7 +110,7 @@ def test_rpc_module():
         # If we don't want to do metal and only use cpu, just set target to be target
         f = tvm.build(s, [A, B], "vulkan", target_host=target, name="myadd")
         path_dso_vulkan = temp.relpath("dev_lib_vulkan.so")
-        f.export_library(path_dso_vulkan, ndk.create_shared)
+        f.export_library(path_dso_vulkan)
 
         print("Run GPU(Vulkan Flavor) test ...")
         ctx = remote.vulkan(0)

@@ -184,8 +184,12 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
       int64_t lanes = ptr->lanes;
       auto stride = ptr->stride;
       auto base = ptr->base;
-      os << vid << '[' << base << ']';
-      return os.str();
+      arith::PVar<PrimExpr> basec;
+      if (arith::ramp(basec, 1, lanes).Match(index)) {
+        PrimExpr lane_int = IntImm(DataType::Int(32), lanes);
+        os << vid << '[' << base / lane_int << ']';
+        return os.str();
+      }
     }
     if (!HandleTypeMatch(buffer, t) || is_vol) {
       os << "((";
