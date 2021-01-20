@@ -264,9 +264,10 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   // cache commonly used ops
   const Op& builtin_call_extern_ = builtin::call_extern();
   const Op& builtin_call_pure_extern_ = builtin::call_pure_extern();
-
+  void PrintDeclareWithBody(const Stmt& n);
  protected:
   Map<const String, tvm::tir::Buffer> var_buffer_map_;
+  std::unordered_map<std::string, std::string> var_declare_map_;
   std::string need_declar_value_;
  private:
   /*! \brief whether to print in SSA form */

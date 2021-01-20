@@ -140,6 +140,21 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
   this->stream << "}\n\n";
 }
 
+void CodeGenC::PrintDeclareWithBody(const Stmt& n) {
+  
+  std::ostringstream new_stream;
+  new_stream.swap(stream);
+  PrintStmt(n);
+  new_stream.swap(stream);
+  for (auto it : var_declare_map_) {
+    PrintIndent();
+    stream << "const int " << it.second << " = " << it.first << ";\n";
+  }
+  var_declare_map_.clear();
+  stream << new_stream.str();
+  
+}
+
 void CodeGenC::PrintFuncPrefix() { stream << "void"; }
 
 void CodeGenC::PrintFinalReturn() {}
@@ -979,7 +994,21 @@ void CodeGenC::VisitStmt_(const ForNode* op) {
   PrintType(op->loop_var.dtype(), stream);
   stream << ' ' << vid << " = 0; " << vid << " < " << extent << "; ++" << vid << ") {\n";
   int for_scope = BeginScope();
-  PrintStmt(op->body);
+  //=========start==========
+  PrintDeclareWithBody(op->body);
+  //std::ostringstream new_stream;
+  //new_stream.swap(stream);
+   //================================
+  //PrintStmt(op->body);
+   //================================
+  //new_stream.swap(stream);
+  //for (auto it : var_declare_map_) {
+  //  PrintIndent();
+  //  stream << "const int " << it.second << " = " << it.first << ";\n";
+  //}
+  //var_declare_map_.clear();
+  // stream << new_stream.str();
+  // end=================
   this->EndScope(for_scope);
   PrintIndent();
   stream << "}\n";

@@ -211,8 +211,87 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
   LOG(FATAL) << "Cannot convert type " << t << " to OpenCL type";
 }
 
+// for string delimiter
+static std::vector<std::string> split(std::string s, std::string delimiter) {
+  size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+  std::string token;
+  std::vector<std::string> res;
+
+  for (pos_end = 0; pos_end < s.size(); ++pos_end) {
+    if (delimiter.find(s[pos_end]) != std::string::npos) {
+      if (pos_end - pos_start != 0) {
+        res.emplace_back(s.substr(pos_start, pos_end - pos_start));
+        pos_start = pos_end;
+      }
+    }
+  }
+  if (pos_start < s.size()) {
+    res.push_back(s.substr(pos_start));
+  }
+  return res;
+}
+
+ void trimSpace(std::string &s)
+ {
+    int index = 0;
+    if( !s.empty())
+    {
+        while( (index = s.find(' ',index)) != std::string::npos)
+        {
+            s.erase(index,1);
+        }
+    }
+}
+
+ bool CodeGenOpenCL::find_longst_common_str_or_add_key(const std::string& base,
+                                                      std::string& new_base_index) {
+  //for constant expr, we just skip it
+  if (base.find_first_of("+*-/%") == std::string::npos) {
+    return false;
+  }
+  
+  std::string remove_space = base;
+  trimSpace(remove_space);
+
+  std::vector<std::string> vec_base = split(remove_space, "+*-/%");
+  std::vector<std::string> vec_combine;
+  for (const auto& v : vec_base) {
+    if (vec_combine.empty()) {
+      vec_combine.push_back(v);
+    } else {
+      vec_combine.push_back(vec_combine.back() + v);
+    }
+  }
+  for (auto vec_comb_it = vec_combine.rbegin(); vec_comb_it != vec_combine.rend(); ++vec_comb_it) {
+    for (const auto& kv : var_declare_map_) {
+      size_t pos = vec_comb_it->find(kv.first);
+      if (pos != std::string::npos) {
+        if (vec_comb_it->size() - kv.first.size() >= 0 &&
+            vec_comb_it->substr(0, pos).find_first_not_of("()") == std::string::npos) {
+          new_base_index = kv.second + remove_space.substr(pos + kv.first.size());
+          int left_bracket = std::count(new_base_index.begin(), new_base_index.end(), '(');
+          int right_bracket = std::count(new_base_index.begin(), new_base_index.end(), ')');
+          new_base_index.append(std::string(std::max(0, left_bracket - right_bracket), ')'));
+          new_base_index.insert(0, std::string(std::max(0, right_bracket - left_bracket), '('));
+          return true;
+        }
+      }
+    }
+  }
+  std::hash<std::string> hash_str;
+  var_declare_map_[remove_space] = "g_" + std::to_string(hash_str(base));
+  new_base_index = var_declare_map_[remove_space];
+  return false;
+}
+
+
 void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr base,
                                  std::ostream& os) {  // NOLINT(*)
+  std::ostringstream ossbase;
+  PrintExpr(base, ossbase);
+  std::string new_base_index = ossbase.str();
+  find_longst_common_str_or_add_key(ossbase.str(), new_base_index);
+  
   do {
     if (t.is_climgfloat() || t.is_climgfloatw()) {
       std::string vid = GetVarID(buffer);
@@ -233,7 +312,8 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
         os << "sampler, ";
       }
       std::ostringstream osindex;
-      PrintExpr(base, osindex);
+      osindex << new_base_index;
+      //PrintExpr(base, osindex);
 
       ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
           << "var buffer shape is essential for opencl var:" << vid;
@@ -269,7 +349,8 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
     os << "*)";
   }
   os << GetVarID(buffer) << " + ";
-  PrintExpr(base, os);
+  os << new_base_index;
+  //PrintExpr(base, os);
 }
 std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExpr base) {
   std::ostringstream os;
@@ -380,6 +461,21 @@ void CodeGenOpenCL::VisitExpr_(const CallNode* op, std::ostream& os) {
 
 void CodeGenOpenCL::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // NOLINT(*)
   std::string v = PrintExpr(op->value);
+  size_t vid_pos = v.find('[');
+  if (op->lanes == 4 && vid_pos != std::string::npos) {
+    std::string vid = v.substr(0, vid_pos);
+    os << "((";
+    PrintType(op->dtype, os);
+    std::string index_str = v.substr(vid_pos + 1, v.size() - vid_pos - 1);
+    std::replace(index_str.begin(), index_str.end(), '(', ' ');
+    std::replace(index_str.begin(), index_str.end(), ')', ' ');
+    int ind = std::stoi(index_str);
+    int indv = ind / 4;
+    int modv = ind % 4;
+    char subscript[4] = {'x', 'y', 'z', 'w'};
+    os << "*)(" << vid << "))[" << indv << "]." << subscript[modv];
+    return;
+  }
   os << "((";
   PrintType(op->dtype, os);
   os << ")(";

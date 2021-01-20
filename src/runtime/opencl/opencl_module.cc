@@ -213,7 +213,8 @@ cl_kernel OpenCLModuleNode::InstallKernel(cl::OpenCLWorkspace* w, cl::OpenCLThre
     // build program
     cl_int err;
     cl_device_id dev = w->devices[device_id];
-    err = clBuildProgram(program_, 1, &dev, nullptr, nullptr, nullptr);
+    char options[] = " -Werror -cl-mad-enable -cl-fast-relaxed-math";
+    err = clBuildProgram(program_, 1, &dev, options, nullptr, nullptr);
     if (err != CL_SUCCESS) {
       size_t len;
       std::string log;
