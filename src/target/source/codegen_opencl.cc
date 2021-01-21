@@ -57,12 +57,9 @@ void CodeGenOpenCL::PrintFuncPrefix() {
 void CodeGenOpenCL::PreFunctionBody(const PrimFunc& f) {
   in_para_stm = false;
   stream << R"(
-    const int w_pack2 = get_global_id(0);
-    const int h_pack2 = get_global_id(1);
-    const int k_pack4 = get_global_id(2);
-    const int w = w_pack2 << 1;
-    const int h = h_pack2 << 1;
-
+    const int global_id0 = get_global_id(0);
+    const int global_id1 = get_global_id(1);
+    const int global_id2 = get_global_id(2);
 
     const int group_id0 = get_group_id(0);
     const int group_id1 = get_group_id(1);

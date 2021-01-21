@@ -140,11 +140,12 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
   this->stream << "}\n\n";
 }
 
-void CodeGenC::PrintDeclareWithBody(const Stmt& n) {
+void CodeGenC::PrintDeclareWithBody(std::function<void()> f) {
   
   std::ostringstream new_stream;
   new_stream.swap(stream);
-  PrintStmt(n);
+//PrintStmt(n);
+  f();
   new_stream.swap(stream);
   for (auto it : var_declare_map_) {
     PrintIndent();
@@ -206,7 +207,12 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
         tmpos << base;
         std::string strind = tmpos.str();
         std::replace(strind.begin(), strind.end(),'.', '_');
-        os << vid << '[' << strind << " / " << lane_int << ']';
+        if (strind.find_first_not_of("012345678 ") == std::string::npos) {
+          int ind = std::stoi(strind) / lanes;
+          os << vid << '[' << ind << ']';
+        } else {
+          os << vid << '[' << strind << " / " << lane_int << ']';
+        }
         return os.str();
       }
     }
@@ -998,21 +1004,7 @@ void CodeGenC::VisitStmt_(const ForNode* op) {
   PrintType(op->loop_var.dtype(), stream);
   stream << ' ' << vid << " = 0; " << vid << " < " << extent << "; ++" << vid << ") {\n";
   int for_scope = BeginScope();
-  //=========start==========
-  PrintDeclareWithBody(op->body);
-  //std::ostringstream new_stream;
-  //new_stream.swap(stream);
-   //================================
-  //PrintStmt(op->body);
-   //================================
-  //new_stream.swap(stream);
-  //for (auto it : var_declare_map_) {
-  //  PrintIndent();
-  //  stream << "const int " << it.second << " = " << it.first << ";\n";
-  //}
-  //var_declare_map_.clear();
-  // stream << new_stream.str();
-  // end=================
+  PrintStmt(op->body);
   this->EndScope(for_scope);
   PrintIndent();
   stream << "}\n";
@@ -1042,9 +1034,12 @@ void CodeGenC::VisitStmt_(const IfThenElseNode* op) {
 }
 
 void CodeGenC::VisitStmt_(const SeqStmtNode* op) {
-  for (Stmt stmt : op->seq) {
-    PrintStmt(stmt);
-  }
+  auto print_seq = [this, op]() {
+    for (Stmt stmt : op->seq) {
+      PrintStmt(stmt);
+    }
+  };
+  PrintDeclareWithBody(print_seq);
 }
 
 void CodeGenC::VisitStmt_(const EvaluateNode* op) {
