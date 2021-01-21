@@ -213,7 +213,7 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
 
 // for string delimiter
 static std::vector<std::string> split(std::string s, std::string delimiter) {
-  size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+  size_t pos_start = 0, pos_end;
   std::string token;
   std::vector<std::string> res;
 
@@ -233,7 +233,7 @@ static std::vector<std::string> split(std::string s, std::string delimiter) {
 
  void trimSpace(std::string &s)
  {
-    int index = 0;
+    size_t index = 0;
     if( !s.empty())
     {
         while( (index = s.find(' ',index)) != std::string::npos)
@@ -462,20 +462,28 @@ void CodeGenOpenCL::VisitExpr_(const CallNode* op, std::ostream& os) {
 void CodeGenOpenCL::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // NOLINT(*)
   std::string v = PrintExpr(op->value);
   size_t vid_pos = v.find('[');
-  if (op->lanes == 4 && vid_pos != std::string::npos) {
-    std::string vid = v.substr(0, vid_pos);
-    os << "((";
-    PrintType(op->dtype, os);
-    std::string index_str = v.substr(vid_pos + 1, v.size() - vid_pos - 1);
-    std::replace(index_str.begin(), index_str.end(), '(', ' ');
-    std::replace(index_str.begin(), index_str.end(), ')', ' ');
-    int ind = std::stoi(index_str);
-    int indv = ind / 4;
-    int modv = ind % 4;
-    char subscript[4] = {'x', 'y', 'z', 'w'};
-    os << "*)(" << vid << "))[" << indv << "]." << subscript[modv];
-    return;
-  }
+  do {
+        if (op->lanes == 4 && vid_pos != std::string::npos) {
+        std::string vid = v.substr(0, vid_pos);
+          std::string index_str = v.substr(vid_pos + 1, v.size() - vid_pos - 1 - 1);
+        std::replace(index_str.begin(), index_str.end(), '(', ' ');
+        std::replace(index_str.begin(), index_str.end(), ')', ' ');
+        if (index_str.find_first_not_of("012345678 ") != std::string::npos) {
+          os << "((";
+          PrintType(op->dtype.with_lanes(1), os);
+          os << "*)(" << vid << "))[" << index_str << "]";
+          return;
+        }
+        os << "((";
+        PrintType(op->dtype, os);
+        int ind = std::stoi(index_str);
+        int indv = ind / 4;
+        int modv = ind % 4;
+        char subscript[4] = {'x', 'y', 'z', 'w'};
+        os << "*)(" << vid << "))[" << indv << "]." << subscript[modv];
+        return;
+      }
+  } while (0);
   os << "((";
   PrintType(op->dtype, os);
   os << ")(";

@@ -202,7 +202,11 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
       arith::PVar<PrimExpr> basec;
       if (arith::ramp(basec, 1, lanes).Match(index)) {
         PrimExpr lane_int = IntImm(DataType::Int(32), lanes);
-        os << vid << '[' << base / lane_int << ']';
+        std::ostringstream tmpos;
+        tmpos << base;
+        std::string strind = tmpos.str();
+        std::replace(strind.begin(), strind.end(),'.', '_');
+        os << vid << '[' << strind << " / " << lane_int << ']';
         return os.str();
       }
     }
