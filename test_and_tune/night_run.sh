@@ -1,0 +1,13 @@
+python tunerelaymobilegpu_nhcw4c.py
+python tunerelaymobilegpu_nhcw4c.py
+python tunerelaymobilegpu_nhcw4c.py
+python tunerelaymobilegpu_nhcw4c.py
+
+python tune_network_mali.py
+python tune_network_mali.py
+python tune_network_mali.py
+python tune_network_mali.py
+
+python tune_conv2d_layer_mali.py
+python tune_conv2d_layer_mali.py
+python tune_conv2d_layer_mali.py
