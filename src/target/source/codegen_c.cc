@@ -796,8 +796,11 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
           if (var_buffer_map_[vid]->shape.size() > 2) {
             width = var_buffer_map_[vid]->shape[2];
           }
-
-          value_temp << "(int2)(" << index_temp.str() << "/" << channel << "%(" << width / channel
+          int Quotient = Downcast<IntImm>(width)->value / Downcast<IntImm>(channel)->value;
+          if (Quotient == 0) {
+            Quotient = 1;
+          }
+          value_temp << "(int2)(" << index_temp.str() << "/" << channel << "%(" << Quotient
                      << ")," << index_temp.str() << "/(" << width << "))).x";
         } else {
           value_temp << '[';

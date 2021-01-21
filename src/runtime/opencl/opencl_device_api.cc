@@ -128,9 +128,16 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
 }
 
 void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
-  ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
-
-  if (dsize->ndim > 2) {
+  ICHECK(dsize->ndim >= 2 && dsize->ndim <=4 ) << "opencl image memory shape must be at least 2D";
+  if (dsize->ndim > 3) {
+    if (dsize->shape[2] == 1 && dsize->shape[3] == 1) {
+      width = dsize->shape[1] / 4;
+      height = dsize->shape[0];
+    } else {
+      width = dsize->shape[2] * dsize->shape[3] / 4;
+      height = dsize->shape[1] * dsize->shape[0];
+    }
+  } else if (dsize->ndim > 2) {
     width = dsize->shape[2] / 4;
     height = dsize->shape[1] * dsize->shape[0];
   } else {

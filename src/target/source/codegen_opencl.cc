@@ -321,18 +321,12 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       if (var_buffer_map_[vid]->shape.size() > 2) {
         width = var_buffer_map_[vid]->shape[2];
       }
-      if (vid == "Axxxx") {
-        os << "(int2)((w + ax1), (h + ax2_outer) + rc_outer *("<< width / channel <<") )";
+      int Quotient = Downcast<IntImm>(width)->value / Downcast<IntImm>(channel)->value;
+      if (Quotient == 0) {
+        Quotient = 1;
       }
-      else if (vid == "Wxxxxx") {
-        os << "(int2)(k_pack4, rc_outer*4 + ax0)";
-      }
-      else if (vid == "Bxxxx") {
-        os << "(int2)((w + yy_inner), (h + xx_p4_inner_outer) + k_pack4 *(" << width / channel << "))";
-      } else {
-        os << "(int2)(" << osindex.str() << "/" << channel << "%(" << width / channel << "),"
+      os << "(int2)(" << osindex.str() << "/" << channel << "%(" << Quotient << "),"
            << osindex.str() << "/(" << width << "))";
-      }
       return;
     }
   } while (0);
@@ -554,10 +548,13 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     if (var_buffer_map_[vid]->shape.size() > 2) {
       width = var_buffer_map_[vid]->shape[2] ;
     }
+    int Quotient = Downcast<IntImm>(width)->value / Downcast<IntImm>(channel)->value;
+    if (Quotient == 0) {
+      Quotient = 1;
+    }
+    
     std::string xyindex = GetUniqueName("xyindex");
-    //os << indexexp_os.str() << "%(uint)(" << width << "*64"<< "),";
-    os << xyindex << "/" << channel << "%(" << width / channel << "),";
-    //os << indexexp_os.str() << "/(uint)(" << width << "*64" << "))";
+    os << xyindex << "/" << channel << "%(" << Quotient << "),";
     os << xyindex << "/(" << width << "))";
     need_declar_value_ = "int "+ xyindex + "=" + indexexp_os.str() + ";\n";
   } else {
