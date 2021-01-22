@@ -1007,7 +1007,19 @@ void CodeGenC::VisitStmt_(const ForNode* op) {
   PrintType(op->loop_var.dtype(), stream);
   stream << ' ' << vid << " = 0; " << vid << " < " << extent << "; ++" << vid << ") {\n";
   int for_scope = BeginScope();
+  //===========================
+  std::ostringstream new_stream;
+  new_stream.swap(stream);
   PrintStmt(op->body);
+  new_stream.swap(stream);
+  for (auto it : var_declare_map_) {
+    PrintIndent();
+    stream << "const int " << it.second << " = " << it.first << ";\n";
+  }
+  var_declare_map_.clear();
+  stream << new_stream.str();
+
+  //========================
   this->EndScope(for_scope);
   PrintIndent();
   stream << "}\n";

@@ -46,7 +46,9 @@ enum DeviceAttrKind : int {
   kMaxThreadDimensions = 8,
   kMaxRegistersPerBlock = 9,
   kGcnArch = 10,
-  kApiVersion = 11
+  kApiVersion = 11,
+  kCL_DEVICE_IMAGE2D_MAX_WIDTH=12,
+  kCL_DEVICE_IMAGE2D_MAX_HEIGHT=13
 };
 
 /*! \brief Number of bytes each allocation must align to */

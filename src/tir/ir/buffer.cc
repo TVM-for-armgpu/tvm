@@ -250,10 +250,19 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
       ICHECK_EQ(n->shape.size(), index.size());
       if (index.size() > 0) {
         PrimExpr offset = index[0];
-        for (size_t i = 1; i < index.size(); ++i) {
+        for (size_t i = 1; i < index.size()-1; ++i) {
           offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
         }
-        base = base + offset;
+        int i_last = index.size() - 1;
+        if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()) {
+          ICHECK(i_last > 0) << "opencl image object dimention must greater than 2";
+          base = base + indexmod(offset, 59) + (index[i_last]);
+        } else {
+          if (i_last > 0) {
+            offset = MergeMulMod(&ana, offset * n->shape[i_last] + index[i_last]);
+          }
+          base = base + offset;
+        }
       }
     }
   } else {

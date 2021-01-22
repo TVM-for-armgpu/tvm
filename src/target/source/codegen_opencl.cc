@@ -29,6 +29,7 @@
 #include "../../runtime/opencl/opencl_module.h"
 #include "../../runtime/thread_storage_scope.h"
 #include "../build_common.h"
+#include <tvm/tir/expr_simplify.h>
 
 namespace tvm {
 namespace codegen {
@@ -281,14 +282,31 @@ static std::vector<std::string> split(std::string s, std::string delimiter) {
   return false;
 }
 
+ void split_img_xy_axes(std::string index_str, std::string& img_x_axes, std::string& img_y_axes) {
+  trimSpace(index_str);
+  size_t pos = index_str.find("%59");
+  ICHECK(pos != std::string::npos) << "this should not happend";
+  int rb = 0, lb = 0;
+  int m_pos = 0;
+  for (int i = pos - 1; i >= 0; i--) {
+    if (index_str[i] == ')') {
+      rb++;
+    } else if (index_str[i] == '(') {
+      lb++;
+    }
+    if (lb == rb) {
+      m_pos = i;
+      break;
+    }
+  }
+  img_y_axes = index_str.substr(m_pos, pos - m_pos);
+  img_x_axes = index_str.substr(0, m_pos) + "0" + index_str.substr(pos + 3);
+}
 
 void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr base,
                                  std::ostream& os) {  // NOLINT(*)
   std::ostringstream ossbase;
-  PrintExpr(base, ossbase);
-  std::string new_base_index = ossbase.str();
-  find_longst_common_str_or_add_key(ossbase.str(), new_base_index);
-  
+
   do {
     if (t.is_climgfloat() || t.is_climgfloatw()) {
       std::string vid = GetVarID(buffer);
@@ -296,22 +314,36 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
         break;
       }
       if (!HandleTypeMatch(buffer, t.element_of())) {
-        os << '(';
-        auto it = alloc_storage_scope_.find(buffer);
-        if (it != alloc_storage_scope_.end()) {
-          PrintStorageScope(it->second, os);
-        }
-        PrintType(t.element_of(), os);
-        os << "*)";
+        //os << '(';
+        //auto it = alloc_storage_scope_.find(buffer);
+        //if (it != alloc_storage_scope_.end()) {
+          //PrintStorageScope(it->second, os);
+        //}
+        //PrintType(t.element_of(), os);
+        //os << "*)";
       }
       os << vid << ",";
       if (t.is_climgfloat()) {
         os << "sampler, ";
       }
       std::ostringstream osindex;
-      osindex << new_base_index;
-      //PrintExpr(base, osindex);
+      //osindex << new_base_index;
+      PrintExpr(base, osindex);
+      //===
+      std::string img_x_axes, img_y_axes;
+      split_img_xy_axes(osindex.str(), img_x_axes, img_y_axes);
+      img_x_axes += "/4";
+      //4 == lanes
+      img_x_axes = tvm::tir::exprSimp::DoSimplify(img_x_axes);
 
+      std::string new_base_index_x = img_x_axes;
+      std::string new_base_index_y = img_y_axes;
+      find_longst_common_str_or_add_key(img_x_axes, new_base_index_x);
+      find_longst_common_str_or_add_key(img_y_axes, new_base_index_y);
+
+      os << "(int2)(" << new_base_index_x << "," << new_base_index_y << ")";
+      //===
+      /*
       ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
           << "var buffer shape is essential for opencl var:" << vid;
       ICHECK(var_buffer_map_[vid]->shape.size() > 1)
@@ -324,12 +356,17 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       int Quotient = Downcast<IntImm>(width)->value / Downcast<IntImm>(channel)->value;
       if (Quotient == 0) {
         Quotient = 1;
-      }
-      os << "(int2)(" << osindex.str() << "/" << channel << "%(" << Quotient << "),"
-           << osindex.str() << "/(" << width << "))";
+      }*/
+      //os << "(int2)(" << osindex.str() << "/" << channel << "%(" << Quotient << "),"
+      //   << osindex.str() << "/(" << width << "))";
+      
       return;
     }
   } while (0);
+  PrintExpr(base, ossbase);
+  std::string new_base_index = ossbase.str();
+  find_longst_common_str_or_add_key(ossbase.str(), new_base_index);
+  
   if (!HandleTypeMatch(buffer, t.element_of())) {
     os << '(';
     auto it = alloc_storage_scope_.find(buffer);
@@ -459,7 +496,7 @@ void CodeGenOpenCL::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // 
           std::string index_str = v.substr(vid_pos + 1, v.size() - vid_pos - 1 - 1);
         std::replace(index_str.begin(), index_str.end(), '(', ' ');
         std::replace(index_str.begin(), index_str.end(), ')', ' ');
-        if (index_str.find_first_not_of("012345678 ") != std::string::npos) {
+        if (index_str.find_first_not_of("0123456789 ") != std::string::npos) {
           os << "((";
           PrintType(op->dtype.with_lanes(1), os);
           os << "*)(" << vid << "))[" << index_str << "]";
@@ -552,11 +589,22 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     if (Quotient == 0) {
       Quotient = 1;
     }
-    
-    std::string xyindex = GetUniqueName("xyindex");
-    os << xyindex << "/" << channel << "%(" << Quotient << "),";
-    os << xyindex << "/(" << width << "))";
-    need_declar_value_ = "int "+ xyindex + "=" + indexexp_os.str() + ";\n";
+    //===
+    std::string img_x_axes, img_y_axes;
+    split_img_xy_axes(indexexp_os.str(), img_x_axes, img_y_axes);
+    img_x_axes += "/4";
+    img_x_axes = tvm::tir::exprSimp::DoSimplify(img_x_axes);
+    std::string new_base_index_x = img_x_axes;
+    std::string new_base_index_y = img_y_axes;
+    find_longst_common_str_or_add_key(img_x_axes, new_base_index_x);
+    find_longst_common_str_or_add_key(img_y_axes, new_base_index_y);
+    os << new_base_index_x << "," << new_base_index_y << ")";
+    LOG(WARNING) << "answer will not correct!";
+    //===
+    //std::string xyindex = GetUniqueName("xyindex");
+    //os << xyindex << "/" << channel << "%(" << Quotient << "),";
+    //os << xyindex << "/(" << width << "))";
+    //need_declar_value_ = "int "+ xyindex + "=" + indexexp_os.str() + ";\n";
   } else {
     // Buffer declared as vector type.
     // optimize for case where it is in register,

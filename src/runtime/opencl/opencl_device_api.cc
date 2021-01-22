@@ -107,12 +107,29 @@ void OpenCLWorkspace::GetAttr(TVMContext ctx, DeviceAttrKind kind, TVMRetValue* 
       *rv = ss.str();
       break;
     }
+    case kCL_DEVICE_IMAGE2D_MAX_WIDTH: {
+      size_t value;
+      OPENCL_CALL(clGetDeviceInfo(devices[index], CL_DEVICE_IMAGE2D_MAX_WIDTH, sizeof(size_t),
+                                  &value, nullptr));
+      *rv = static_cast<int32_t>(value);
+      break;
+    }
+    case kCL_DEVICE_IMAGE2D_MAX_HEIGHT: {
+      size_t value;
+      OPENCL_CALL(clGetDeviceInfo(devices[index], CL_DEVICE_IMAGE2D_MAX_HEIGHT, sizeof(size_t),
+                                  &value, nullptr));
+      *rv = static_cast<int32_t>(value);
+      break;
+    }
     case kMaxRegistersPerBlock:
       return;
     case kGcnArch:
       return;
     case kApiVersion:
       return;
+    default:
+      LOG(FATAL) << "not surpport this type kind=" << kind;
+
   }
 }
 
@@ -128,26 +145,29 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
 }
 
 void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
+  int lans = dsize->dtype.lanes;
+  lans = 4;
+  ICHECK(lans == 1 || lans == 4) << "opencl image only surpport CL_RGBA and CL_R now";
   ICHECK(dsize->ndim >= 2 && dsize->ndim <=4 ) << "opencl image memory shape must be at least 2D";
   if (dsize->ndim > 3) {
     if (dsize->shape[2] == 1 && dsize->shape[3] == 1) {
-      width = dsize->shape[1] / 4;
+      width = dsize->shape[1] / lans;
       height = dsize->shape[0];
     } else {
-      width = dsize->shape[2] * dsize->shape[3] / 4;
+      width = dsize->shape[2] * dsize->shape[3] / lans;
       height = dsize->shape[1] * dsize->shape[0];
     }
   } else if (dsize->ndim > 2) {
-    width = dsize->shape[2] / 4;
+    width = dsize->shape[2] / lans;
     height = dsize->shape[1] * dsize->shape[0];
   } else {
-    width = dsize->shape[1] / 4;
+    width = dsize->shape[1] / lans;
     height = dsize->shape[0];
   }
   return;
   height = dsize->shape[0];
-  width = (dsize->shape[1] + 3) / 4;
-  ICHECK(width == dsize->shape[1] / 4 || dsize->shape[1] < 4);
+  width = (dsize->shape[1] + 3) / lans;
+  ICHECK(width == dsize->shape[1] / lans || dsize->shape[1] < 4);
   if (dsize->ndim > 2) {
     width *= dsize->shape[2];
   }
@@ -157,13 +177,13 @@ void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
   if (dsize->shape[1] < 4) {
     width = dsize->shape[1];
     if (dsize->ndim > 2) {
-      ICHECK(dsize->shape[2] % 4 == 0) << "can't store to image object with CL_RGBA";
+      ICHECK(dsize->shape[2] % lans == 0) << "can't store to image object with CL_RGBA";
       width *= dsize->shape[2];
     }
     if (width < 4) {
       width += 3;
     }
-    width /= 4;
+    width /= lans;
   }
   if (dsize->ndim > 3) {
     height *= dsize->shape[3];
@@ -178,6 +198,9 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
   cl_image_format fmt = {CL_RGBA, CL_FLOAT};
+  if (type_hint.lanes == 4) {
+    fmt.image_channel_order = CL_RGBA;
+  }
   if (type_hint.bits == 16) {
     fmt.image_channel_data_type = CL_HALF_FLOAT;
   }
@@ -189,8 +212,13 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   if (type_hint.code == kDLCLImgFloatW) {
     mf = CL_MEM_WRITE_ONLY;
   }
-  CHECK_LE(width, CL_DEVICE_IMAGE2D_MAX_WIDTH*16) << "image width is wider than the image object limit";
-  CHECK_LE(height, CL_DEVICE_IMAGE2D_MAX_HEIGHT*16) << "image height is higher than the image object limit";
+  TVMRetValue imgh, imgw;
+  GetAttr(ctx, kCL_DEVICE_IMAGE2D_MAX_HEIGHT, &imgh);
+  GetAttr(ctx, kCL_DEVICE_IMAGE2D_MAX_WIDTH, &imgw);
+  int iw = imgw.operator int();
+  int ih = imgh.operator int();
+  CHECK_LE(width, iw) << "image width is wider than the image object limit";
+  CHECK_LE(height, ih) << "image height is higher than the image object limit";
   cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
                         width,
                         height,
