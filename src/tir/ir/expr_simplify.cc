@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include <regex>
-
+#include <assert.h>
 namespace tvm {
 namespace tir {
 namespace exprSimp {
@@ -777,7 +777,7 @@ void simplify(std::unique_ptr<Ast>& ast) {
     } else {                                                                         \
       std::cout << __LINE__ << ":[FAIL] " << expr_lit << " failed.\n got " << actual \
                 << " vs wanted " << expected << "\n";                                \
-      _ASSERT(0);                                                                    \
+      assert(0);                                                                    \
     }                                                                                \
   }
 void test_folder_div() {

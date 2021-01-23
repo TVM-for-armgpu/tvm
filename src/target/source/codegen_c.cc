@@ -143,15 +143,18 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
 void CodeGenC::PrintDeclareWithBody(std::function<void()> f) {
   
   std::ostringstream new_stream;
+  std::unordered_map<std::string, std::string> new_var_declare_map_;
+  new_var_declare_map_.swap(var_declare_map_);
   new_stream.swap(stream);
 //PrintStmt(n);
   f();
   new_stream.swap(stream);
-  for (auto it : var_declare_map_) {
+  new_var_declare_map_.swap(var_declare_map_);
+  for (auto it : new_var_declare_map_) {
     PrintIndent();
     stream << "const int " << it.second << " = " << it.first << ";\n";
   }
-  var_declare_map_.clear();
+  new_var_declare_map_.clear();
   stream << new_stream.str();
   
 }
@@ -1008,17 +1011,7 @@ void CodeGenC::VisitStmt_(const ForNode* op) {
   stream << ' ' << vid << " = 0; " << vid << " < " << extent << "; ++" << vid << ") {\n";
   int for_scope = BeginScope();
   //===========================
-  std::ostringstream new_stream;
-  new_stream.swap(stream);
-  PrintStmt(op->body);
-  new_stream.swap(stream);
-  for (auto it : var_declare_map_) {
-    PrintIndent();
-    stream << "const int " << it.second << " = " << it.first << ";\n";
-  }
-  var_declare_map_.clear();
-  stream << new_stream.str();
-
+  PrintDeclareWithBody([this, op]() { PrintStmt(op->body); });
   //========================
   this->EndScope(for_scope);
   PrintIndent();
