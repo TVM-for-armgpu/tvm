@@ -38,7 +38,10 @@
 
 static char g_last_error[1024];
 
-void TVMAPISetLastError(const char* msg) { strncpy(g_last_error, msg, sizeof(g_last_error)); }
+void TVMAPISetLastError(const char* msg) {
+  strncpy(g_last_error, msg, sizeof(g_last_error) - 1);
+  g_last_error[sizeof(g_last_error) - 1] = 0;
+}
 
 __attribute__((format(printf, 1, 2))) int TVMAPIErrorf(const char* msg, ...) {
   va_list args;
@@ -505,4 +508,9 @@ release_and_return : {
   }
 }
   return err;
+}
+
+// Default implementation, overridden by the platform runtime.
+__attribute__((weak)) tvm_crt_error_t TVMPlatformGenerateRandom(uint8_t* buffer, size_t num_bytes) {
+  return kTvmErrorFunctionCallNotImplemented;
 }

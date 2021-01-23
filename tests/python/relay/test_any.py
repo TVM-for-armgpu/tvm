@@ -72,12 +72,11 @@ def check_result(
                         str(e),
                         str(r),
                     )
-                    return
-
-                if flatten:
-                    r = r.flatten()
-                    e = e.flatten()
-                tvm.testing.assert_allclose(r, e, atol=2e-6)
+                else:
+                    if flatten:
+                        r = r.flatten()
+                        e = e.flatten()
+                    tvm.testing.assert_allclose(r, e, atol=2e-6)
 
 
 def verify_any_broadcast(x_shape, y_shape, x_np_shape, y_np_shape, op, np_op):
@@ -121,6 +120,7 @@ def test_any_elemwise():
     verify_any_elemwise((relay.Any(),), (3,), relay.sqrt, np.sqrt)
     verify_any_elemwise((relay.Any(), 2), (5, 2), relay.negative, np.negative)
     verify_any_elemwise((relay.Any(), relay.Any()), (5, 4), relay.exp, np.exp)
+    verify_any_elemwise((relay.Any(),), (3,), relay.round, np.round)
 
 
 @tvm.testing.uses_gpu
@@ -454,6 +454,7 @@ def verify_any_conv2d(
     dilation,
     static_data_shape,
     ref_out_shape,
+    use_cudnn=False,
 ):
     mod = tvm.IRModule()
     dtype = "float32"
@@ -463,7 +464,12 @@ def verify_any_conv2d(
     mod["main"] = relay.Function([data, kernel], y)
     data_np = np.random.uniform(size=static_data_shape).astype(dtype)
     kernel_np = np.random.uniform(size=kernel_shape).astype(dtype)
-    check_result([data_np, kernel_np], mod, ref_out_shape, assert_shape=True)
+
+    targets = None
+    if use_cudnn and tvm.get_global_func("tvm.contrib.cudnn.conv.output_shape", True):
+        targets = [("cuda -libs=cudnn", tvm.gpu(0))]
+
+    check_result([data_np, kernel_np], mod, ref_out_shape, assert_shape=True, targets=targets)
 
 
 # TODO(@kevinthesun): Support dynamic input height and width.
@@ -486,6 +492,16 @@ def test_any_conv2d():
         (2, 2),
         (2, 64, 224, 224),
         (2, 64, 222, 222),
+    )
+    verify_any_conv2d(
+        (relay.Any(), 64, 224, 224),
+        (64, 64, 3, 3),
+        (1, 1),
+        (1, 1),
+        (1, 1),
+        (1, 64, 224, 224),
+        (1, 64, 224, 224),
+        use_cudnn=True,
     )
 
 
@@ -724,7 +740,13 @@ def test_any_batch_flatten():
 
 
 def verify_any_dense(
-    data_shape, weight_shape, units, static_data_shape, static_weight_shape, ref_out_shape
+    data_shape,
+    weight_shape,
+    units,
+    static_data_shape,
+    static_weight_shape,
+    ref_out_shape,
+    use_cublas=False,
 ):
     mod = tvm.IRModule()
     dtype = "float32"
@@ -734,7 +756,12 @@ def verify_any_dense(
     mod["main"] = relay.Function([data, weight], y)
     data_np = np.random.uniform(size=static_data_shape).astype(dtype)
     weight_np = np.random.uniform(size=static_weight_shape).astype(dtype)
-    check_result([data_np, weight_np], mod, ref_out_shape, assert_shape=True)
+
+    targets = None
+    if use_cublas and tvm.get_global_func("tvm.contrib.cublas.matmul", True):
+        targets = [("cuda -libs=cublas", tvm.gpu(0))]
+
+    check_result([data_np, weight_np], mod, ref_out_shape, assert_shape=True, targets=targets)
 
 
 # TODO(tvm-team) Fix dense schedule
@@ -742,6 +769,12 @@ def verify_any_dense(
 def test_any_dense():
     verify_any_dense(any_dims(2), any_dims(2), None, (4, 16), (8, 16), (4, 8))
     verify_any_dense(any_dims(2), (50, relay.Any()), 50, (4, 40), (50, 40), (4, 50))
+
+
+@tvm.testing.uses_gpu
+def test_any_dense_dynamic_batch():
+    verify_any_dense((relay.Any(), 40), (50, 40), 50, (4, 40), (50, 40), (4, 50))
+    verify_any_dense((relay.Any(), 40), (50, 40), 50, (4, 40), (50, 40), (4, 50), use_cublas=True)
 
 
 @tvm.testing.uses_gpu
@@ -813,7 +846,7 @@ def test_any_softmax():
     verify_any_softmax(any_dims(4), 2, (13, 11, 3, 1), (13, 11, 3, 1))
 
 
-def verify_any_topk(data_shape, kval, np_dshape, dtype, const_k=False):
+def verify_any_topk(data_shape, kval, np_dshape, dtype, ret_type="indices", const_k=False):
     mod = tvm.IRModule()
     data = relay.var("data", shape=data_shape, dtype=dtype)
     np_data = np.random.uniform(size=np_dshape).astype(dtype)
@@ -825,7 +858,9 @@ def verify_any_topk(data_shape, kval, np_dshape, dtype, const_k=False):
         k = relay.var("k", shape=(), dtype="int32")
         args = [data, k]
         in_vals = [np_data, kval]
-    out = relay.topk(data, k, ret_type="indices")
+    out = relay.topk(data, k, ret_type=ret_type)
+    if ret_type == "both":
+        out = out[0]
     mod["main"] = relay.Function(args, out)
 
     sorted = np.argsort(-np_data)
@@ -841,7 +876,56 @@ def verify_any_topk(data_shape, kval, np_dshape, dtype, const_k=False):
 def test_any_topk():
     verify_any_topk(any_dims(1), 5, (10,), "float32")
     verify_any_topk(any_dims(2), 2, (6, 3), "int32")
-    verify_any_topk(any_dims(2), 3, (6, 3), "float32", True)
+    verify_any_topk(any_dims(2), 3, (6, 3), "float32", const_k=True)
+    verify_any_topk(any_dims(1), 0, (0,), "float32", ret_type="both")
+
+
+def verify_any_get_valid_counts(num_anchor_real, dtype, targets=None):
+    mod = tvm.IRModule()
+    batch_size = 1
+    num_anchor = relay.Any()
+    data = relay.var("data", shape=(batch_size, num_anchor, 5), dtype=dtype)
+    np_data = np.random.uniform(size=(batch_size, num_anchor_real, 5)).astype(dtype)
+
+    np_out1 = np.zeros(shape=(batch_size,))
+    np_out2 = np.zeros(shape=np_data.shape).astype(dtype)
+    np_out3 = np.zeros(shape=(batch_size, num_anchor_real))
+    score_threshold = 0.95
+
+    for i in range(batch_size):
+        np_out1[i] = 0
+        inter_idx = 0
+        for j in range(num_anchor_real):
+            score = np_data[i, j, 0]
+            if score > score_threshold:
+                for k in range(5):
+                    np_out2[i, inter_idx, k] = np_data[i, j, k]
+                np_out1[i] += 1
+                np_out3[i, inter_idx] = j
+                inter_idx += 1
+            if j >= np_out1[i]:
+                for k in range(5):
+                    np_out2[i, j, k] = -1.0
+                np_out3[i, j] = -1
+
+    z = relay.vision.get_valid_counts(data, score_threshold, 0, score_index=0)
+
+    mod["main"] = relay.Function([data], z.astuple())
+
+    check_result([np_data], mod, [np_out1, np_out2, np_out3], targets=targets)
+
+
+@tvm.testing.uses_gpu
+def test_any_get_valid_counts():
+    verify_any_get_valid_counts(10, "float32")
+    # opencl seems to have issues with empty size buffer
+    # Check failed: err_code == CL_SUCCESS == false: OpenCL Error,
+    # code=-61: CL_INVALID_BUFFER_SIZE
+    targets = []
+    for tgt, ctx in tvm.testing.enabled_targets():
+        if "opencl" not in tgt:
+            targets.append((tgt, ctx))
+    verify_any_get_valid_counts(0, "float32", targets=targets)
 
 
 @tvm.testing.uses_gpu
