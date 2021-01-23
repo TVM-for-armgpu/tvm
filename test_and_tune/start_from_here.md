@@ -27,11 +27,14 @@ Please refer to the official document [click-and-go](https://tvm.apache.org/docs
 **for x86**
 - turn off opencl, otherwise you will get runtime error.
 - config llvm
+- [config.cmake](./x86config.cmake)
 
 **for arm**
 - turn on opencl
 - turn on cpp-rpc
+- [config.cmake](./armconfig.cmake)
 
+ [arm_runtime](./arm_runtime) may help you to onboard easily
 ## Setup the remote rpc environment
 ### option 1 NIC enabled
 if you could alloc a Network interface controller for andriod and make the host and device connect together. 
