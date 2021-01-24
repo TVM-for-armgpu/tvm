@@ -30,6 +30,7 @@
 #include <string>
 #include <type_traits>
 
+#define USE_CL_RGBA 1
 namespace tvm {
 namespace runtime {
 /*!
