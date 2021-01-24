@@ -258,6 +258,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
                                  std::ostream& os) {  // NOLINT(*)
   std::ostringstream ossbase;
   PrintExpr(base, ossbase);
+  std::string new_base_index = Simplify_with_const_var(ossbase.str());
   do {
     if (t.is_climgfloat() || t.is_climgfloatw()) {
       std::string vid = GetVarID(buffer);
@@ -304,7 +305,6 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
     os << "*)";
   }
   os << GetVarID(buffer) << " + ";
-  std::string new_base_index = Simplify_with_const_var(ossbase.str());
   os << new_base_index;
 }
 std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExpr base) {
