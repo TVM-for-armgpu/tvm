@@ -265,6 +265,18 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   const Op& builtin_call_extern_ = builtin::call_extern();
   const Op& builtin_call_pure_extern_ = builtin::call_pure_extern();
   void PrintDeclareWithBody(std::function<void()> f);
+  virtual std::string get_2Dmemo_floatx1_int2(const std::string& vid,
+                                              const std::string one_dimention_index) {
+    LOG(FATAL) << "Not implemented!";
+    return "";
+  };
+  virtual void Store_2Dmemo_floatx1(const std::string& vid, const std::string& addr,
+                                           const std::string& value) {
+    LOG(FATAL) << "Not implemented!";
+    return;
+  }
+  std::string Simplify_with_const_var(const std::string& base);
+  bool Find_longst_common_str_or_add_key(const std::string& base, std::string& new_base_index);
  protected:
   Map<const String, tvm::tir::Buffer> var_buffer_map_;
   std::unordered_map<std::string, std::string> var_declare_map_;
@@ -280,6 +292,7 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
   std::unordered_map<Var, const LetNode*, ObjectPtrHash, ObjectPtrEqual> let_binding_;
 };
 int GetValueType(const Type& type);
+void trimSpace(std::string& s);
 }  // namespace codegen
 }  // namespace tvm
 #endif  // TVM_TARGET_SOURCE_CODEGEN_C_H_

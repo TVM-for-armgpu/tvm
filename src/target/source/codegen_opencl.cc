@@ -58,13 +58,13 @@ void CodeGenOpenCL::PrintFuncPrefix() {
 void CodeGenOpenCL::PreFunctionBody(const PrimFunc& f) {
   in_para_stm = false;
   stream << R"(
-    const int group_id0 = get_group_id(0);
-    const int group_id1 = get_group_id(1);
-    const int group_id2 = get_group_id(2);
-
-    const int local_id0 = get_local_id(0);
-    const int local_id1 = get_local_id(1);
-    const int local_id2 = get_local_id(2);
+    //const int group_id0 = get_group_id(0);
+    //const int group_id1 = get_group_id(1);
+    //const int group_id2 = get_group_id(2);
+    //
+    //const int local_id0 = get_local_id(0);
+    //const int local_id1 = get_local_id(1);
+    //const int local_id2 = get_local_id(2);
 
     )";
 }
@@ -110,11 +110,11 @@ void CodeGenOpenCL::BindThreadIndex(const IterVar& iv) {
   runtime::ThreadScope ts = runtime::ThreadScope::Create(iv->thread_tag);
   std::ostringstream os;
   if (ts.rank == 1) {
-    //os << "get_local_id(" << ts.dim_index << ")";
-    os << "local_id" << ts.dim_index;
+    os << "get_local_id(" << ts.dim_index << ")";
+    //os << "local_id" << ts.dim_index;
   } else {
-    //os << "get_group_id(" << ts.dim_index << ")";
-    os << "group_id" << ts.dim_index;
+    os << "get_group_id(" << ts.dim_index << ")";
+    //os << "group_id" << ts.dim_index;
   }
   var_idmap_[iv->var.get()] = CastFromTo(os.str(), DataType::UInt(64), iv->var.dtype());
 }
@@ -205,80 +205,35 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
   LOG(FATAL) << "Cannot convert type " << t << " to OpenCL type";
 }
 
-// for string delimiter
-static std::vector<std::string> split(std::string s, std::string delimiter) {
-  size_t pos_start = 0, pos_end;
-  std::string token;
-  std::vector<std::string> res;
-
-  for (pos_end = 0; pos_end < s.size(); ++pos_end) {
-    if (delimiter.find(s[pos_end]) != std::string::npos) {
-      if (pos_end - pos_start != 0) {
-        res.emplace_back(s.substr(pos_start, pos_end - pos_start));
-        pos_start = pos_end;
-      }
-    }
+std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
+    const std::string one_dimention_index1) {
+  std::string one_dimention_index = Simplify_with_const_var(one_dimention_index1);
+  ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
+      << "var buffer shape is essential for opencl var:" << vid;
+  ICHECK(var_buffer_map_[vid]->shape.size() > 1)
+      << "var buffer shape of image memory must be at least 2 dimention";
+  PrimExpr width = var_buffer_map_[vid]->shape[1];
+  PrimExpr channel = IntImm(DataType::Int(32), 1);
+  if (var_buffer_map_[vid]->shape.size() > 2) {
+    width *= var_buffer_map_[vid]->shape[2];
   }
-  if (pos_start < s.size()) {
-    res.push_back(s.substr(pos_start));
-  }
-  return res;
-}
-
- void trimSpace(std::string &s)
- {
-    size_t index = 0;
-    if( !s.empty())
-    {
-        while( (index = s.find(' ',index)) != std::string::npos)
-        {
-            s.erase(index,1);
-        }
-    }
-}
-
- bool CodeGenOpenCL::find_longst_common_str_or_add_key(const std::string& base,
-                                                      std::string& new_base_index) {
-  //for constant expr, we just skip it
-  if (base.find_first_of("+*-/%") == std::string::npos) {
-    return false;
-  }
-  
-  std::string remove_space = base;
-  trimSpace(remove_space);
-
-  std::vector<std::string> vec_base = split(remove_space, "+*-/%");
-  std::vector<std::string> vec_combine;
-  for (const auto& v : vec_base) {
-    if (vec_combine.empty()) {
-      vec_combine.push_back(v);
-    } else {
-      vec_combine.push_back(vec_combine.back() + v);
-    }
-  }
-  for (auto vec_comb_it = vec_combine.rbegin(); vec_comb_it != vec_combine.rend(); ++vec_comb_it) {
-    for (const auto& kv : var_declare_map_) {
-      size_t pos = vec_comb_it->find(kv.first);
-      if (pos != std::string::npos) {
-        if (vec_comb_it->size() - kv.first.size() >= 0 &&
-            vec_comb_it->substr(0, pos).find_first_not_of("()") == std::string::npos) {
-          new_base_index = kv.second + remove_space.substr(pos + kv.first.size());
-          int left_bracket = std::count(new_base_index.begin(), new_base_index.end(), '(');
-          int right_bracket = std::count(new_base_index.begin(), new_base_index.end(), ')');
-          new_base_index.append(std::string(std::max(0, left_bracket - right_bracket), ')'));
-          new_base_index.insert(0, std::string(std::max(0, right_bracket - left_bracket), '('));
-          return true;
-        }
-      }
-    }
-  }
-  std::hash<std::string> hash_str;
-  var_declare_map_[remove_space] = "g_" + std::to_string(hash_str(base));
-  new_base_index = var_declare_map_[remove_space];
-  return false;
+  std::ostringstream value_temp;
+  value_temp << one_dimention_index << "/" << channel << "%(" << width << ")";
+  std::string img_x_axes = tvm::tir::exprSimp::DoSimplify(value_temp.str());
+  value_temp.str("");
+  value_temp.clear();
+  value_temp << one_dimention_index << "/(" << width << ")";
+  std::string img_y_axes = tvm::tir::exprSimp::DoSimplify(value_temp.str());
+  value_temp.str("");
+  value_temp.clear();
+  value_temp << "(int2)(" << img_x_axes << ", " << img_y_axes << ")";
+  return value_temp.str();
 }
 
  void split_img_xy_axes(std::string index_str, std::string& img_x_axes, std::string& img_y_axes) {
+ #if USE_CL_RGBA == 0
+   LOG(FATAL) << "split xy axex function doesnot support 1-changnel image";
+#endif
   trimSpace(index_str);
   size_t pos = index_str.find("%59");
   ICHECK(pos != std::string::npos) << "this should not happend";
@@ -302,7 +257,7 @@ static std::vector<std::string> split(std::string s, std::string delimiter) {
 void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr base,
                                  std::ostream& os) {  // NOLINT(*)
   std::ostringstream ossbase;
-
+  PrintExpr(base, ossbase);
   do {
     if (t.is_climgfloat() || t.is_climgfloatw()) {
       std::string vid = GetVarID(buffer);
@@ -322,47 +277,23 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       if (t.is_climgfloat()) {
         os << "sampler, ";
       }
-      std::ostringstream osindex;
-      //osindex << new_base_index;
-      PrintExpr(base, osindex);
+#if USE_CL_RGBA
       //===
       std::string img_x_axes, img_y_axes;
-      split_img_xy_axes(osindex.str(), img_x_axes, img_y_axes);
+      split_img_xy_axes(ossbase.str(), img_x_axes, img_y_axes);
       img_x_axes += "/4";
       //4 == lanes
       img_x_axes = tvm::tir::exprSimp::DoSimplify(img_x_axes);
-
-      std::string new_base_index_x = img_x_axes;
-      std::string new_base_index_y = img_y_axes;
-      find_longst_common_str_or_add_key(img_x_axes, new_base_index_x);
-      find_longst_common_str_or_add_key(img_y_axes, new_base_index_y);
-
-      os << "(int2)(" << new_base_index_x << "," << new_base_index_y << ")";
+      img_x_axes = Simplify_with_const_var(img_x_axes);
+      img_y_axes = Simplify_with_const_var(img_y_axes);
+      os << "(int2)(" << img_x_axes << "," << img_y_axes << ")";
       //===
-      /*
-      ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
-          << "var buffer shape is essential for opencl var:" << vid;
-      ICHECK(var_buffer_map_[vid]->shape.size() > 1)
-          << "var buffer shape of image memory must be at least 2 dimention";
-      PrimExpr width = var_buffer_map_[vid]->shape[1];
-      PrimExpr channel = IntImm(DataType::Int(32), 4);
-      if (var_buffer_map_[vid]->shape.size() > 2) {
-        width = var_buffer_map_[vid]->shape[2];
-      }
-      int Quotient = Downcast<IntImm>(width)->value / Downcast<IntImm>(channel)->value;
-      if (Quotient == 0) {
-        Quotient = 1;
-      }*/
-      //os << "(int2)(" << osindex.str() << "/" << channel << "%(" << Quotient << "),"
-      //   << osindex.str() << "/(" << width << "))";
-      
+#else
+      os << get_2Dmemo_floatx1_int2(vid, new_base_index);
+#endif
       return;
     }
   } while (0);
-  PrintExpr(base, ossbase);
-  std::string new_base_index = ossbase.str();
-  find_longst_common_str_or_add_key(ossbase.str(), new_base_index);
-  
   if (!HandleTypeMatch(buffer, t.element_of())) {
     os << '(';
     auto it = alloc_storage_scope_.find(buffer);
@@ -373,13 +304,17 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
     os << "*)";
   }
   os << GetVarID(buffer) << " + ";
+  std::string new_base_index = Simplify_with_const_var(ossbase.str());
   os << new_base_index;
-  //PrintExpr(base, os);
 }
 std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExpr base) {
   std::ostringstream os;
   if (t.is_climgfloat()) {
+#if USE_CL_RGBA
     os << "read_imagef(";
+#else
+    LOG(FATAL) << "floatx4 Image load is not supported here";
+#endif
   } else {
     os << "vload" << t.lanes() << "(0, ";
   }
@@ -387,6 +322,13 @@ std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExp
   os << ")";
   return os.str();
 }
+void CodeGenOpenCL::Store_2Dmemo_floatx1(const std::string& vid, const std::string& addr,
+    const std::string& value) {
+  std::string image_index = Simplify_with_const_var(addr);
+  std::string ref = get_2Dmemo_floatx1_int2(vid, addr);
+  stream << "write_imagef(" << vid << "," << ref << " , (float4)(" << value << "));\n";
+}
+
 
 void CodeGenOpenCL::PrintVecStore(const VarNode* buffer, DataType t, PrimExpr base,
                                   const std::string& value) {
@@ -398,16 +340,15 @@ void CodeGenOpenCL::PrintVecStore(const VarNode* buffer, DataType t, PrimExpr ba
   if (var_buffer_map_.count(vid)) {
     nt = var_buffer_map_[vid]->dtype;
   }
-  if (value.find("xyindex") != std::string::npos) {
-    stream << need_declar_value_;
-    need_declar_value_ = "";
-    this->PrintIndent();
-  }
   if (nt.is_climgfloatw() ||  t.is_climgfloatw()) {
+#if USE_CL_RGBA
     stream << "write_imagef(";
     // don't know why t's type was eliminated
     PrintVecAddr(buffer, nt, base, stream);
     stream << "," << value;
+#else
+    LOG(FATAL) << "Not support write one elments to 4-channel image!";
+#endif
   } else {
     stream << "vstore" << t.lanes() << "(" << value << ", 0, ";
     PrintVecAddr(buffer, nt, base, stream);
@@ -567,40 +508,14 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     }
     // os << ']';
     //os << "read_imagef(" << vid << ",sampler,"
-    os << "(int2)(";
+#if USE_CL_RGBA
+    LOG(FATAL) << "Not support fetch one elments froms 4-channel image!";
+#else
     std::ostringstream indexexp_os;
     PrintExpr(index, indexexp_os);
-    ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
-        << "var buffer shape is essential for opencl var";
-
-    ICHECK(var_buffer_map_[vid]->shape.size() > 1)
-        << "var buffer shape of image memory must be at least 2 dimention";
-    PrimExpr width = var_buffer_map_[vid]->shape[1];
-    //how many elements in image object,default is CL_RGBA by 4
-    PrimExpr channel = IntImm(DataType::Int(32), 4);
-    if (var_buffer_map_[vid]->shape.size() > 2) {
-      width = var_buffer_map_[vid]->shape[2] ;
-    }
-    int Quotient = Downcast<IntImm>(width)->value / Downcast<IntImm>(channel)->value;
-    if (Quotient == 0) {
-      Quotient = 1;
-    }
-    //===
-    std::string img_x_axes, img_y_axes;
-    split_img_xy_axes(indexexp_os.str(), img_x_axes, img_y_axes);
-    img_x_axes += "/4";
-    img_x_axes = tvm::tir::exprSimp::DoSimplify(img_x_axes);
-    std::string new_base_index_x = img_x_axes;
-    std::string new_base_index_y = img_y_axes;
-    find_longst_common_str_or_add_key(img_x_axes, new_base_index_x);
-    find_longst_common_str_or_add_key(img_y_axes, new_base_index_y);
-    os << new_base_index_x << "," << new_base_index_y << ")";
-    LOG(WARNING) << "answer will not correct!";
-    //===
-    //std::string xyindex = GetUniqueName("xyindex");
-    //os << xyindex << "/" << channel << "%(" << Quotient << "),";
-    //os << xyindex << "/(" << width << "))";
-    //need_declar_value_ = "int "+ xyindex + "=" + indexexp_os.str() + ";\n";
+    std::string image_index = Simplify_with_const_var(indexexp_os.str());
+    os << get_2Dmemo_floatx1_int2(vid, image_index);
+#endif
   } else {
     // Buffer declared as vector type.
     // optimize for case where it is in register,

@@ -484,6 +484,7 @@ void simplify_associate_mul(std::unique_ptr<Ast>& ast) {
       // Fold constexpr.
       if (ast->right->is_constant()) {
         ast = Ast::make_constant(ast->left->constant * ast->right->constant);
+        return;
       }
       // Aggregation of coefficients.
       if (ast->right->is_node("*") && ast->right->left->is_constant()) {
@@ -571,6 +572,7 @@ void simplify_associate_mod_remove_nop(std::unique_ptr<Ast>& ast, int operand) {
     if (ast->is_node("*") && ast->left->is_constant()) {
       if (ast->left->constant % operand == 0) {
         ast = Ast::make_constant(0);
+        return;
       }
     }
   }
@@ -742,7 +744,7 @@ void simplify_mod_and_div_with_bitop(std::unique_ptr<Ast>& ast) {
     if (ast->is_node("%")) {
       if (ast->right->is_constant() && is_expon_by_2(ast->right->constant)) {
         ast = Ast::make_node("&", std::move(ast->left),
-                             Ast::make_constant(mylog(ast->right->constant)));
+                             Ast::make_constant(ast->right->constant-1));
         return;
       } else {
         // uint32_t bediv = 1;
@@ -767,7 +769,7 @@ void simplify(std::unique_ptr<Ast>& ast) {
   simplify_associate_div(ast);
   simplify_associate_mod(ast);
   simplify_remove_nop(ast);
-  simplify_mod_and_div_with_bitop(ast);
+  //simplify_mod_and_div_with_bitop(ast);
 }
 
 #define ICHECKEQ(actual, expected, expr_lit)                                         \
@@ -899,12 +901,14 @@ void test_all() {
 
 std::string DoSimplify(const std::string& expr_lit_c) {
   std::string expr_lit = std::regex_replace(expr_lit_c, std::regex("\\(int\\)"), "_int_");
-  expr_lit = std::regex_replace(expr_lit, std::regex("\\+\\(0\\)"), "");
+  expr_lit = std::regex_replace(expr_lit, std::regex("\\."), "_dot_");
   Tokenizer tokenizer(expr_lit);
   auto ast = parse_expr(tokenizer);
   simplify(ast);
   expr_lit = print(ast);
-  return std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
+  expr_lit = std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
+  expr_lit = std::regex_replace(expr_lit, std::regex("_dot_"), ".");
+  return expr_lit;
 }
 
 int __main(int argc, const char** argv) {

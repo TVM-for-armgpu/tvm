@@ -145,6 +145,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
 }
 
 void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
+#if USE_CL_RGBA
   int lans = dsize->dtype.lanes;
   lans = 4;
   ICHECK(lans == 1 || lans == 4) << "opencl image only surpport CL_RGBA and CL_R now";
@@ -164,32 +165,18 @@ void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
     width = dsize->shape[1] / lans;
     height = dsize->shape[0];
   }
-  return;
+  #else
+    //HWCN
   height = dsize->shape[0];
-  width = (dsize->shape[1] + 3) / lans;
-  ICHECK(width == dsize->shape[1] / lans || dsize->shape[1] < 4);
+  width = dsize->shape[1];
   if (dsize->ndim > 2) {
     width *= dsize->shape[2];
-  }
-
-  // TODO: figure out a elegant solution to orignize data layout
-  //only works for filter kernel
-  if (dsize->shape[1] < 4) {
-    width = dsize->shape[1];
-    if (dsize->ndim > 2) {
-      ICHECK(dsize->shape[2] % lans == 0) << "can't store to image object with CL_RGBA";
-      width *= dsize->shape[2];
-    }
-    if (width < 4) {
-      width += 3;
-    }
-    width /= lans;
   }
   if (dsize->ndim > 3) {
     height *= dsize->shape[3];
   }
-
   return;
+  #endif
 }
 
 void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t alignment,
@@ -197,7 +184,11 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   this->Init();
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
+#if USE_CL_RGBA
   cl_image_format fmt = {CL_RGBA, CL_FLOAT};
+ #else
+  cl_image_format fmt = {CL_R, CL_FLOAT};
+#endif
   if (type_hint.lanes == 4) {
     fmt.image_channel_order = CL_RGBA;
   }

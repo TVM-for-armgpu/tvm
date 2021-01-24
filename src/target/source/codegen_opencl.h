@@ -60,7 +60,10 @@ class CodeGenOpenCL final : public CodeGenC {
   std::string GetBufferRef(DataType t, const VarNode* buffer, PrimExpr index) final;
   void PreFunctionBody(const PrimFunc& f) final;
   void PrintGlobalSamplerDeclare();
-  bool find_longst_common_str_or_add_key(const std::string& base, std::string& new_base_index);
+  std::string get_2Dmemo_floatx1_int2(const std::string& vid,
+                                      const std::string one_dimention_index) final;
+  void Store_2Dmemo_floatx1(const std::string& vid,
+                                   const std::string& addr, const std::string& value) final;
  private:
   // whether enable fp16 and fp64 extension
   bool enable_fp16_{false};

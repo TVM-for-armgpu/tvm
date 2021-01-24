@@ -26,6 +26,7 @@
 #include <iomanip>
 
 #include "../../arith/pattern_match.h"
+#include <tvm/tir/expr_simplify.h>
 
 namespace tvm {
 namespace codegen {
@@ -72,7 +73,6 @@ void CodeGenC::ReserveKeywordsAsUnique() {
   GetUniqueName("enum");
   GetUniqueName("union");
   GetUniqueName("return");
-  GetUniqueName("xyindex");
 }
 
 int GetValueType(const Type& type) {  // NOLINT(*)
@@ -760,7 +760,8 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
     ICHECK(is_one(op->predicate)) << "predicated load is not supported";
 
     arith::PVar<PrimExpr> base;
-    if (arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)) {
+    bool is_climg_bug_not_cl_rgba = op->dtype.is_climgfloat() && USE_CL_RGBA == 0;
+    if (is_climg_bug_not_cl_rgba == false && arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)) {
       std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), base.Eval());
       HandleVolatileLoads(ref, op, os);
     } else {
@@ -790,21 +791,11 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
         std::ostringstream index_temp;
         PrintVecElemLoad(sindex, op->index.dtype(), i, index_temp);
         if (elem_type.is_climgfloat()) {
-          ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
-              << "var buffer shape is essential for opencl var:" << vid;
-          ICHECK(var_buffer_map_[vid]->shape.size() > 1)
-              << "var buffer shape of image memory must be at least 2 dimention";
-          PrimExpr width = var_buffer_map_[vid]->shape[1];
-          PrimExpr channel = IntImm(DataType::Int(32), 4);
-          if (var_buffer_map_[vid]->shape.size() > 2) {
-            width = var_buffer_map_[vid]->shape[2];
-          }
-          int Quotient = Downcast<IntImm>(width)->value / Downcast<IntImm>(channel)->value;
-          if (Quotient == 0) {
-            Quotient = 1;
-          }
-          value_temp << "(int2)(" << index_temp.str() << "/" << channel << "%(" << Quotient
-                     << ")," << index_temp.str() << "/(" << width << "))).x";
+#if USE_CL_RGBA
+          LOG(FATAL) << "Not support read 1 element from 4-channel image";
+#else 
+          value_temp << get_2Dmemo_floatx1_int2(vid, index_temp.str()) << ").x";
+#endif
         } else {
           value_temp << '[';
           value_temp << index_temp.str();
@@ -820,25 +811,22 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
 void CodeGenC::VisitStmt_(const StoreNode* op) {
   std::string vid = GetVarID(op->buffer_var.get());
   DataType t = op->value.dtype();
+  bool is_climg =
+      alloc_storage_scope_.count(op->buffer_var.get()) &&
+      alloc_storage_scope_[op->buffer_var.get()].compare(0, sizeof("image") - 1, "image") == 0;
   if (t.lanes() == 1) {
     std::string value = this->PrintExpr(op->value);
     std::string ref = this->GetBufferRef(t, op->buffer_var.get(), op->index);
     this->PrintIndent();
 
-    const VarNode* buffer = op->buffer_var.get();
-    std::string scope;
-    if (alloc_storage_scope_.count(buffer)) {
-      scope = alloc_storage_scope_.at(buffer);
-    }
     // read_image
     // write_image
-    if (ref.find("xyindex") != std::string::npos || value.find("xyindex") != std::string::npos) {
-      stream << need_declar_value_;
-      need_declar_value_ = "";
-      this->PrintIndent();
-    }
-    if (scope.compare(0, sizeof("image")-1, "image") == 0) {
-        stream << "write_imagef(" << vid << "," << ref << " , (float4)(" << value << "));\n";
+    if (is_climg) {
+#if USE_CL_RGBA
+      LOG(FATAL) << "floatx4 Image store is not supported here";
+#else
+      Store_2Dmemo_floatx1(vid, ref, value);
+#endif
     } else {
       stream << ref << " = " << value << ";\n";
     }
@@ -846,8 +834,9 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     ICHECK(is_one(op->predicate)) << "Predicated store is not supported";
     arith::PVar<PrimExpr> base;
 
-
-    if (arith::ramp(base, 1, t.lanes()).Match(op->index)) {
+   
+    bool is_climg_bug_not_cl_rgba = is_climg && USE_CL_RGBA == 0;
+    if (is_climg_bug_not_cl_rgba == false && arith::ramp(base, 1, t.lanes()).Match(op->index)) {
       std::string value = this->PrintExpr(op->value);
       this->PrintVecStore(op->buffer_var.get(), t, base.Eval(), value);
     } else {
@@ -856,7 +845,8 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
       int vec_scope = BeginScope();
 
       // store elements seperately
-      std::string index = SSAGetID(PrintExpr(op->index), op->index.dtype());
+      std::string index =
+          SSAGetID(PrintExpr(op->index), op->index.dtype());
       std::string value = SSAGetID(PrintExpr(op->value), op->value.dtype());
       for (int i = 0; i < t.lanes(); ++i) {
         this->PrintIndent();
@@ -872,13 +862,25 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
           PrintType(elem_type, stream);
           stream << "*)" << vid << ')';
         } else {
-          stream << vid;
+          if (!is_climg) {
+            stream << vid;
+          }
         }
-        stream << '[';
-        PrintVecElemLoad(index, op->index.dtype(), i, stream);
-        stream << "] = ";
-        PrintVecElemLoad(value, op->value.dtype(), i, stream);
-        stream << ";\n";
+        if (is_climg) {
+          std::ostringstream elmoss;
+          PrintVecElemLoad(index, op->index.dtype(), i, elmoss);
+          std::string ref = elmoss.str();
+          elmoss.str("");
+          elmoss.clear();
+          PrintVecElemLoad(value, op->value.dtype(), i, elmoss);
+          Store_2Dmemo_floatx1(vid, ref, elmoss.str());
+        } else {
+          stream << '[';
+          PrintVecElemLoad(index, op->index.dtype(), i, stream);
+          stream << "] = ";
+          PrintVecElemLoad(value, op->value.dtype(), i, stream);
+          stream << ";\n";
+        }
       }
       EndScope(vec_scope);
     }
@@ -903,8 +905,10 @@ void CodeGenC::VisitExpr_(const RampNode* op, std::ostream& os) {  // NOLINT(*)
   ICHECK_EQ(op->base.dtype(), DataType::Int(32));
   os << "((int" << op->lanes << ")(";
   for (int i = 0; i < op->lanes; i++) {
-    os << "(" << PrintExpr(op->base) << ")"
+    std::ostringstream subexpr;
+    subexpr << "(" << Simplify_with_const_var(PrintExpr(op->base)) << ")"
        << "+(" << PrintExpr(op->stride) << "*" << i << ")";
+    os << tvm::tir::exprSimp::DoSimplify(subexpr.str());
     if (i != op->lanes - 1) os << ", ";
   }
   os << "))";
@@ -1114,6 +1118,86 @@ static bool CheckOutermostBracketMatch(const std::string& s) {
     }
   }
   return false;
+}
+
+// for string delimiter
+static std::vector<std::string> split(std::string s, std::string delimiter) {
+  size_t pos_start = 0, pos_end;
+  std::string token;
+  std::vector<std::string> res;
+
+  for (pos_end = 0; pos_end < s.size(); ++pos_end) {
+    if (delimiter.find(s[pos_end]) != std::string::npos) {
+      if (pos_end - pos_start != 0) {
+        res.emplace_back(s.substr(pos_start, pos_end - pos_start));
+        pos_start = pos_end;
+      }
+    }
+  }
+  if (pos_start < s.size()) {
+    res.push_back(s.substr(pos_start));
+  }
+  return res;
+}
+
+void trimSpace(std::string& s) {
+  size_t index = 0;
+  if (!s.empty()) {
+    while ((index = s.find(' ', index)) != std::string::npos) {
+      s.erase(index, 1);
+    }
+  }
+}
+
+bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
+                                                      std::string& new_base_index) {
+  // for constant expr, we just skip it
+  if (base.find_first_of("+*-/%") == std::string::npos) {
+    new_base_index = base;
+    return false;
+  }
+
+  std::string remove_space = base;
+  trimSpace(remove_space);
+  if (var_declare_map_.count(remove_space)) {
+    new_base_index = var_declare_map_[remove_space];
+    return true;
+  }
+  std::vector<std::string> vec_base = split(remove_space, "+*-/%");
+  std::vector<std::string> vec_combine;
+  for (const auto& v : vec_base) {
+    if (vec_combine.empty()) {
+      vec_combine.push_back(v);
+    } else {
+      vec_combine.push_back(vec_combine.back() + v);
+    }
+  }
+  for (auto vec_comb_it = vec_combine.rbegin(); vec_comb_it != vec_combine.rend(); ++vec_comb_it) {
+    for (const auto& kv : var_declare_map_) {
+      size_t pos = vec_comb_it->find(kv.first);
+      if (pos != std::string::npos) {
+        if (vec_comb_it->size() - kv.first.size() >= 0 &&
+            vec_comb_it->substr(0, pos).find_first_not_of("()") == std::string::npos) {
+          new_base_index = kv.second + remove_space.substr(pos + kv.first.size());
+          int left_bracket = std::count(new_base_index.begin(), new_base_index.end(), '(');
+          int right_bracket = std::count(new_base_index.begin(), new_base_index.end(), ')');
+          new_base_index.append(std::string(std::max(0, left_bracket - right_bracket), ')'));
+          new_base_index.insert(0, std::string(std::max(0, right_bracket - left_bracket), '('));
+          return true;
+        }
+      }
+    }
+  }
+  std::hash<std::string> hash_str;
+  new_base_index = "g_" + std::to_string(hash_str(base));
+  var_declare_map_[remove_space] = new_base_index;
+  return false;
+}
+
+std::string CodeGenC::Simplify_with_const_var(const std::string& base) {
+  std::string new_base_index = base;
+  Find_longst_common_str_or_add_key(base, new_base_index);
+  return new_base_index;
 }
 
 }  // namespace codegen

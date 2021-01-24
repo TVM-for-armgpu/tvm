@@ -255,10 +255,15 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
           offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
         }
         int i_last = index.size() - 1;
+        
+#if USE_CL_RGBA
         if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()) {
           ICHECK(i_last > 0) << "opencl image object dimention must greater than 2";
           base = base + indexmod(offset, 59) + (index[i_last]);
-        } else {
+        }
+#else
+#endif
+        {
           if (i_last > 0) {
             offset = MergeMulMod(&ana, offset * n->shape[i_last] + index[i_last]);
           }
