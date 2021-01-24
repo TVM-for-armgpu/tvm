@@ -58,13 +58,13 @@ void CodeGenOpenCL::PrintFuncPrefix() {
 void CodeGenOpenCL::PreFunctionBody(const PrimFunc& f) {
   in_para_stm = false;
   stream << R"(
-    //const int group_id0 = get_group_id(0);
-    //const int group_id1 = get_group_id(1);
-    //const int group_id2 = get_group_id(2);
-    //
-    //const int local_id0 = get_local_id(0);
-    //const int local_id1 = get_local_id(1);
-    //const int local_id2 = get_local_id(2);
+    const int group_id0 = get_group_id(0);
+    const int group_id1 = get_group_id(1);
+    const int group_id2 = get_group_id(2);
+    
+    const int local_id0 = get_local_id(0);
+    const int local_id1 = get_local_id(1);
+    const int local_id2 = get_local_id(2);
 
     )";
 }
@@ -110,11 +110,11 @@ void CodeGenOpenCL::BindThreadIndex(const IterVar& iv) {
   runtime::ThreadScope ts = runtime::ThreadScope::Create(iv->thread_tag);
   std::ostringstream os;
   if (ts.rank == 1) {
-    os << "get_local_id(" << ts.dim_index << ")";
-    //os << "local_id" << ts.dim_index;
+    //os << "get_local_id(" << ts.dim_index << ")";
+    os << "local_id" << ts.dim_index;
   } else {
-    os << "get_group_id(" << ts.dim_index << ")";
-    //os << "group_id" << ts.dim_index;
+    //os << "get_group_id(" << ts.dim_index << ")";
+    os << "group_id" << ts.dim_index;
   }
   var_idmap_[iv->var.get()] = CastFromTo(os.str(), DataType::UInt(64), iv->var.dtype());
 }
