@@ -196,39 +196,39 @@ struct Ast {
 
   // L_AST_SUBNODE
   std::string op;
-  std::unique_ptr<Ast> left;
-  std::unique_ptr<Ast> right;
+  std::shared_ptr<Ast> left;
+  std::shared_ptr<Ast> right;
   AstDataType dtype = L_AST_UINT;
 
-  static std::unique_ptr<Ast> make_constant(int constant) {
-    auto ast = std::make_unique<Ast>();
+  static std::shared_ptr<Ast> make_constant(int constant) {
+    auto ast = std::make_shared<Ast>();
     ast->node_ty = L_AST_CONSTANT;
     ast->constant = constant;
     ast->dtype = L_AST_UINT;
     return ast;
   }
-  static std::unique_ptr<Ast> make_constant_float(float constant) {
-    auto ast = std::make_unique<Ast>();
+  static std::shared_ptr<Ast> make_constant_float(float constant) {
+    auto ast = std::make_shared<Ast>();
     ast->node_ty = L_AST_CONSTANT;
     ast->constant_f = constant;
     ast->dtype = L_AST_FLOAT;
     return ast;
   }
-  static std::unique_ptr<Ast> make_symbol(const std::string& symbol) {
-    auto ast = std::make_unique<Ast>();
+  static std::shared_ptr<Ast> make_symbol(const std::string& symbol) {
+    auto ast = std::make_shared<Ast>();
     ast->node_ty = L_AST_SYMBOL;
     ast->symbol = symbol;
     ast->range_hint_high = 0;
     return ast;
   }
-  static std::unique_ptr<Ast> make_node(const std::string& op, std::unique_ptr<Ast>&& left,
-                                        std::unique_ptr<Ast>&& right,
+  static std::shared_ptr<Ast> make_node(const std::string& op, std::shared_ptr<Ast> left,
+                                        std::shared_ptr<Ast> right,
                                         AstDataType dtype = L_AST_UINT) {
-    auto ast = std::make_unique<Ast>();
+    auto ast = std::make_shared<Ast>();
     ast->node_ty = L_AST_SUBNODE;
     ast->op = op;
-    ast->left = std::forward<std::unique_ptr<Ast>>(left);
-    ast->right = std::forward<std::unique_ptr<Ast>>(right);
+    ast->left = std::forward<std::shared_ptr<Ast>>(left);
+    ast->right = std::forward<std::shared_ptr<Ast>>(right);
     ast->dtype = dtype;
     return ast;
   }
@@ -245,9 +245,9 @@ struct Ast {
   }
 };
 
-std::unique_ptr<Ast> parse_expr(Tokenizer& tokenizer);
+std::shared_ptr<Ast> parse_expr(Tokenizer& tokenizer);
 
-std::unique_ptr<Ast> parse_factor(Tokenizer& tokenizer) {
+std::shared_ptr<Ast> parse_factor(Tokenizer& tokenizer) {
   if (tokenizer.next_is_integer()) {
     auto token = tokenizer.next();
     return Ast::make_constant(token.integer);
@@ -279,8 +279,8 @@ std::unique_ptr<Ast> parse_factor(Tokenizer& tokenizer) {
   }
   throw std::logic_error("unexpected token or end of input");
 }
-std::unique_ptr<Ast> parse_term(Tokenizer& tokenizer) {
-  std::unique_ptr<Ast> left = parse_factor(tokenizer);
+std::shared_ptr<Ast> parse_term(Tokenizer& tokenizer) {
+  std::shared_ptr<Ast> left = parse_factor(tokenizer);
   while (!tokenizer.empty()) {
     auto match = tokenizer.next_is_punctuation("*") || tokenizer.next_is_punctuation("/") ||
                  tokenizer.next_is_punctuation("<<") || tokenizer.next_is_punctuation(">>") ||
@@ -296,8 +296,8 @@ std::unique_ptr<Ast> parse_term(Tokenizer& tokenizer) {
   }
   return left;
 }
-std::unique_ptr<Ast> parse_expr(Tokenizer& tokenizer) {
-  std::unique_ptr<Ast> left = parse_term(tokenizer);
+std::shared_ptr<Ast> parse_expr(Tokenizer& tokenizer) {
+  std::shared_ptr<Ast> left = parse_term(tokenizer);
 
   while (!tokenizer.empty()) {
     auto match = tokenizer.next_is_punctuation("+");
@@ -313,7 +313,7 @@ std::unique_ptr<Ast> parse_expr(Tokenizer& tokenizer) {
   return left;
 }
 
-void print_impl(std::stringstream& ss, const std::unique_ptr<Ast>& ast) {
+void print_impl(std::stringstream& ss, const std::shared_ptr<Ast>& ast) {
   if (ast->node_ty == L_AST_CONSTANT) {
     if (ast->dtype == L_AST_FLOAT) {
       ss << ast->constant_f;
@@ -340,18 +340,18 @@ void print_impl(std::stringstream& ss, const std::unique_ptr<Ast>& ast) {
   }
 }
 
-std::string print(const std::unique_ptr<Ast>& ast) {
+std::string print(const std::shared_ptr<Ast>& ast) {
   std::stringstream ss;
   print_impl(ss, ast);
   return ss.str();
 }
-const char* Dump(const std::unique_ptr<Ast>& ast) {
+const char* Dump(const std::shared_ptr<Ast>& ast) {
   static std::string debug;
   debug = print(ast);
   // std::cout << debug << "\n";
   return debug.c_str();
 }
-void hint_symbol(std::unique_ptr<Ast>& ast, const std::string& symbol, int high) {
+void hint_symbol(std::shared_ptr<Ast>& ast, const std::string& symbol, int high) {
   if (ast->is_symbol() && ast->symbol == symbol) {
     ast->range_hint_high = high;
   }
@@ -362,7 +362,7 @@ void hint_symbol(std::unique_ptr<Ast>& ast, const std::string& symbol, int high)
 }
 
 // Move constant coefficients to the left.
-void simplify_prioritize_mul_coefficients(std::unique_ptr<Ast>& ast) {
+void simplify_prioritize_mul_coefficients(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
     simplify_prioritize_mul_coefficients(ast->left);
     simplify_prioritize_mul_coefficients(ast->right);
@@ -377,7 +377,7 @@ void simplify_prioritize_mul_coefficients(std::unique_ptr<Ast>& ast) {
 }
 
 // Depends on `simplify_prioritize_mul_coefficients`.
-bool simplify_is_multiple_of(std::unique_ptr<Ast>& ast, int divisor) {
+bool simplify_is_multiple_of(std::shared_ptr<Ast>& ast, int divisor) {
   if (ast->is_symbol()) {
     return false;
   }
@@ -396,7 +396,7 @@ bool simplify_is_multiple_of(std::unique_ptr<Ast>& ast, int divisor) {
 
 // Get all coefficients in a polynomial. The function returns no element if the
 // sub-expression contains any division or modulo.
-bool simplify_collect_coefficients_impl(std::unique_ptr<Ast>& ast, std::vector<int>& out) {
+bool simplify_collect_coefficients_impl(std::shared_ptr<Ast>& ast, std::vector<int>& out) {
   if (ast->is_symbol()) {
     out.push_back(1);
     return true;
@@ -414,11 +414,11 @@ bool simplify_collect_coefficients_impl(std::unique_ptr<Ast>& ast, std::vector<i
   }
   return false;
 }
-std::vector<int> simplify_collect_coefficients(std::unique_ptr<Ast>& ast) {
+std::vector<int> simplify_collect_coefficients(std::shared_ptr<Ast>& ast) {
   std::vector<int> out;
   return simplify_collect_coefficients_impl(ast, out) ? out : std::vector<int>{};
 }
-int simplify_get_coefficient_gcd(std::unique_ptr<Ast>& ast) {
+int simplify_get_coefficient_gcd(std::shared_ptr<Ast>& ast) {
   auto gcd = [](int a, int b) {
     if (a == 0 || b == 0) return std::max(a, b);
     while (a != b) {
@@ -444,7 +444,7 @@ int simplify_get_coefficient_gcd(std::unique_ptr<Ast>& ast) {
 
 // Get the upper bound of the values in this sub-expression. Retuens 0 if one
 // term has never been hinted.
-int simplify_upper_bound_of(const std::unique_ptr<Ast>& ast) {
+int simplify_upper_bound_of(const std::shared_ptr<Ast>& ast) {
   if (ast->is_constant()) {
     return ast->constant;
   }
@@ -472,7 +472,7 @@ int simplify_upper_bound_of(const std::unique_ptr<Ast>& ast) {
 // Fold multiplications.
 //
 // Depends on `simplify_prioritize_mul_coefficients`.
-void simplify_associate_mul(std::unique_ptr<Ast>& ast) {
+void simplify_associate_mul(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
     // Ensure the sub-expression has been folded.
     simplify_associate_mul(ast->left);
@@ -500,7 +500,7 @@ void simplify_associate_mul(std::unique_ptr<Ast>& ast) {
 // Fold divisions. The divisors are always on the right.
 //
 // Depends on `simplify_prioritize_mul_coefficients`.
-void simplify_associate_div_remove_nop(std::unique_ptr<Ast>& ast, int operand) {
+void simplify_associate_div_remove_nop(std::shared_ptr<Ast>& ast, int operand) {
   if (!ast) {
     return;
   }
@@ -518,7 +518,7 @@ void simplify_associate_div_remove_nop(std::unique_ptr<Ast>& ast, int operand) {
   }
   //}
 }
-void simplify_associate_div(std::unique_ptr<Ast>& ast) {
+void simplify_associate_div(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
     simplify_associate_div(ast->left);
     simplify_associate_div(ast->right);
@@ -563,7 +563,7 @@ void simplify_associate_div(std::unique_ptr<Ast>& ast) {
 // Fold modulos. The divisors are always on the right.
 //
 // Depends on `simplify_prioritize_mul_coefficients`.
-void simplify_associate_mod_remove_nop(std::unique_ptr<Ast>& ast, int operand) {
+void simplify_associate_mod_remove_nop(std::shared_ptr<Ast>& ast, int operand) {
   if (ast->is_node()) {
     simplify_associate_mod_remove_nop(ast->left, operand);
     simplify_associate_mod_remove_nop(ast->right, operand);
@@ -578,7 +578,7 @@ void simplify_associate_mod_remove_nop(std::unique_ptr<Ast>& ast, int operand) {
   }
 }
 
-void simplify_associate_mod(std::unique_ptr<Ast>& ast) {
+void simplify_associate_mod(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
     simplify_associate_mod(ast->left);
     simplify_associate_mod(ast->right);
@@ -610,7 +610,7 @@ void simplify_associate_mod(std::unique_ptr<Ast>& ast) {
 }
 
 // Remove nops that doesn"t have any effect on expression evaluation.
-void simplify_remove_nop(std::unique_ptr<Ast>& ast) {
+void simplify_remove_nop(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
     simplify_remove_nop(ast->left);
     simplify_remove_nop(ast->right);
@@ -680,7 +680,7 @@ void simplify_remove_nop(std::unique_ptr<Ast>& ast) {
 }
 
 // replace div and mod with bit_shift and mul
-void simplify_mod_and_div_with_bitop(std::unique_ptr<Ast>& ast) {
+void simplify_mod_and_div_with_bitop(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
     simplify_mod_and_div_with_bitop(ast->left);
     simplify_mod_and_div_with_bitop(ast->right);
@@ -747,22 +747,21 @@ void simplify_mod_and_div_with_bitop(std::unique_ptr<Ast>& ast) {
                              Ast::make_constant(ast->right->constant-1));
         return;
       } else {
-        // uint32_t bediv = 1;
         // float type
-        // unique_ptr can't have another copy, so we can't simplify it to a-a*(1/b)*b
-        // float new_bediv = 1.0 / ast->right->constant * bediv;
-        // auto temp_right = std::move(ast->right);
-        // ast->right = Ast::make_node('*', std::move(ast->left),
-        // Ast::make_constant_float(new_bediv)); ast->right = Ast::make_node('*',
-        // std::move(ast->left), std::move(temp_right)); ast = Ast::make_node('-',
-        // std::move(ast->left), std::move(ast->right));
+        // shared_ptr can't have another copy, so we can't simplify a%b to 
+        // a%b => a-int(a/b)*b => a-int(a*(1/b))*b, notice b is constant
+        float new_bediv = (1.0 / ast->right->constant);
+        auto r = ast->right;
+        ast->right = Ast::make_node("*", (ast->left), Ast::make_constant_float(new_bediv));
+        ast->right = Ast::make_node("*", (ast->right), r);
+        ast = Ast::make_node("-", (ast->left), ast->right);
         return;
       }
     }
   }
 }
 
-void simplify(std::unique_ptr<Ast>& ast) {
+void simplify(std::shared_ptr<Ast>& ast) {
   // DON'T CHANGE THE ORDER HERE.
   simplify_prioritize_mul_coefficients(ast);
   simplify_associate_mul(ast);
