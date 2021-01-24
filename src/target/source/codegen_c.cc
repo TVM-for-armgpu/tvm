@@ -1152,7 +1152,8 @@ void trimSpace(std::string& s) {
 bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
                                                       std::string& new_base_index) {
   // for constant expr, we just skip it
-  if (base.find_first_of("+*-/%") == std::string::npos) {
+  if (base.find_first_of("+*-/%") == std::string::npos ||
+      base.find("const_common_")!=std::string::npos) {
     new_base_index = base;
     return false;
   }
@@ -1189,7 +1190,7 @@ bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
     }
   }
   std::hash<std::string> hash_str;
-  new_base_index = "g_" + std::to_string(hash_str(base));
+  new_base_index = "const_common_" + std::to_string(hash_str(base));
   var_declare_map_[remove_space] = new_base_index;
   return false;
 }

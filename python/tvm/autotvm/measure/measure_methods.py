@@ -566,7 +566,7 @@ def run_through_rpc(
             raise AttributeError(
                 "Please make sure USE_RANDOM is ON in the config.cmake " "on the remote devices"
             )
-        args = [nd.array(np.zeros(x[0], dtype=x[1]), ctx=ctx) for x in build_result.arg_info]
+        args = [nd.array(np.zeros(x[0], dtype=x[1].replace('climgfloatr','float').replace('climgfloatw','float')), ctx=ctx, dtype=x[1]) for x in build_result.arg_info]
         if "scatter" not in measure_input.task.name:
             # the index tensor of scatter op cannot be randomly initialized
             for arg in args:

@@ -6,6 +6,7 @@
 #include <vector>
 #include <regex>
 #include <assert.h>
+#include <tvm/support/logging.h>
 namespace tvm {
 namespace tir {
 namespace exprSimp {
@@ -899,15 +900,22 @@ void test_all() {
 
 
 std::string DoSimplify(const std::string& expr_lit_c) {
-  std::string expr_lit = std::regex_replace(expr_lit_c, std::regex("\\(int\\)"), "_int_");
-  expr_lit = std::regex_replace(expr_lit, std::regex("\\."), "_dot_");
-  Tokenizer tokenizer(expr_lit);
-  auto ast = parse_expr(tokenizer);
-  simplify(ast);
-  expr_lit = print(ast);
-  expr_lit = std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
-  expr_lit = std::regex_replace(expr_lit, std::regex("_dot_"), ".");
-  return expr_lit;
+  try {
+    std::string expr_lit = std::regex_replace(expr_lit_c, std::regex("\\(int\\)"), "_int_");
+    expr_lit = std::regex_replace(expr_lit, std::regex("\\."), "_dot_");
+    Tokenizer tokenizer(expr_lit);
+    auto ast = parse_expr(tokenizer);
+    simplify(ast);
+    expr_lit = print(ast);
+    expr_lit = std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
+    expr_lit = std::regex_replace(expr_lit, std::regex("_dot_"), ".");
+    return expr_lit;
+  } catch (std::exception e) {
+    LOG(WARNING) << " expression simplify Exception:" << e.what()
+                 << ".current expr=" << expr_lit_c;
+
+    return expr_lit_c;
+  }
 }
 
 int __main(int argc, const char** argv) {
