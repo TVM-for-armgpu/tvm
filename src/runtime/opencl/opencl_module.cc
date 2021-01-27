@@ -221,7 +221,7 @@ cl_kernel OpenCLModuleNode::InstallKernel(cl::OpenCLWorkspace* w, cl::OpenCLThre
       clGetProgramBuildInfo(program_, dev, CL_PROGRAM_BUILD_LOG, 0, nullptr, &len);
       log.resize(len);
       clGetProgramBuildInfo(program_, dev, CL_PROGRAM_BUILD_LOG, len, &log[0], nullptr);
-      LOG(FATAL) << "OpenCL build error for device=" << dev << log;
+      LOG(FATAL) << "OpenCL build error for device=" << dev << "err=" << err << log;
     }
     device_built_flag_[device_id] = true;
   }

@@ -769,7 +769,7 @@ void simplify(std::shared_ptr<Ast>& ast) {
   simplify_associate_div(ast);
   simplify_associate_mod(ast);
   simplify_remove_nop(ast);
-  //simplify_mod_and_div_with_bitop(ast);
+  simplify_mod_and_div_with_bitop(ast);
 }
 
 #define ICHECKEQ(actual, expected, expr_lit)                                         \
@@ -910,7 +910,7 @@ std::string DoSimplify(const std::string& expr_lit_c) {
     expr_lit = std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
     expr_lit = std::regex_replace(expr_lit, std::regex("_dot_"), ".");
     return expr_lit;
-  } catch (std::exception e) {
+  } catch (std::exception& e) {
     LOG(WARNING) << " expression simplify Exception:" << e.what()
                  << ".current expr=" << expr_lit_c;
 
