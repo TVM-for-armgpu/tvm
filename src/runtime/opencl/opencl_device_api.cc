@@ -149,8 +149,15 @@ void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
   int lans = dsize->dtype.lanes;
   lans = 4;
   ICHECK(lans == 1 || lans == 4) << "opencl image only surpport CL_RGBA and CL_R now";
-  ICHECK(dsize->ndim >= 2 && dsize->ndim <=4 ) << "opencl image memory shape must be at least 2D";
-  if (dsize->ndim > 3) {
+  ICHECK(dsize->ndim >= 2 && dsize->ndim <= 6 ) << "opencl image memory shape must be at least 2D";
+  if (dsize->ndim == 6) {
+    width =  dsize->shape[5] / lans;
+    height =
+        dsize->shape[4] * dsize->shape[3] * dsize->shape[2] * dsize->shape[1] * dsize->shape[0];
+  } else if (dsize->ndim == 5) {
+    width = dsize->shape[3] * dsize->shape[4] / lans;
+    height = dsize->shape[2] * dsize->shape[1] * dsize->shape[0];
+  } else if (dsize->ndim > 3) {
     if (dsize->shape[2] == 1 && dsize->shape[3] == 1) {
       width = dsize->shape[1] / lans;
       height = dsize->shape[0];
