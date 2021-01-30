@@ -26,7 +26,7 @@ struct Token {
 
 inline bool is_valid_punctuation(const std::string& c) {
   return c == "(" || c == ")" || c == "+" || c == "*" || c == "/" || c == "%" || c == "&" ||
-         c == "|" || c == "<<" || c == ">>";
+         c == "|" || c == "<<" || c == ">>" || c == "!";
 }
 
 constexpr bool is_expon_by_2(int32_t number) { return (number & number - 1) == 0; }
@@ -178,6 +178,7 @@ enum AstNodeType {
   L_AST_CONSTANT,
   L_AST_SYMBOL,
   L_AST_SUBNODE,
+  L_AST_UNARY,
 };
 enum AstDataType {
   L_AST_FLOAT,
@@ -201,6 +202,9 @@ struct Ast {
   std::shared_ptr<Ast> right;
   AstDataType dtype = L_AST_UINT;
 
+  // L_AST_UNARY
+  std::shared_ptr<Ast> child;
+
   static std::shared_ptr<Ast> make_constant(int constant) {
     auto ast = std::make_shared<Ast>();
     ast->node_ty = L_AST_CONSTANT;
@@ -220,6 +224,13 @@ struct Ast {
     ast->node_ty = L_AST_SYMBOL;
     ast->symbol = symbol;
     ast->range_hint_high = 0;
+    return ast;
+  }
+  static std::shared_ptr<Ast> make_unary(const std::string& op, std::shared_ptr<Ast> child) {
+    auto ast = std::make_shared<Ast>();
+    ast->node_ty = L_AST_UNARY;
+    ast->op = op;
+    ast->child = std::forward<std::shared_ptr<Ast>>(child);
     return ast;
   }
   static std::shared_ptr<Ast> make_node(const std::string& op, std::shared_ptr<Ast> left,
@@ -278,12 +289,16 @@ std::shared_ptr<Ast> parse_factor(Tokenizer& tokenizer) {
     }
     return ast;
   }
+  if (tokenizer.next_is_punctuation("!")) {
+    tokenizer.next();
+    auto ast = parse_factor(tokenizer);
+    return Ast::make_unary("!", ast);
+  }
   throw std::logic_error("unexpected token or end of input");
 }
 
 // https://en.cppreference.com/w/c/language/operator_precedence
 const std::vector<std::vector<std::string>> PRECEDENCE_TABLE = {
-  {"!", "~"},
   {"*", "/", "%"},
   {"+", "-"},
   {"<<", ">>"},
@@ -333,7 +348,7 @@ void print_impl(std::stringstream& ss, const std::shared_ptr<Ast>& ast) {
     }
   } else if (ast->node_ty == L_AST_SYMBOL) {
     ss << ast->symbol;
-  } else {
+  } else if (ast->node_ty == L_AST_SUBNODE) {
     bool need_paren =
         ast->op != "*" && ast->op != "/" && ast->op != "%" && ast->op != "<<" && ast->op != ">>";
     if (ast->dtype == L_AST_FLOAT || ast->left->dtype == L_AST_FLOAT ||
@@ -348,6 +363,9 @@ void print_impl(std::stringstream& ss, const std::shared_ptr<Ast>& ast) {
     ss << " " << ast->op << " ";
     print_impl(ss, ast->right);
     ss << ")";
+  } else if (ast->node_ty == L_AST_UNARY) {
+    ss << ast->op;
+    print_impl(ss, ast->child);
   }
 }
 
@@ -515,20 +533,22 @@ void simplify_associate_div_remove_nop(std::shared_ptr<Ast>& ast, int operand) {
   if (!ast) {
     return;
   }
-  // if (ast->is_node()) {
-  simplify_associate_div_remove_nop(ast->left, operand);
-  simplify_associate_div_remove_nop(ast->right, operand);
 
-  // Complicated cases.
-  if (ast->is_node("*") && ast->left->is_constant()) {
-    // if (ast->left->constant % operand == 0) {
-    //  ast->left->constant /= operand;
-    //}
-  } else if (ast->is_constant()) {
+  if (ast->is_constant()) {
     ast->constant /= operand;
+    return;
   }
-  //}
+
+  if (ast->is_combinational_node()) {
+    simplify_associate_div_remove_nop(ast->left, operand);
+    simplify_associate_div_remove_nop(ast->right, operand);
+  }
+
+  if (ast->is_node("*")) {
+    simplify_associate_div_remove_nop(ast->left, operand);
+  }
 }
+
 void simplify_associate_div(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
     simplify_associate_div(ast->left);
@@ -876,6 +896,20 @@ void test_folder_div() {
     auto ast = parse_expr(tokenizer);
     simplify(ast);
     ICHECKEQ(print(ast), "(int)(((16 * group_id0) + ((9 * local_id0) + 4)) * 0.2)", expr_lit);
+  }
+  {
+    const char* expr_lit = "((((((int)group_id0)*32)+((((int)local_id0)&3)*8))+(0))+4)/4";
+    Tokenizer tokenizer(expr_lit);
+    auto ast = parse_expr(tokenizer);
+    simplify(ast);
+    ICHECKEQ(print(ast), "(((8 * group_id0) + (2 * (local_id0 & 3))) + 1)", expr_lit);
+  }
+  {
+    const char* expr_lit = "(!(a*16)+32)/4";
+    Tokenizer tokenizer(expr_lit);
+    auto ast = parse_expr(tokenizer);
+    simplify(ast);
+    ICHECKEQ(print(ast), "((int)(!(a * 16) + 32) >> 2)", expr_lit);
   }
 }
 
