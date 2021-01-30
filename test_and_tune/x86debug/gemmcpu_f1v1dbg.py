@@ -2,6 +2,8 @@ import numpy as np
 import tvm
 import os
 from tvm import te
+import sys
+sys.path.append('..')
 import extern_op
 
 print(os.getpid())
@@ -14,7 +16,7 @@ kernel = 1
 pad = 0
 stride = 1
 
-open_image=1
+open_image=0
 ddtype='float32'
 if open_image == 1:
     ddtype = "climgfloatr32"
@@ -23,19 +25,19 @@ if open_image == 1:
 PACK4 = 4
 #PACK2=2
 PACK2=1
-W_P = in_size//PACK2
-H_P = in_size//PACK2
-C_P = in_channel//PACK4
+W_P = (in_size+3)//4*4//PACK2
+H_P = (in_size+2)//2*2//PACK2
+C_P = (in_channel+3)//PACK4
 K_P=out_channel//PACK4
 
 #A = te.placeholder((C_P,H_P,PACK2,W_P,PACK2,PACK4), dtype=ddtype,name="A")
 A = te.placeholder((C_P,H_P,W_P*PACK4), dtype=ddtype,name="A")
-W = te.placeholder((in_channel,out_channel), dtype=ddtype, name="W")
+W = te.placeholder((C_P*PACK4,out_channel), dtype=ddtype, name="W")
 out_size = in_size
 # Pad input
 Apad = A
 # Create reduction variables
-rc = te.reduce_axis((0, in_channel), name="rc")
+rc = te.reduce_axis((0, C_P*PACK4), name="rc")
 # Compute the convolution
 idxdiv = tvm.tir.indexdiv
 idxmod = tvm.tir.indexmod
@@ -150,9 +152,9 @@ rc, = s[BL].op.reduce_axis
 rco,rci=s[BL].split(rc,factor=4)
 s[BL].reorder(rco,rci,whp,p4)
 s[BL].vectorize(p4)  # vectorize memory load
-s[BL].unroll(whp)
+#s[BL].unroll(whp)
 #s[BL].unroll(p4)
-s[BL].unroll(rci)
+#s[BL].unroll(rci)
 
 # Attach computation to iteration variables
 #s[AA].compute_at(s[BL], rco)
@@ -168,25 +170,26 @@ wpo, wpi = s[AL].split(wp_p4, factor=4)
 #s[AA].bind(ty, thread_y)
 #s[AA].bind(tx, thread_x)
 s[AL].vectorize(wpi)  # vectorize memory load
-s[AL].unroll(wpo)
-s[AL].unroll(hp)
+#s[AL].unroll(wpo)
+#s[AL].unroll(hp)
 #s[AL].reorder(wpo,hp)
 
 # Schedule for W's shared memory load
 kp, cp = s[WL].op.axis
+print(kp,'==========')
 #ty, ci = s[WL].split(ci, nparts=num_thread)
 _, cpi = s[WL].split(cp, factor=4)
 #tx, fi = s[WW].split(fi, nparts=num_thread)
 #s[WW].reorder(ty, tx, yi, xi, ci, fi)
 #s[WW].bind(ty, thread_y)
 #s[WW].bind(tx, thread_x)
-s[WL].vectorize(cpi)  # vectorize memory load
-s[WL].unroll(kp)
+#s[WL].vectorize(cpi)  # vectorize memory load
+#s[WL].unroll(kp)
 
 wpio,wpii = s[B].split(wp4, factor=4)
 s[B].vectorize(wpii)  # vectorize memory load
-s[B].unroll(wpio)
-s[B].unroll(hpii)
+#s[B].unroll(wpio)
+#s[B].unroll(hpii)
 
 
 #print(tvm.lower(s, [A, W, B], simple_mode=True))
@@ -203,18 +206,21 @@ s[B].unroll(hpii)
 #print(tvm.lower(s, [A, W, B], simple_mode=True))
 
 target="opencl"
-target="cuda"
+#target="cuda"
 func = tvm.build(s, [A, W, B], target)
 print("------opencl code------")
 print(func.imported_modules[0].get_source()) if len(func.imported_modules) > 0 else print("source not imported")
 ctx = tvm.context(target, 0)
-ctx = tvm.gpu(0)
+#ctx = tvm.gpu(0)
 
-np.random.seed(5)
-#a_np = np.random.uniform(size=(C_P,H_P,W_P*PACK4)).astype("float32")
-#w_np = np.random.uniform(size=(in_channel,out_channel)).astype("float32")
-a_np = np.arange(C_P*H_P*W_P*PACK4).reshape(C_P*PACK4,H_P*W_P)
-w_np = np.arange(in_channel*out_channel).reshape(out_channel,in_channel)
+ao_np = np.arange(in_channel*in_size*in_size)
+a_np=np.zeros((C_P*PACK4,H_P,W_P))
+a_np[:in_channel,:in_size,:in_size]=ao_np.reshape(in_channel,in_size,in_size)
+a_np=a_np.reshape(C_P*PACK4,H_P*W_P)
+wo_np = np.arange(in_channel*out_channel).reshape(out_channel,in_channel)
+w_np=np.zeros((out_channel,C_P*PACK4))
+w_np[:out_channel,:in_channel]=wo_np
+
 a_tvm=a_np.T.reshape(C_P*H_P*W_P,4)
 B1=a_tvm[0::C_P,:]
 for i in range(C_P-1):
@@ -238,7 +244,7 @@ Ctvm = b.asnumpy().reshape(K_P,H_P*W_P*PACK4)
 print(C.shape)
 print(Ctvm.shape)
 np.testing.assert_allclose(C, Ctvm, rtol=1e-2)
-#np.savetxt("filename.txt",b.asnumpy()[:,:,0,0])
+np.savetxt("filename.txt",C)
 evaluator = func.time_evaluator(func.entry_name, ctx, number=15)
 cost = evaluator(a, w, b).mean
 print("\nanswer::correct!,Convolution: %fms, about %f GFLOPS" % (cost*1e3,out_channel*in_channel*in_size*in_size*2/cost/1e9))

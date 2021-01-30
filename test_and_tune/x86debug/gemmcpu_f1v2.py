@@ -1,15 +1,17 @@
-
 import numpy as np
 import tvm
 import os
 from tvm import te
+import sys
+sys.path.append('..')
+import extern_op
 
 print(os.getpid())
 # The sizes of inputs and filters
 batch = 1
 in_channel = 256
 out_channel = 512
-in_size = 64
+in_size = 40
 kernel = 1
 pad = 0
 stride = 1
@@ -41,9 +43,10 @@ idxdiv = tvm.tir.indexdiv
 idxmod = tvm.tir.indexmod
 B = te.compute(
     (K_P, H_P,W_P*PACK4),
+    #lambda ff,yy,xx_p4: extern_op.mysum(
     lambda ff,yy,xx_p4: te.sum(
-        #Apad[ff,yy,xx_p4] * W[idxdiv(rc,4)*PACK4+idxmod(rc,4),ff*PACK4+idxmod(ff,4)], axis=[rc]
-        Apad[idxdiv(rc,4),yy,idxmod(rc,4)+idxdiv(xx_p4,4)*4] * W[rc,ff*PACK4+idxmod(xx_p4,4)], axis=[rc]
+        #extern_op.mymul(Apad[rc//4,yy,rc%4+xx_p4//4*4] , W[rc,ff*PACK4+idxmod(xx_p4,4)]), axis=[rc]
+        Apad[rc//4,yy,rc%4+xx_p4//4*4] * W[rc,ff*PACK4+idxmod(xx_p4,4)], axis=[rc]
     ),
     name="B",
 )
@@ -151,6 +154,7 @@ s[BL].reorder(rco,rci,whp,p4)
 s[BL].vectorize(p4)  # vectorize memory load
 s[BL].unroll(whp)
 #s[BL].unroll(p4)
+s[BL].unroll(rci)
 
 # Attach computation to iteration variables
 #s[AA].compute_at(s[BL], rco)
@@ -166,7 +170,9 @@ wpo, wpi = s[AL].split(wp_p4, factor=4)
 #s[AA].bind(ty, thread_y)
 #s[AA].bind(tx, thread_x)
 s[AL].vectorize(wpi)  # vectorize memory load
-#s[AL].unroll(wpo)
+s[AL].unroll(wpo)
+s[AL].unroll(hp)
+#s[AL].reorder(wpo,hp)
 
 # Schedule for W's shared memory load
 kp, cp = s[WL].op.axis
@@ -177,9 +183,12 @@ _, cpi = s[WL].split(cp, factor=4)
 #s[WW].bind(ty, thread_y)
 #s[WW].bind(tx, thread_x)
 s[WL].vectorize(cpi)  # vectorize memory load
+s[WL].unroll(kp)
 
 wpio,wpii = s[B].split(wp4, factor=4)
 s[B].vectorize(wpii)  # vectorize memory load
+s[B].unroll(wpio)
+s[B].unroll(hpii)
 
 
 #print(tvm.lower(s, [A, W, B], simple_mode=True))
@@ -208,6 +217,7 @@ np.random.seed(5)
 #w_np = np.random.uniform(size=(in_channel,out_channel)).astype("float32")
 a_np = np.arange(C_P*H_P*W_P*PACK4).reshape(C_P*PACK4,H_P*W_P)
 w_np = np.arange(in_channel*out_channel).reshape(out_channel,in_channel)
+
 a_tvm=a_np.T.reshape(C_P*H_P*W_P,4)
 B1=a_tvm[0::C_P,:]
 for i in range(C_P-1):
@@ -233,4 +243,5 @@ print(Ctvm.shape)
 np.testing.assert_allclose(C, Ctvm, rtol=1e-2)
 #np.savetxt("filename.txt",b.asnumpy()[:,:,0,0])
 evaluator = func.time_evaluator(func.entry_name, ctx, number=15)
-print("\nanswer::correct!,Convolution: %f ms" % (evaluator(a, w, b).mean * 1e3))
+cost = evaluator(a, w, b).mean
+print("\nanswer::correct!,Convolution: %fms, about %f GFLOPS" % (cost*1e3,out_channel*in_channel*in_size*in_size*2/cost/1e9))

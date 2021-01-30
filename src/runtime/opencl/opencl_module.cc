@@ -75,10 +75,11 @@ class OpenCLWrappedFunc {
       std::cout << wl.work_size[i]<<",";
     }
     // launch kernel
-    
+    // cl event for time statistic
+    cl_event event;
     OPENCL_CALL(clEnqueueNDRangeKernel(queue, kernel, work_dim, nullptr, wl.work_size,
                                        wl.work_size + 3, 0, nullptr, &event));
-    clWaitForEvents(1 , &event);
+    clWaitForEvents(1, &event);
     cl_ulong time_start, time_end;
     double total_time;
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
@@ -100,8 +101,6 @@ class OpenCLWrappedFunc {
   std::string func_name_;
   // convert code for void argument
   std::vector<size_t> arg_size_;
-  // cl event for time statistic
-  cl_event event;
   // thread axis config
   ThreadAxisConfig thread_axis_cfg_;
 };

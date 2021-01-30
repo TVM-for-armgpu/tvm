@@ -20,20 +20,19 @@
 import logging
 import tvm
 from tvm import te
-from . import utils
+from . import utils,ndk
 from .. import rpc
 
 
 def _convert_to_remote(func, remote):
     """ convert module function to remote rpc function"""
     temp = utils.tempdir()
-    path_dso = temp.relpath("tmp_func.tar")
-    func.export_library(path_dso)
+    path_dso = temp.relpath("tmp_func.so")
+    func.export_library(path_dso,ndk.create_shared)
 
     remote.upload(path_dso)
-    func = remote.load_module("tmp_func.tar")
+    func = remote.load_module("tmp_func.so")
     return func
-
 
 def measure_bandwidth_sum(
     total_item,
@@ -358,7 +357,10 @@ def measure_peak_all(target, target_host, host, port):
     """
 
     target = tvm.target.Target(target)
-    remote = rpc.connect(host, port)
+    #remote = rpc.connect(host, port)
+    tracker = rpc.connect_tracker("127.0.0.1", 9090)
+    remote = tracker.request("android", priority=0, session_timeout=60)
+    n_times = 20
     n_times = 20
 
     bandwidth_total_item = 1 << 25
