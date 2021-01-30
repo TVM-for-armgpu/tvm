@@ -280,38 +280,48 @@ std::shared_ptr<Ast> parse_factor(Tokenizer& tokenizer) {
   }
   throw std::logic_error("unexpected token or end of input");
 }
-std::shared_ptr<Ast> parse_term(Tokenizer& tokenizer) {
-  std::shared_ptr<Ast> left = parse_factor(tokenizer);
+
+// https://en.cppreference.com/w/c/language/operator_precedence
+const std::vector<std::vector<std::string>> PRECEDENCE_TABLE = {
+  {"!", "~"},
+  {"*", "/", "%"},
+  {"+", "-"},
+  {"<<", ">>"},
+  {"&"},
+  {"^"},
+  {"|"}
+};
+
+std::shared_ptr<Ast> parse_expr(Tokenizer& tokenizer, uint32_t precedence) {
+  auto parse_next_level = [&]() {
+    if (precedence >= 1) {
+      return parse_expr(tokenizer, precedence - 1);
+    } else {
+      return parse_factor(tokenizer);
+    }
+  };
+
+  std::shared_ptr<Ast> left = parse_next_level();
+
   while (!tokenizer.empty()) {
-    auto match = tokenizer.next_is_punctuation("*") || tokenizer.next_is_punctuation("/") ||
-                 tokenizer.next_is_punctuation("<<") || tokenizer.next_is_punctuation(">>") ||
-                 tokenizer.next_is_punctuation("%");
+    bool match = false;
+    for (auto punc : PRECEDENCE_TABLE[precedence]) {
+      match |= tokenizer.next_is_punctuation(punc);
+    }
     if (!match) {
       return left;
     }
 
     auto op_token = tokenizer.next();
-    auto right = parse_factor(tokenizer);
+    auto right = parse_next_level();
 
     left = Ast::make_node(op_token.punctuation, std::move(left), std::move(right));
   }
   return left;
 }
+
 std::shared_ptr<Ast> parse_expr(Tokenizer& tokenizer) {
-  std::shared_ptr<Ast> left = parse_term(tokenizer);
-
-  while (!tokenizer.empty()) {
-    auto match = tokenizer.next_is_punctuation("+");
-    if (!match) {
-      return left;
-    }
-
-    auto op_token = tokenizer.next();
-    auto right = parse_term(tokenizer);
-
-    left = Ast::make_node(op_token.punctuation, std::move(left), std::move(right));
-  }
-  return left;
+  return parse_expr(tokenizer, PRECEDENCE_TABLE.size() - 1);
 }
 
 void print_impl(std::stringstream& ss, const std::shared_ptr<Ast>& ast) {
