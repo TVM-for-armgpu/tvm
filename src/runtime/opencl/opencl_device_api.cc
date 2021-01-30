@@ -151,9 +151,9 @@ void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
   ICHECK(lans == 1 || lans == 4) << "opencl image only surpport CL_RGBA and CL_R now";
   ICHECK(dsize->ndim >= 2 && dsize->ndim <= 6 ) << "opencl image memory shape must be at least 2D";
   if (dsize->ndim == 6) {
-    width =  dsize->shape[5] / lans;
-    height =
-        dsize->shape[4] * dsize->shape[3] * dsize->shape[2] * dsize->shape[1] * dsize->shape[0];
+    width = dsize->shape[4] * dsize->shape[3] * dsize->shape[2] * dsize->shape[1] *
+            dsize->shape[5] / lans;
+    height = dsize->shape[0];
   } else if (dsize->ndim == 5) {
     width = dsize->shape[3] * dsize->shape[4] / lans;
     height = dsize->shape[2] * dsize->shape[1] * dsize->shape[0];
@@ -422,7 +422,7 @@ void OpenCLWorkspace::Init(const std::string& type_key, const std::string& devic
   ICHECK_EQ(this->queues.size(), 0U);
   for (size_t i = 0; i < this->devices.size(); ++i) {
     cl_device_id did = this->devices[i];
-    this->queues.push_back(clCreateCommandQueue(this->context, did, 0, &err_code));
+    this->queues.push_back(clCreateCommandQueue(this->context, did, CL_QUEUE_PROFILING_ENABLE, &err_code));
     OPENCL_CHECK_ERROR(err_code);
   }
   initialized_ = true;

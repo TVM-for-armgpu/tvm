@@ -23,15 +23,15 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, last):
 
     n, f, y, x, b_p4 = n, kp, hp, wp, p4
     
-    #bf, kpi = cfg["tile_oc"].apply(s, B, f)
-    #by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
-    #bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
+    bf, kpi = cfg["tile_oc"].apply(s, B, f)
+    by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
+    bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
 
-    bf, kpi = s[B].split(f, factor=64)
-    yo, hpii = s[B].split(y, factor=2)
-    by, vy = s[B].split(yo, factor=4)
-    xo, wp4 = s[B].split(x, factor=2)
-    bx, vx = s[B].split(xo, factor=2)
+    #bf, kpi = s[B].split(f, factor=64)
+    #yo, hpii = s[B].split(y, factor=2)
+    #by, vy = s[B].split(yo, factor=4)
+    #xo, wp4 = s[B].split(x, factor=2)
+    #bx, vx = s[B].split(xo, factor=2)
 
 
     s[B].bind(bf, te.thread_axis("blockIdx.z"))
@@ -49,9 +49,9 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, last):
     whp = s[BL].fuse(wp, hp)
     rc, _, _ = s[BL].op.reduce_axis
     
-    #rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
-    rco, rci = s[BL].split(rc, factor=4)
-    rco, rcm = s[BL].split(rco, factor=1)
+    rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
+    #rco, rci = s[BL].split(rc, factor=4)
+    #rco, rcm = s[BL].split(rco, factor=1)
 
     s[BL].reorder(rco, rcm, rci, whp, p4)
     s[BL].vectorize(p4)  # vectorize memory load
@@ -79,6 +79,5 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, last):
     s[B].unroll(wpio)  # vectorize memory load
     s[B].unroll(hpii)  # vectorize memory load
     return s
-
 
 

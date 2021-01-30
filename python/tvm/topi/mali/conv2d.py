@@ -390,7 +390,7 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
     else:
         n, in_channel, ih, iw = get_const_tuple(data.shape)
         num_filter, _, kernel_height, kernel_width = get_const_tuple(kernel.shape)
-
+    cfg.add_flop(n* ic_chunk* ih* iw* ic_bn*oc_chunk*oc_bn*2)
     # Define autotvm tuning space
     is_kernel_1x1 = kernel_height == 1 and kernel_width == 1
     pt, pl, pb, pr = 0,0,0,0
@@ -402,7 +402,7 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
                      filter=lambda x: x.size[-1] == 4)
     cfg.define_split("tile_oc", num_filter//oc_bn, num_outputs=2)
     cfg.define_split(
-        "tile_ow", ow, num_outputs=3, filter=lambda y: y.size[-1] % 4 == 0, policy="verbose"
+        "tile_ow", ow, num_outputs=3, filter=lambda y: y.size[-1] % 2 == 0, policy="verbose"
     )
     if is_kernel_1x1:
         cfg.define_split(
@@ -445,7 +445,7 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
     idxdiv = tvm.tir.indexdiv
     idxmod = tvm.tir.indexmod
 
-    return te.compute(
+    conv_out = te.compute(
         oshape,
         lambda n, oc_chunk, oh, ow, oc_block: op_map.mad(
             op_map.mymul(
@@ -455,7 +455,7 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
                     oh * HSTR + kh * dilation_h,
                     ow * WSTR + kw * dilation_w,
                     idxmod(ic, ic_bn),
-                ].astype(out_dtype)
+                ].astype(data.dtype)
                 , kernel[ic,oc_chunk, kh,
                         kw, 0, oc_block]
             ),
@@ -464,6 +464,8 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
         name="conv2d_NCHWc",
         tag="conv2d_NCHWc",
     )
+    conv_out.dtype = out_dtype
+    return conv_out
     
     #return te.compute(
     #    oshape,
