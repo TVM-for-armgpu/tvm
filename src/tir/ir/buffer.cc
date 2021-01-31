@@ -251,29 +251,37 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
       ICHECK_EQ(n->shape.size(), index.size());
       if (index.size() > 0) {
         PrimExpr offset = index[0];
-        for (size_t i = 1; i < index.size()-1; ++i) {
-          offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
-        }
-        int i_last = index.size() - 1;
-        
 #if USE_CL_RGBA
         if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()) {
+          int how_much_item_is_for_x_axes = 1;
+          if (index.size() == 5) {
+            how_much_item_is_for_x_axes = 2;
+          } else if (index.size() == 6) {
+            how_much_item_is_for_x_axes = 5;
+          }
+          for (size_t i = 1; i < index.size() - how_much_item_is_for_x_axes; ++i) {
+            offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
+          }
+          int i_last = index.size() - how_much_item_is_for_x_axes;
           ICHECK(i_last > 0) << "opencl image object dimention must greater than 2";
-          base = base + indexmod(offset, 59) + (index[i_last]);
+          PrimExpr offset_x = index[i_last];
+          for (size_t i = i_last + 1; i < index.size(); ++i) {
+            offset_x = MergeMulMod(&ana, offset_x * n->shape[i] + index[i]);
+          }
+          base = base + indexmod(offset * 202129, 202121) + offset_x;
         } else {
-          if (i_last > 0) {
-            offset = MergeMulMod(&ana, offset * n->shape[i_last] + index[i_last]);
+          for (size_t i = 1; i < index.size(); ++i) {
+            offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
           }
           base = base + offset;
         }
 #else
-        {
-          if (i_last > 0) {
-            offset = MergeMulMod(&ana, offset * n->shape[i_last] + index[i_last]);
-          }
-          base = base + offset;
+        for (size_t i = 1; i < index.size(); ++i) {
+          offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
         }
+        base = base + offset;
 #endif
+
       }
     }
   } else {

@@ -85,7 +85,8 @@ class OpenCLWrappedFunc {
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
     total_time = time_end - time_start;
-    LOG(WARNING) << "\nExecution time in milliseconds = " <<  (total_time / 1000000.0) << "ms\n";
+    //LOG(WARNING) << "\nExecution time in milliseconds = " << (total_time / 1000000.0) << "ms\n";
+    std::cout << (total_time / 1000000.0) << "ms.";
   }
 
  private:
