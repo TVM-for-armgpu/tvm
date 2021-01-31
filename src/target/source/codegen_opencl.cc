@@ -438,17 +438,19 @@ void CodeGenOpenCL::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // 
   std::string v = PrintExpr(op->value);
   size_t vid_pos = v.find('[');
   do {
-        if (op->lanes == 4 && vid_pos != std::string::npos) {
+    if (op->lanes == 4 && vid_pos != std::string::npos) {
         std::string vid = v.substr(0, vid_pos);
-          std::string index_str = v.substr(vid_pos + 1, v.size() - vid_pos - 1 - 1);
-        std::replace(index_str.begin(), index_str.end(), '(', ' ');
-        std::replace(index_str.begin(), index_str.end(), ')', ' ');
-        if (index_str.find_first_not_of("0123456789 ") != std::string::npos) {
-          os << "((";
-          PrintType(op->dtype.with_lanes(1), os);
-          os << "*)(" << vid << "))[" << index_str << "]";
+        std::string index_str = v.substr(vid_pos + 1, v.size() - vid_pos - 1 - 1);
+        if (index_str.find_first_not_of("0123456789() ") != std::string::npos) {
+          os << "(";
+          //os << "((";
+          //PrintType(op->dtype.with_lanes(1), os);
+         //os << "*)(" << vid << "))[" << index_str << "]";
+          os << "(" << vid << "))[" << index_str << "]";
           return;
         }
+        std::replace(index_str.begin(), index_str.end(), '(', ' ');
+        std::replace(index_str.begin(), index_str.end(), ')', ' ');
         os << "((";
         PrintType(op->dtype, os);
         int ind = std::stoi(index_str);

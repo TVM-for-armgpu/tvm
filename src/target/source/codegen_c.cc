@@ -743,6 +743,7 @@ void CodeGenC::PrintVecBinaryOp(const std::string& op, DataType t, PrimExpr lhs,
 
 void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
   int lanes = op->dtype.lanes();
+  std::string vid = GetVarID(op->buffer_var.get());
   // delcare type.
   if (op->dtype.lanes() == 1) {
     const VarNode* buffer = op->buffer_var.get();
@@ -752,7 +753,6 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
       scope = alloc_storage_scope_.at(buffer);
     }
     if (scope.compare(0, sizeof("image")-1, "image") == 0) {
-      std::string vid = GetVarID(op->buffer_var.get());
       ref = "read_imagef(" + vid + ",sampler," + ref + ").x";
     }
     HandleVolatileLoads(ref, op, os);
@@ -767,7 +767,7 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
     } else {
       std::ostringstream svalue_expr;
       std::string sindex = SSAGetID(PrintExpr(op->index), op->index.dtype());
-      std::string vid = GetVarID(op->buffer_var.get());
+      
       DataType elem_type = op->dtype.element_of();
       for (int i = 0; i < lanes; ++i) {
         std::ostringstream value_temp;
