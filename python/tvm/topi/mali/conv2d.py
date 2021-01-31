@@ -30,7 +30,7 @@ from ..nn.conv2d import conv2d_winograd_nhwc, _conv2d_winograd_nhwc_impl
 from . import conv2d_imagex4_1x1
 # reuse some compute declarations from ARM CPU
 from ..arm_cpu.conv2d_spatial_pack import conv2d_spatial_pack_nchw
-from . import op_map
+from . import op_mad
 logger = logging.getLogger("topi")
 
 
@@ -447,8 +447,8 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
 
     conv_out = te.compute(
         oshape,
-        lambda n, oc_chunk, oh, ow, oc_block: op_map.mad(
-            op_map.mymul(
+        lambda n, oc_chunk, oh, ow, oc_block: op_mad.mad(
+            op_mad.mymul(
                 data_pad[
                     n,
                     idxdiv(ic, ic_bn),

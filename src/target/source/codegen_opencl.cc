@@ -230,13 +230,21 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
   return value_temp.str();
 }
 
+// a little bit tricy for this function, which corresponding to buffer.cc:ElemOffset
+// But I cant figure out a more elegant solution here.
+// To factor x,y axes from one-dimention index. without extra information.,It's a almost impossible 
+// to factor x,y from y*shape[1]+x, because all of them mix up into one index.
+// But what if we make  y*shape[1]+x to  y*Prim%anonther_Prim+x? the symbol % will prevent all numbers interweave
+// y*Prim is suppose y < anonther_Prim, which will cause y%anonther_Prim=0,
+// Now, I make Prim as 202129, anonther_Prim as 202121.
  void split_img_xy_axes(std::string index_str, std::string& img_x_axes, std::string& img_y_axes) {
  #if USE_CL_RGBA == 0
    LOG(FATAL) << "split xy axex function doesnot support 1-changnel image";
 #endif
   trimSpace(index_str);
-  size_t pos = index_str.find("%59");
-  ICHECK(pos != std::string::npos) << "this should not happend";
+   std::string split_dem = "%59";
+  size_t pos = index_str.find(split_dem);
+  ICHECK(pos != std::string::npos) << index_str << " cant find %202129, kernel CI or CO is equal 202129??";
   int rb = 0, lb = 0;
   int m_pos = 0;
   for (int i = pos - 1; i >= 0; i--) {
@@ -251,14 +259,14 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
     }
   }
   img_y_axes = index_str.substr(m_pos, pos - m_pos);
-  img_x_axes = index_str.substr(0, m_pos) + "0" + index_str.substr(pos + 3);
-}
+  //img_y_axes=tvm::tir::exprSimp::DoSimplify("(" + img_y_axes + ")/202129");
+  img_x_axes = index_str.substr(0, m_pos) + "0" + index_str.substr(pos + split_dem.size());
+ }
 
 void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr base,
                                  std::ostream& os) {  // NOLINT(*)
   std::ostringstream ossbase;
   PrintExpr(base, ossbase);
-  std::string new_base_index = Simplify_with_const_var(ossbase.str());
   do {
     if (t.is_climgfloat() || t.is_climgfloatw()) {
       std::string vid = GetVarID(buffer);
@@ -290,6 +298,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       os << "(int2)(" << img_x_axes << "," << img_y_axes << ")";
       //===
 #else
+      std::string new_base_index = Simplify_with_const_var(ossbase.str());
       os << get_2Dmemo_floatx1_int2(vid, new_base_index);
 #endif
       return;
@@ -305,6 +314,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
     os << "*)";
   }
   os << GetVarID(buffer) << " + ";
+  std::string new_base_index = Simplify_with_const_var(ossbase.str());
   os << new_base_index;
 }
 std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExpr base) {
@@ -509,7 +519,8 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     // os << ']';
     //os << "read_imagef(" << vid << ",sampler,"
 #if USE_CL_RGBA
-    LOG(FATAL) << "Not support fetch one elments froms 4-channel image!";
+    LOG(FATAL) << "Not support fetch one elments froms 4-channel image! want " << vid << " "
+               << index;
 #else
     std::ostringstream indexexp_os;
     PrintExpr(index, indexexp_os);

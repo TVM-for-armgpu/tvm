@@ -68,7 +68,7 @@ auto DataShapeDeleter = [](DataShape* ds) {
 };
 
 struct ShapePOD {
-  int64_t shape[4];
+  int64_t shape[8];
   int64_t itemsize;
   int64_t ndim;
 };

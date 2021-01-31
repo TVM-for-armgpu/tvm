@@ -867,6 +867,7 @@ void RPCEndpoint::CopyToRemote(void* from, size_t from_offset, void* to, size_t 
 void RPCEndpoint::CopyToRemote(void* from, size_t from_offset, void* to, size_t to_offset,
                                DataShape* dshape, TVMContext ctx_to, DLDataType type_hint) {
   ShapePOD serial_shape;
+  ICHECK(dshape->ndim <= 7) << "ShapePOD can only convey 7-dim data";
   serial_shape.ndim = dshape->ndim;
   for (int i = 0; i < dshape->ndim; ++i) {
     serial_shape.shape[i] = dshape->shape[i];
@@ -904,6 +905,7 @@ void RPCEndpoint::CopyToRemoteInternal(void* from, size_t from_offset, void* to,
 void RPCEndpoint::CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset,
                                  DataShape* dshape, TVMContext ctx_from, DLDataType type_hint) {
   ShapePOD serial_shape;
+  ICHECK(dshape->ndim <= 7) << "ShapePOD can only convey 7-dim data";
   serial_shape.ndim = dshape->ndim;
   for (int i = 0; i < dshape->ndim; ++i) {
     serial_shape.shape[i] = dshape->shape[i];
