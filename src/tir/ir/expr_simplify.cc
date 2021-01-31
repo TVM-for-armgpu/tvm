@@ -100,9 +100,12 @@ std::vector<Token> lex(const char* expr) {
         break;
     }
 
-    if (beg != pos && (ty == L_TOKEN_PUNCTUATION || ty != last_ty) &&
-        // Ignore the first char of shift operators.
-        !(ty == L_TOKEN_PUNCTUATION && is_shift && pos == beg + 1)) {
+    if ((beg != pos) &&
+        (ty == L_TOKEN_PUNCTUATION || ty != last_ty) &&
+        // ignore the first char of shift operators.
+        !(pos == beg + 1 && is_shift && *pos == *beg)) {
+      // [beg, pos)
+
       std::string token_lit(beg, pos);
       beg = pos;
 
