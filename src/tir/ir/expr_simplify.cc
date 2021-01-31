@@ -752,9 +752,11 @@ void simplify_left_shift_with_bitwise_and(std::shared_ptr<Ast>& ast) {
         ast = Ast::make_constant(0);
         ast->left_shift_bits = 32;
       } else {
-        ast->left_shift_bits = ast->left->left_shift_bits;
+        ast->left_shift_bits = std::max(ast->left->left_shift_bits, ast->right->left_shift_bits);
       }
     }
+  } else if (ast->is_node("|")) {
+    ast->left_shift_bits = std::min(ast->left->left_shift_bits, ast->right->left_shift_bits);
   } else {
     ast->left_shift_bits = 0;
   }
