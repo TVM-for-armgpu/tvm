@@ -30,6 +30,9 @@ inline bool is_valid_punctuation(const std::string& c) {
 }
 
 constexpr bool is_expon_by_2(int32_t number) { return (number & number - 1) == 0; }
+
+constexpr uint32_t lowbit(uint32_t x) { return x & -x; }
+
 constexpr uint32_t get_nearsest_expo_by2(uint32_t a) {
   int n = a - 1;
   n |= n >> 1;
@@ -109,7 +112,7 @@ std::vector<Token> lex(const char* expr) {
       std::string token_lit(beg, pos);
       beg = pos;
 
-      if (token_lit[0] != ' ' || token_lit[0] != '\t') {
+      if (token_lit[0] != ' ' && token_lit[0] != '\t') {
         Token token{};
         token.ty = last_ty;
         switch (last_ty) {
@@ -195,6 +198,8 @@ struct Ast {
   int32_t constant;
   float constant_f;
   int range_hint_high;
+  // used to simplify cases like: (a << 3) & 7
+  int left_shift_bits = 0;
 
   // L_AST_SYMBOL
   std::string symbol;
@@ -253,7 +258,7 @@ struct Ast {
     return node_ty == L_AST_SUBNODE && (expected_op.empty() || expected_op == op);
   }
   inline bool is_associative_node() const { return is_node("*") || is_node("/") || is_node("%"); }
-  inline bool is_combinational_node() const { return is_node("+"); }
+  inline bool is_combinational_node() const { return is_node("+") || is_node("-"); }
   inline bool is_symbol() const { return node_ty == L_AST_SYMBOL; }
   inline bool is_constexpr() const {
     return is_constant() || (is_node() && left->is_constant() && right->is_constant());
@@ -713,6 +718,48 @@ void simplify_remove_nop(std::shared_ptr<Ast>& ast) {
   }
 }
 
+void simplify_left_shift_with_bitwise_and(std::shared_ptr<Ast>& ast) {
+  if (!ast) { return; }
+  simplify_left_shift_with_bitwise_and(ast->left);
+  simplify_left_shift_with_bitwise_and(ast->right);
+
+  if (ast->is_constant()) {
+    if (ast->constant == 0) {
+      ast->left_shift_bits = 32;
+    } else {
+      ast->left_shift_bits = mylog(lowbit(ast->constant));
+    }
+  } else if (ast->is_node("*")) {
+    ast->left_shift_bits = ast->left->left_shift_bits + ast->right->left_shift_bits; 
+  } else if (ast->is_node("<<")) {
+    if (ast->right->is_constant()) {
+      ast->left_shift_bits = ast->left->left_shift_bits + ast->right->constant;
+    } else {
+      ast->left_shift_bits = 0;
+    }
+  } else if (ast->is_node(">>")) {
+    if (ast->right->is_constant()) {
+      ast->left_shift_bits = std::max(ast->left->left_shift_bits - ast->right->constant, 0);
+    } else {
+      ast->left_shift_bits = 0;
+    }
+  } else if (ast->is_node("&")) {
+    if (!ast->right->is_constant()) {
+      ast->left_shift_bits = 0;
+    } else {
+      auto and_value = ast->right->constant;
+      if (and_value < (1ll << ast->left->left_shift_bits)) {
+        ast = Ast::make_constant(0);
+        ast->left_shift_bits = 32;
+      } else {
+        ast->left_shift_bits = ast->left->left_shift_bits;
+      }
+    }
+  } else {
+    ast->left_shift_bits = 0;
+  }
+}
+
 // replace div and mod with bit_shift and mul
 void simplify_mod_and_div_with_bitop(std::shared_ptr<Ast>& ast) {
   if (ast->is_node()) {
@@ -801,6 +848,7 @@ void simplify(std::shared_ptr<Ast>& ast) {
   simplify_associate_mul(ast);
   simplify_associate_div(ast);
   simplify_associate_mod(ast);
+  simplify_left_shift_with_bitwise_and(ast);
   simplify_remove_nop(ast);
   simplify_mod_and_div_with_bitop(ast);
 }
@@ -913,6 +961,20 @@ void test_folder_div() {
     auto ast = parse_expr(tokenizer);
     simplify(ast);
     ICHECKEQ(print(ast), "((int)(!(a * 16) + 32) >> 2)", expr_lit);
+  }
+  {
+    const char* expr_lit = "(((vara*512)&511)*32*79*2/32)/79";
+    Tokenizer tokenizer(expr_lit);
+    auto ast = parse_expr(tokenizer);
+    simplify(ast);
+    ICHECKEQ(print(ast), "0", expr_lit);
+  }
+  {
+    const char* expr_lit = "((a<<2)*3)&1";
+    Tokenizer tokenizer(expr_lit);
+    auto ast = parse_expr(tokenizer);
+    simplify(ast);
+    ICHECKEQ(print(ast), "0", expr_lit);
   }
 }
 
