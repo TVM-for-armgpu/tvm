@@ -144,7 +144,8 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
   return mptr;
 }
 
-void OpenCLWorkspace::get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
+void OpenCLWorkspace::get_image_t_size(TVMContext ctx, DataShape* dsize, size_t& height,
+                                       size_t& width) {
 #if USE_CL_RGBA
   int lans = dsize->dtype.lanes;
   lans = 4;
@@ -215,7 +216,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
     fmt.image_channel_data_type = CL_HALF_FLOAT;
   }
   size_t height = 0, width = 0;
-  get_image_t_size(dsize, height, width);
+  get_image_t_size(ctx, dsize, height, width);
 
 
   cl_mem_flags mf = CL_MEM_READ_ONLY;
@@ -288,7 +289,7 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
   this->Init();
   ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
   size_t height = 0, width = 0;
-  get_image_t_size(dsize, height, width);
+  get_image_t_size(ctx_to, dsize, height, width);
 
   size_t origin[3] = {
       0,
