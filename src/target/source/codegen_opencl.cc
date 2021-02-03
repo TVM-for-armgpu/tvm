@@ -334,9 +334,7 @@ std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExp
 }
 void CodeGenOpenCL::Store_2Dmemo_floatx1(const std::string& vid, const std::string& addr,
     const std::string& value) {
-  std::string image_index = Simplify_with_const_var(addr);
-  std::string ref = get_2Dmemo_floatx1_int2(vid, addr);
-  stream << "write_imagef(" << vid << "," << ref << " , (float4)(" << value << "));\n";
+  stream << "write_imagef(" << vid << "," << addr << " , (float4)(" << value << "));\n";
 }
 
 
