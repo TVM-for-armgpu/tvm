@@ -252,6 +252,13 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
       if (index.size() > 0) {
         PrimExpr offset = index[0];
 #if USE_CL_RGBA
+        int DONT_USE_SPLIT = 0;
+        FILE* fp = fopen("./dont_use_split", "r");
+        if (fp != NULL) {
+          LOG(WARNING) << "transfer to div and mod split mode";
+          DONT_USE_SPLIT = 1;
+          fclose(fp);
+        }
         if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()) {
           int how_much_item_is_for_x_axes = 1;
           if (index.size() == 5) {

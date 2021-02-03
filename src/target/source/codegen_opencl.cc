@@ -217,6 +217,11 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
   if (var_buffer_map_[vid]->shape.size() > 2) {
     width *= var_buffer_map_[vid]->shape[2];
   }
+  // 16384 is the max opencl-image width
+  if (width.as<IntImmNode>()->value > 16384) {
+    width = indexdiv(width , 2);
+  }
+
   std::ostringstream value_temp;
   value_temp << one_dimention_index << "/" << channel << "%(" << width << ")";
   std::string img_x_axes = tvm::tir::exprSimp::DoSimplify(value_temp.str());
@@ -290,7 +295,32 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
 #if USE_CL_RGBA
       //===
       std::string img_x_axes, img_y_axes;
-      split_img_xy_axes(ossbase.str(), img_x_axes, img_y_axes);
+      int DONT_USE_SPLIT = 0;
+      FILE* fp = fopen("./dont_use_split", "r");
+      if (fp != NULL) {
+        DONT_USE_SPLIT = 1;
+        fclose(fp);
+      }
+
+      if (DONT_USE_SPLIT) {
+        ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
+            << "var buffer shape is essential for opencl var:" << vid;
+        ICHECK(var_buffer_map_[vid]->shape.size() > 2)
+            << "var buffer shape of image memory must be at least 2 dimention";
+        PrimExpr width = var_buffer_map_[vid]->shape[2];
+        PrimExpr channel = IntImm(DataType::Int(32), 4);
+        std::ostringstream xyaxes_base_oss;
+        xyaxes_base_oss << "(" << ossbase.str() << "/" << channel << "%" << indexdiv(width, channel) << ")";
+        // times 4 is for compatable "/4" below
+        img_x_axes = xyaxes_base_oss.str() + "*4";
+        xyaxes_base_oss.str("");
+        xyaxes_base_oss.clear();
+        xyaxes_base_oss << "(" << ossbase.str() << "/" << width << ")";
+        img_y_axes = xyaxes_base_oss.str();
+      } else {
+        split_img_xy_axes(ossbase.str(), img_x_axes, img_y_axes);
+      }
+
       img_x_axes += "/4";
       //4 == lanes
       img_x_axes = tvm::tir::exprSimp::DoSimplify(img_x_axes);

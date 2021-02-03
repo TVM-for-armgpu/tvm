@@ -182,6 +182,18 @@ void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
   if (dsize->ndim > 3) {
     height *= dsize->shape[3];
   }
+  TVMRetValue imgh, imgw;
+  GetAttr(ctx, kCL_DEVICE_IMAGE2D_MAX_HEIGHT, &imgh);
+  GetAttr(ctx, kCL_DEVICE_IMAGE2D_MAX_WIDTH, &imgw);
+  int iw = imgw.operator int();
+  int ih = imgh.operator int();
+  if (width >= iw) {
+    ICHECK(width % 2 == 0) << "width must be devide by 2, or we can't split into two part";
+    width /= 2;
+    height *= 2;
+  }
+  CHECK_LE(width, iw) << "image width is wider than the image object limit";
+  CHECK_LE(height, ih) << "image height is higher than the image object limit";
   return;
   #endif
 }
