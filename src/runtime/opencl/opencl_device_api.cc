@@ -144,7 +144,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
   return mptr;
 }
 
-void  get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
+void OpenCLWorkspace::get_image_t_size(DataShape* dsize, size_t& height, size_t& width) {
 #if USE_CL_RGBA
   int lans = dsize->dtype.lanes;
   lans = 4;
