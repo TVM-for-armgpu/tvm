@@ -242,7 +242,8 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
    LOG(FATAL) << "split xy axex function doesnot support 1-changnel image";
 #endif
   trimSpace(index_str);
-   std::string split_dem = "%59";
+   std::string split_dem = "%21193";
+  std::string amp_factor = "/21139";
   size_t pos = index_str.find(split_dem);
   ICHECK(pos != std::string::npos) << index_str << " cant find %202129, kernel CI or CO is equal 202129??";
   int rb = 0, lb = 0;
@@ -259,7 +260,7 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
     }
   }
   img_y_axes = index_str.substr(m_pos, pos - m_pos);
-  //img_y_axes=tvm::tir::exprSimp::DoSimplify("(" + img_y_axes + ")/202129");
+  img_y_axes = tvm::tir::exprSimp::DoSimplify("(" + img_y_axes + ")" + amp_factor);
   img_x_axes = index_str.substr(0, m_pos) + "0" + index_str.substr(pos + split_dem.size());
  }
 

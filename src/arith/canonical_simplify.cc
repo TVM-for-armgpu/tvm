@@ -210,6 +210,15 @@ class SplitExprNode : public CanonicalExprNode {
   TVM_DECLARE_FINAL_OBJECT_INFO(SplitExprNode, CanonicalExprNode);
 };
 
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<SplitExprNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const SplitExprNode*>(node.get());
+      p->stream << "SplitExpr(";
+      p->stream << op->index << " scale=" << op->scale
+                << "[" << op->lower_factor << ", " << op->upper_factor << " ] ";
+      p->stream << ')';
+
+    });
 class SplitExpr : public PrimExpr {
  public:
   TVM_DEFINE_OBJECT_REF_METHODS(SplitExpr, PrimExpr, SplitExprNode);
@@ -519,6 +528,17 @@ class SumExprNode : public CanonicalExprNode {
     return res;
   }
 };
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<SumExprNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const SumExprNode*>(node.get());
+      p->stream << "SumExpr(";
+      for (const auto& v : op->args) {
+        p->stream << v << ',';
+      }
+      
+      p->stream << " base=" << op->base << ')';
+    });
 
 class SumExpr : public PrimExpr {
  public:
@@ -1091,6 +1111,7 @@ PrimExpr CanonicalSimplifier::Impl::VisitExpr_(const FloorModNode* op) {
       // Simplify the offset constant if necessary.
       // floormod(x - 5, 3) => floormod(x + 1, 3)
       int64_t new_base = floormod(psum->base, cval);
+      new_base = psum->base;
       SumExpr sum_expr = Downcast<SumExpr>(std::move(a));
       sum_expr.CopyOnWrite()->base = new_base;
       return SplitModConst(ToSplitExpr(std::move(sum_expr)), cval, kFloorDiv);

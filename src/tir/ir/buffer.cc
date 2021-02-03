@@ -268,7 +268,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
           for (size_t i = i_last + 1; i < index.size(); ++i) {
             offset_x = MergeMulMod(&ana, offset_x * n->shape[i] + index[i]);
           }
-          base = base + indexmod(offset, 59) + offset_x;
+          base = base + indexmod(offset * 21139, 21193) + offset_x;
         } else {
           for (size_t i = 1; i < index.size(); ++i) {
             offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
