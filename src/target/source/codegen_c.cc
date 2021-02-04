@@ -208,7 +208,7 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
         PrimExpr lane_int = IntImm(DataType::Int(32), lanes);
         std::ostringstream tmpos;
         tmpos << base;
-        std::string strind = tmpos.str();
+        std::string strind = Simplify_with_const_var(tmpos.str());
         std::replace(strind.begin(), strind.end(),'.', '_');
         if (strind.find_first_not_of("012345678 ") == std::string::npos) {
           int ind = std::stoi(strind) / lanes;
@@ -234,7 +234,10 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
       os << vid;
     }
     os << "[(";
-    PrintExpr(index, os);
+    std::ostringstream tmpos;
+    PrintExpr(index, tmpos);
+    std::string strind = Simplify_with_const_var(tmpos.str());
+    os << strind;
     os << ")";
     if (t.bits() == 4 || (t.bits() == 1 && t.is_int())) {
       os << " / " << (32 / t.bits());
@@ -270,7 +273,10 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
       os << "*)";
     }
     os << vid << " + (";
-    PrintExpr(index, os);
+    std::ostringstream tmpos;
+    PrintExpr(index, tmpos);
+    std::string strind = Simplify_with_const_var(tmpos.str());
+    os << strind;
     os << ")";
     if (t.bits() == 4 || (t.bits() == 1 && t.is_int())) {
       os << " / " << (32 / t.bits());
@@ -1149,11 +1155,26 @@ void trimSpace(std::string& s) {
   }
 }
 
+//avoid calculate the common index multi-times, especially IFLOPS is extremely lower in armgpu
 bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
                                                       std::string& new_base_index) {
-  // for constant expr, we just skip it
-  if (base.find_first_of("+*-/%") == std::string::npos ||
-      base.find("const_common_")!=std::string::npos) {
+  
+  auto count_any_of = [](const std::string& src, const std::string& count_charactors) -> int32_t {
+    int32_t ans = 0;
+    for (auto c : src) {
+      if (count_charactors.find(c) != std::string::npos) {
+        ans++;
+      }
+    }
+    return ans;
+  };
+  // for some case, we just skip it to save register
+  // 1. constant expr
+  // 2. already  referenced common_expr
+  // 3. less than two op
+  const std::string common_op = "+*-/%";
+  if (base.find_first_of(common_op) == std::string::npos ||
+      base.find("const_common_") != std::string::npos || count_any_of(base, (common_op)) < 2) {
     new_base_index = base;
     return false;
   }
