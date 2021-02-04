@@ -908,17 +908,42 @@ void test_all() {
   test_folder_mod();
 }
 
+std::string preprocess_expr_replace_ilegal_expr(std::string expr_lit) {
+  expr_lit = std::regex_replace(expr_lit, std::regex("\\(int\\)"), "_int_");
+  expr_lit = std::regex_replace(expr_lit, std::regex("\\."), "_dot_");
+
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_group_id\\(0\\)"), "group_id0");
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_group_id\\(1\\)"), "group_id1");
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_group_id\\(2\\)"), "group_id2");
+
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_local_id\\(0\\)"), "local_id0");
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_local_id\\(1\\)"), "local_id1");
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_local_id\\(2\\)"), "local_id2");
+  return expr_lit;
+}
+
+std::string post_process_replace_back_ilegal_expr(std::string expr_lit) {
+  expr_lit = std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
+  expr_lit = std::regex_replace(expr_lit, std::regex("_dot_"), ".");
+
+  expr_lit = std::regex_replace(expr_lit, std::regex("group_id0"), "get_group_id(0)");
+  expr_lit = std::regex_replace(expr_lit, std::regex("group_id1"), "get_group_id(1)");
+  expr_lit = std::regex_replace(expr_lit, std::regex("group_id2"), "get_group_id(2)");
+
+  expr_lit = std::regex_replace(expr_lit, std::regex("local_id0"), "get_local_id(0)");
+  expr_lit = std::regex_replace(expr_lit, std::regex("local_id1"), "get_local_id(1)");
+  expr_lit = std::regex_replace(expr_lit, std::regex("local_id2"), "get_local_id(2)");
+  return expr_lit;
+}
 
 std::string DoSimplify(const std::string& expr_lit_c) {
   try {
-    std::string expr_lit = std::regex_replace(expr_lit_c, std::regex("\\(int\\)"), "_int_");
-    expr_lit = std::regex_replace(expr_lit, std::regex("\\."), "_dot_");
+    std::string expr_lit = preprocess_expr_replace_ilegal_expr(expr_lit_c.substr());
     Tokenizer tokenizer(expr_lit);
     auto ast = parse_expr(tokenizer);
     simplify(ast);
     expr_lit = print(ast);
-    expr_lit = std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
-    expr_lit = std::regex_replace(expr_lit, std::regex("_dot_"), ".");
+    expr_lit = post_process_replace_back_ilegal_expr(expr_lit);
     return expr_lit;
   } catch (std::exception& e) {
     LOG(WARNING) << " expression simplify Exception:" << e.what()
