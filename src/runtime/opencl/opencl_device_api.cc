@@ -219,10 +219,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   get_image_t_size(ctx, dsize, height, width);
 
 
-  cl_mem_flags mf = CL_MEM_READ_ONLY;
-  if (type_hint.code == kDLCLImgFloatW) {
-    mf = CL_MEM_WRITE_ONLY;
-  }
+  cl_mem_flags mf = CL_MEM_READ_WRITE;
   TVMRetValue imgh, imgw;
   GetAttr(ctx, kCL_DEVICE_IMAGE2D_MAX_HEIGHT, &imgh);
   GetAttr(ctx, kCL_DEVICE_IMAGE2D_MAX_WIDTH, &imgw);

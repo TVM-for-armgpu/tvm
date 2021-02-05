@@ -1174,7 +1174,7 @@ bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
   // 3. less than two op
   const std::string common_op = "+*-/%";
   if (base.find_first_of(common_op) == std::string::npos ||
-      base.find("const_common_") != std::string::npos || count_any_of(base, (common_op)) < 2) {
+      base.find("const_common_") != std::string::npos || count_any_of(base, (common_op)) < 3) {
     new_base_index = base;
     return false;
   }
