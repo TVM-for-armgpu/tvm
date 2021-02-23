@@ -9,16 +9,33 @@ from ..utils import traverse_inline, get_const_int, get_const_tuple
 from .. import nn
 
 
-def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, last):
+def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     Apad = data_vec
     W = kernel_vec
-    B = last
+    B = conv_out
+#=========
+    B = op.output(0)
+    Apad, W = s[B].op.input_tensors
+#==========
+
     AL = s.cache_read(Apad, "local", [B])
     WL = s.cache_read(W, "local", [B])
     BL = s.cache_write(B, "local")
-
+    if op not in s.outputs:
+        s[B].compute_inline()
+        B = s.outputs[0].output(0)
     # Split the workloads
-    n, kp, hp, wp, p4 = s[B].op.axis
+    #==========
+    ax_all = s[B].op.axis
+    len_4_flag = False
+    if len(ax_all) == 4:
+        n, kp, hp, wp = s[B].op.axis
+        p4 = kp
+        len_4_flag = True
+    else:
+        n, kp, hp, wp, p4 = s[B].op.axis
+    #==========
+    #n, kp, hp, wp, p4 = s[B].op.axis
     rc, _, _ = s[BL].op.reduce_axis
 
     n, f, y, x, b_p4 = n, kp, hp, wp, p4
@@ -27,6 +44,8 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, last):
     by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
     bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
 
+    if len_4_flag:
+        kpi,b_p4 = s[B].split(kpi, factor=4)
     #bf, kpi = s[B].split(f, factor=64)
     #yo, hpii = s[B].split(y, factor=2)
     #by, vy = s[B].split(yo, factor=4)
@@ -79,5 +98,3 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, last):
     s[B].unroll(wpio)  # vectorize memory load
     s[B].unroll(hpii)  # vectorize memory load
     return s
-
-

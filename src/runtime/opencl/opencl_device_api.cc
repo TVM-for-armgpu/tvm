@@ -139,7 +139,11 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
   cl_mem mptr=0;
-    mptr = clCreateBuffer(this->context, CL_MEM_READ_WRITE, size, nullptr, &err_code);
+  if (size == 0) {
+    size++;
+    LOG(WARNING) << "attention:size == 0, may cause the wrong ans";
+  }
+  mptr = clCreateBuffer(this->context, CL_MEM_READ_WRITE, size, nullptr, &err_code);
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }

@@ -90,6 +90,91 @@ def _get_workload(data, kernel, stride, padding, dilation, out_dtype):
         WSTR,
     )
 
+def depthwise_conv2d_nchw_iohw(Input, Filter, stride, padding, dilation, out_dtype=None):
+    """Depthwise convolution nchw forward operator.
+
+    Parameters
+    ----------
+    Input : tvm.te.Tensor
+        4-D with shape [batch, in_channel, in_height, in_width]
+
+    Filter : tvm.te.Tensor [IOHW]
+        4-D with shape [in_channel, channel_multiplier, filter_height, filter_width]
+
+    stride : tuple of two ints
+        The spatial stride along height and width
+
+    padding : int or str
+        Padding size, or ['VALID', 'SAME']
+
+    dilation: int or a list/tuple of two ints
+        dilation size, or [dilation_height, dilation_width]
+
+    out_dtype: str, optional
+        Output data type
+
+    Returns
+    -------
+    Output : tvm.te.Tensor
+        4-D with shape [batch, out_channel, out_height, out_width]
+    """
+    out_dtype = Input.dtype if out_dtype is None else out_dtype
+
+    if isinstance(stride, int):
+        stride_h = stride_w = stride
+    else:
+        stride_h, stride_w = stride
+
+    if isinstance(dilation, int):
+        dilation_h = dilation_w = dilation
+    else:
+        dilation_h, dilation_w = dilation
+
+    batch, in_channel, in_height, in_width = Input.shape
+    # shape of dilated kernel
+    channel_multiplier, filter_channel, filter_height, filter_width = Filter.shape
+
+    dilated_kernel_h = (filter_height - 1) * dilation_h + 1
+    dilated_kernel_w = (filter_width - 1) * dilation_w + 1
+    pad_top, pad_left, pad_down, pad_right = get_pad_tuple(
+        padding, (dilated_kernel_h, dilated_kernel_w)
+    )
+    out_channel = simplify(in_channel * channel_multiplier)
+    out_height = simplify(
+        (in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
+    out_width = simplify((in_width - dilated_kernel_w +
+                          pad_left + pad_right) // stride_w + 1)
+
+    # padding stage
+    pad_before = [0, 0, pad_top, pad_left]
+    pad_after = [0, 0, pad_down, pad_right]
+    PaddedInput = pad(Input, pad_before, pad_after, name="PaddedInput")
+    # depthconv stage
+    idxdiv = tvm.tir.indexdiv
+    idxmod = tvm.tir.indexmod
+    di = te.reduce_axis((0, filter_height), name="di")
+    dj = te.reduce_axis((0, filter_width), name="dj")
+    Output = te.compute(
+        (batch, out_channel, out_height, out_width),
+        lambda b, c, i, j: te.sum(
+            (
+                PaddedInput[
+                    b,
+                    idxdiv(c, channel_multiplier),
+                    i * stride_h + di * dilation_h,
+                    j * stride_w + dj * dilation_w,
+                ].astype(out_dtype)
+                * Filter[
+                    idxmod(c, channel_multiplier), idxdiv(
+                        c, channel_multiplier), di, dj
+                ].astype(out_dtype)
+            ),
+            axis=[di, dj],
+        ),
+        name="DepthwiseConv2d",
+        tag="depthwise_conv2d_nchw",
+    )
+    return Output
 
 def depthwise_conv2d_nchw(Input, Filter, stride, padding, dilation, out_dtype=None):
     """Depthwise convolution nchw forward operator.
