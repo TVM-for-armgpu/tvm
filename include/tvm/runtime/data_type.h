@@ -118,6 +118,7 @@ class DataType {
    * \return the result type.
    */
   DataType with_lanes(int lanes) const { return DataType(data_.code, data_.bits, lanes); }
+  DataType with_code(int code) const { return DataType(code, data_.bits, data_.lanes); }
   /*!
    * \brief Create a new data type by change bits to a specified value.
    * \param bits The target number of bits.

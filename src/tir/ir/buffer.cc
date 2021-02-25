@@ -320,6 +320,7 @@ inline PrimExpr BufferOffset(const BufferNode* n, Array<PrimExpr> index, DataTyp
 PrimExpr Buffer::vload(Array<PrimExpr> begin, DataType dtype) const {
   // specially handle bool, stored as DataType::Int(8)
   const BufferNode* n = operator->();
+  LOG(WARNING) << "vload " << n->data << " " << long(n) << " code=" << n->dtype.code();
   ICHECK(dtype.element_of() == n->dtype.element_of() && dtype.lanes() % n->dtype.lanes() == 0)
       << "Cannot load " << dtype << " from buffer of " << n->dtype;
   if (dtype == DataType::Bool()) {
@@ -334,6 +335,7 @@ PrimExpr Buffer::vload(Array<PrimExpr> begin, DataType dtype) const {
 Stmt Buffer::vstore(Array<PrimExpr> begin, PrimExpr value) const {
   // specially handle bool, stored as DataType::Int(8)
   const BufferNode* n = operator->();
+  LOG(WARNING) << "store " << n->data << " " << long(n) << " code=" << n->dtype.code();
   DataType dtype = value.dtype();
   ICHECK(dtype.element_of() == n->dtype.element_of() && dtype.lanes() % n->dtype.lanes() == 0)
       << "Cannot store " << dtype << " to buffer of " << n->dtype;

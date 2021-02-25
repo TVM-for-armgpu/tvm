@@ -121,7 +121,8 @@ class PrimExpr : public BaseExpr {
 
   /*! \return the data type of this expression. */
   DataType dtype() const { return static_cast<const PrimExprNode*>(get())->dtype; }
-
+  DataType& mutable_dtype() { return static_cast< PrimExprNode*>(data_.get())->dtype;
+  }
   TVM_DEFINE_OBJECT_REF_METHODS(PrimExpr, BaseExpr, PrimExprNode);
 
  private:

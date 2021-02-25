@@ -276,7 +276,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
   do {
     if (t.is_climgfloat() || t.is_climgfloatw()) {
       std::string vid = GetVarID(buffer);
-      if (var_buffer_map_.find(vid) == var_buffer_map_.end()) {
+      if (0 && var_buffer_map_.find(vid) == var_buffer_map_.end()) {
         break;
       }
       if (!HandleTypeMatch(buffer, t.element_of())) {
@@ -550,8 +550,8 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     // os << ']';
     //os << "read_imagef(" << vid << ",sampler,"
 #if USE_CL_RGBA
-    LOG(FATAL) << "Not support fetch one elments froms 4-channel image! want " << vid << " "
-               << index;
+    //LOG(FATAL) << "Not support fetch one elments froms 4-channel image! want " << vid << " "
+    //           << index;
 #else
     std::ostringstream indexexp_os;
     PrintExpr(index, indexexp_os);

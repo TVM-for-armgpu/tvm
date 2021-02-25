@@ -101,6 +101,22 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         name="conv2d_nchwc_io.mali",
                         plevel=20,
                     )
+                if (
+                    kh == 3
+                    and kw == 3
+                    and stride_h == 1
+                    and stride_w == 1
+                    and dilation_h == 1
+                    and dilation_w == 1
+                ):
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.mali.conv2d_nchw_winograd_nchwc_conv3x3_io),
+                        wrap_topi_schedule(
+                            topi.mali.schedule_conv2d_nchw_winograd_nchwc_io),
+                        name="conv2d_nchw_winograd_nchwc_io.mali",
+                        plevel=15,
+                    )
             elif re.match(r"OIHW\d*o", kernel_layout):
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.mali.conv2d_nchw_spatial_pack),
@@ -151,23 +167,50 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                 )
         elif layout == "NCHW4c":
             assert kernel_layout in ["OIHW1o4i", "IOHW1i4o"]
-            if kernel_layout == "IOHW1i4o":
-                strategy.add_implementation(
-                    wrap_compute_conv2d(topi.mali.conv2d_NCHWc_io, True, True),
-                    wrap_topi_schedule(topi.mali.schedule_conv2d_NCHWc_io),
-                    name="conv2d_NCHWc_io.mali",
-                    plevel=20,
-                )
-            else:
-                strategy.add_implementation(
-                    wrap_compute_conv2d(
-                        topi.mali.conv2d_NCHWc, True, True),
-                    wrap_topi_schedule(
-                        topi.mali.schedule_conv2d_NCHWc),
-                    name="conv2d_NCHWc.mali",
-                    plevel=20,
-                )
-
+            if (
+                kh == 1
+                and kw == 1
+                and stride_h == 1
+                and stride_w == 1
+                and dilation_h == 1
+                and dilation_w == 1
+            ):
+                if kernel_layout == "IOHW1i4o":
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(topi.mali.conv2d_NCHWc_io, True, True),
+                        wrap_topi_schedule(topi.mali.schedule_conv2d_NCHWc_io),
+                        name="conv2d_NCHWc_io.mali",
+                        plevel=20,
+                    )
+                else:
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.mali.conv2d_NCHWc, True, True),
+                        wrap_topi_schedule(
+                            topi.mali.schedule_conv2d_NCHWc),
+                        name="conv2d_NCHWc.mali",
+                        plevel=20,
+                    )
+            elif (
+                kh == 3
+                and kw == 3
+                and stride_h == 1
+                and stride_w == 1
+                and dilation_h == 1
+                and dilation_w == 1
+            ):
+                if kernel_layout == "IOHW1i4o":
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.mali.conv2d_nchw_winograd_nchwc_io, True, True),
+                        wrap_topi_schedule(
+                            topi.mali.schedule_conv2d_nchw_winograd_nchwc_io),
+                        name="conv2d_nchw_winograd_NCHWC_io.mali",
+                        plevel=20,
+                    )
+                else:
+                    raise RuntimeError(
+                        "Unsupported conv2d_nchw_winograd_nchwc layout {} for mali".format(layout))
         else:
             raise RuntimeError("Unsupported conv2d layout {} for mali".format(layout))
     elif is_depthwise_conv2d(data.shape, layout, kernel.shape, kernel_layout, groups):
@@ -238,6 +281,7 @@ def conv2d_winograd_without_weight_transfrom_strategy_mali(attrs, inputs, out_ty
     dilation = attrs.get_int_tuple("dilation")
     groups = attrs.get_int("groups")
     layout = attrs.data_layout
+    kernel_layout = attrs.kernel_layout
     strides = attrs.get_int_tuple("strides")
     kernel = inputs[1]
     assert dilation == (1, 1), "Do not support dilate now"
@@ -245,11 +289,23 @@ def conv2d_winograd_without_weight_transfrom_strategy_mali(attrs, inputs, out_ty
     assert groups == 1, "Do not supoort arbitrary group number"
     strategy = _op.OpStrategy()
     if layout == "NCHW":
-        assert len(kernel.shape) == 5, "Kernel must be packed into 5-dim"
+        if kernel_layout == "IOHW":
+            assert False, "TODO"
+        else:
+            assert len(kernel.shape) == 5, "Kernel must be packed into 5-dim"
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.mali.conv2d_nchw_winograd),
+                wrap_topi_schedule(topi.mali.schedule_conv2d_nchw_winograd),
+                name="conv2d_nchw_winograd.mali",
+            )
+    elif layout == "NCHW4c":
+        assert len(
+            kernel.shape) == 6, "Kernel must be packed into 6d-dim nchwc1i4o"
         strategy.add_implementation(
-            wrap_compute_conv2d(topi.mali.conv2d_nchw_winograd),
-            wrap_topi_schedule(topi.mali.schedule_conv2d_nchw_winograd),
-            name="conv2d_nchw_winograd.mali",
+            wrap_compute_conv2d(topi.mali.conv2d_nchw_winograd_nchwc_io),
+            wrap_topi_schedule(
+                topi.mali.schedule_conv2d_nchw_winograd_nchwc_io),
+            name="conv2d_nchw_winograd_nchwc.mali",
         )
     elif layout == "NHWC":
         if not is_auto_scheduler_enabled():
@@ -262,6 +318,7 @@ def conv2d_winograd_without_weight_transfrom_strategy_mali(attrs, inputs, out_ty
             name="conv2d_nhwc_winograd_without_weight_transform",
             plevel=15,
         )
+
     else:
         raise RuntimeError(
             "Unsupported conv2d_winograd_without_weight_transfrom layout {}".format(layout)
