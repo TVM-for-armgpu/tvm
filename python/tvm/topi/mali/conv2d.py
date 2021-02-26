@@ -879,13 +879,16 @@ def conv2d_nchw_winograd_nchwc_conv3x3_io(data, kernel, strides, padding, dilati
     
 @autotvm.register_topi_compute("conv2d_nchw_winograd_NCHWc_io.mali")
 def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation, out_dtype):
-    assert (
-        out_dtype == 'climgfloatr32' and data.dtype == 'climgfloatr32' and kernel.dtype == 'climgfloatr32'
-    ), "only support opencl image type yet"
+    #assert (
+    #    out_dtype == 'climgfloatw32' and data.dtype == 'climgfloatr32' and kernel.dtype == 'climgfloatr32'
+    #), "only support opencl image type yet"
     
     #tile_size = _pick_tile_size(data, kernel)
     tile_size = 2
-    
+    if data.dtype == "climgfloatr32":
+        storage_attr = "image"
+    else:
+        storage_attr = ""
     if len(data.shape) == 5:
         N, ic_chunk, IH, IW, ic_bn = get_const_tuple(data.shape)
         CI = ic_chunk * ic_bn
@@ -960,7 +963,7 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
     r = KW
     m = tile_size
     alpha = m + r - 1
-    A, B, G = winograd_transform_matrices(m, r, out_dtype.replace("climg","").replace("r",""))
+    A, B, G = winograd_transform_matrices(m, r, out_dtype.replace("climg","").replace("w",""))
     H = (IH + pt + pb - 3) // HSTR + 1
     W = (IW + pl + pr - 3) // WSTR + 1
     nH, nW = (H + m - 1) // m, (W + m - 1) // m
@@ -1005,9 +1008,7 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
             tvm.tir.const(0, data_pad.dtype),
         ),
         name="d",
-        attrs={"data_type": "image"},
     )
-    input_tile.dtype="climgfloatr32"
     #dont know why  cant use to tune this op when condition is True
     condition = False
     if autotvm.GLOBAL_SCOPE.in_tuning and condition:
@@ -1037,9 +1038,9 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
                     * G[ocout][r_kh] * G[constv][r_kw],
                     axis=[r_kh, r_kw]),
                 name="mali_conv2d_nchw_winograd_U",
-                attrs={"data_type": "image"},
+                attrs={"data_type": storage_attr},
             )
-    U.dtype="climgfloatw32"
+    #U.dtype="climgfloatw32"
 
     # transform image
     r_a = te.reduce_axis((0, alpha), "r_a")
@@ -1057,16 +1058,13 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
             input_tile[n][ic][h % IH][w % IW][vp]*B[r_a][r_b] * B[r_b][vp],
             axis=[r_a, r_b]),
         name="mali_conv2d_nchw_winograd_V",
-        attrs={"data_type": "image"},
+        attrs={"data_type": storage_attr},
     )
-    V.dtype = "climgfloatw32"
     idxdiv = tvm.tir.indexdiv
     idxmod = tvm.tir.indexmod
 
     # batch gemm
     ci = te.reduce_axis((0, CI), name="c")
-    U.dtype = "climgfloatr32"
-    V.dtype = "climgfloatr32"
     M = te.compute(
         (N, oc_chunk, winop2_tile_size, NTILE, oc_bn),
         lambda n, eps, nu, co, p: te.sum(
@@ -1074,7 +1072,7 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
             axis=ci,
         ),
         name="mali_conv2d_nchw_winograd_M",
-        attrs={"data_type": "image"},
+        attrs={"data_type": storage_attr},
     )
     M.dtype="climgfloatr32"
     r_a = te.reduce_axis((0, alpha), "r_a")
@@ -1082,13 +1080,12 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
     Y = te.compute(
         (N, oc_chunk, IH, IW, oc_bn),
         lambda n, co, h, w, oc: te.sum(
-            M[n][co][h][w][oc].astype("climgfloatr32") * A[r_a][oc] * A[co][r_b],
+            M[n][co][h][w][oc] * A[r_a][oc] * A[co][r_b],
             axis=[r_a,r_b],
         ),
         name="Y",
-        attrs={"data_type": "image"},
+        attrs={"data_type": storage_attr},
     )
-    Y.dtype="climgfloatw32"
     # unpack output
     output = te.compute(
         (N, oc_chunk, IH, IW, oc_bn),
@@ -1096,13 +1093,13 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
         # The following hack term is used to make the padding in batch gemm ("M")
         # effective, otherwise the padding will be eliminated by bound inference.
         # Use `tvm.tir.Mul` instead of `*` to avoid issues in const folding.
-        + tvm.tir.Mul(tvm.tir.const(0, out_dtype),
+        + tvm.tir.Mul(tvm.tir.const(0, out_dtype.replace('w','r')),
                       M[alpha - 1][alpha - 1][CO - 1][P_round - 1][0]),
         name="output",
         tag="winograd_conv2d_output",
-        attrs={"data_type": "image"},
+        attrs={"data_type": storage_attr},
     )
-    output.dtype="climgfloatw32"
+    output.dtype = out_dtype
     #====================useless temperary===========begin
     # we have to manually assign effective GFLOP for winograd
     cfg.add_flop(2 * N * CO * H * W * KH * KW * CI)
@@ -1319,7 +1316,7 @@ def _schedule_winograd_nchwc_io(cfg, s, op):
         if not autotvm.GLOBAL_SCOPE.in_tuning or not condition:
             r_kh, r_kw = s[U].op.reduce_axis
             s[U].reorder(co, ci, eps, nu, r_kh, r_kw, vco)
-            _ = [s[U].unroll(x) for x in [eps, nu, r_kh, r_kw]]
+            #_ = [s[U].unroll(x) for x in [eps, nu, r_kh, r_kw]]
             s[U].vectorize(vco)
             tile_and_bind(s, U, co, ci, 1, 256)
 
@@ -1333,8 +1330,8 @@ def _schedule_winograd_nchwc_io(cfg, s, op):
 
     eps, nu, p, ci, vp = s[V].op.axis
     s[V].reorder(p, ci, eps, nu, vp)
-    for axis in [eps, nu]:
-        s[V].unroll(axis)
+    #for axis in [eps, nu]:
+        #s[V].unroll(axis)
     s[V].vectorize(vp)
     fused = s[V].fuse(p, ci)
 

@@ -64,11 +64,10 @@ Tensor Operation::output(size_t i) const {
   node->dtype = (*this)->output_dtype(i);
   node->shape = (*this)->output_shape(i);
   
-  if (((*this)->name.find(".") == std::string::npos) &&
-      (*this)->attrs.count("data_type") 
-      && ((*this)->attrs["data_type"] != String("image"))) {
+  if (((*this)->name.find(".") == std::string::npos) && (*this)->attrs.count("data_type") &&
+      (Downcast<String>((*this)->attrs["data_type"]) == String("image"))) {
     node->dtype = DataType::CLImgFloatW(node->dtype.bits(), node->dtype.lanes());
-    node->value_storage_type = DataType::kCLImgFloatW; 
+    node->value_storage_type = DataType::kCLImgFloatW;
     ICHECK_GE(node->shape.size(), 2) << "climgfloat type of tensor must be at least 2 dimention";
   }
   // climagefloat is only valid for placehoderop, we need to cast to float for the intermediate tensor
