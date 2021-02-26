@@ -623,6 +623,12 @@ Load::Load(DataType dtype, Var buffer_var, PrimExpr index, PrimExpr predicate, S
 
   ObjectPtr<LoadNode> node = make_object<LoadNode>();
   node->dtype = dtype;
+  if ((dtype.is_climgfloatrw())){
+      node->value_storage_type = DataType::kCLImgFloat;
+      if (buffer_var->name_hint.operator std::string().find(".") != std::string::npos) {
+          node->dtype = node->dtype.with_code(DataType::kFloat);
+      }
+  }
   node->buffer_var = std::move(buffer_var);
   node->index = std::move(index);
   node->predicate = std::move(predicate);

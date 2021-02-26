@@ -337,6 +337,9 @@ Stmt Buffer::vstore(Array<PrimExpr> begin, PrimExpr value) const {
   const BufferNode* n = operator->();
   LOG(WARNING) << "store " << n->data << " " << long(n) << " code=" << n->dtype.code();
   DataType dtype = value.dtype();
+  if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()){
+    value.mutable_storage_type() = DataType::kCLImgFloatW;
+  }
   ICHECK(dtype.element_of() == n->dtype.element_of() && dtype.lanes() % n->dtype.lanes() == 0)
       << "Cannot store " << dtype << " to buffer of " << n->dtype;
   if (value.dtype() == DataType::Bool()) {

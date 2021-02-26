@@ -72,6 +72,7 @@ class TensorNode : public DataProducerNode {
   Array<PrimExpr> shape;
   /*! \brief data type in the content of the tensor */
   DataType dtype;
+  tvm::runtime::DataType::TypeCode value_storage_type = DataType::kFloat; 
   /*! \brief the source operation, can be None */
   Operation op;
   /*! \brief the output index from source operation */

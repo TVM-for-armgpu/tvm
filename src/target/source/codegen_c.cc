@@ -112,7 +112,7 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
         PrintStorageScope(it->second, stream);
       }
       
-       PrintType(GetType(v), stream);
+      PrintType(GetType(v), stream);
       // Register handle data type
       // TODO(tvm-team): consider simply keep type info in the
       // type annotation(via a normalizing rewriting).
@@ -1046,7 +1046,7 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
     ICHECK(is_one(op->predicate)) << "predicated load is not supported";
 
     arith::PVar<PrimExpr> base;
-    bool is_climg_bug_not_cl_rgba = op->dtype.is_climgfloat() && USE_CL_RGBA == 0;
+    bool is_climg_bug_not_cl_rgba = op->dtype.is_climgfloatrw() && (USE_CL_RGBA == 0);
     if (is_climg_bug_not_cl_rgba == false && arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)) {
       std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), base.Eval());
       HandleVolatileLoads(ref, op, os);
@@ -1068,7 +1068,7 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
           PrintType(elem_type, value_temp);
           value_temp << "*)" << vid << ')';
         } else {
-          if (elem_type.is_climgfloat()) {
+          if (elem_type.is_climgfloatrw()) {
             value_temp << "read_imagef(" << vid << ",sampler,";
           } else {
             value_temp << vid;
@@ -1076,7 +1076,7 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
         }
         std::ostringstream index_temp;
         PrintVecElemLoad(sindex, op->index.dtype(), i, index_temp);
-        if (elem_type.is_climgfloat()) {
+        if (elem_type.is_climgfloatrw()) {
 #if USE_CL_RGBA
           LOG(FATAL) << "Not support read 1 element from 4-channel image";
 #else 
@@ -1121,10 +1121,11 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     arith::PVar<PrimExpr> base;
 
    
-    bool is_climg_bug_not_cl_rgba = is_climg && USE_CL_RGBA == 0;
+    bool is_climg_bug_not_cl_rgba = is_climg && (USE_CL_RGBA == 0);
     if (is_climg_bug_not_cl_rgba == false && arith::ramp(base, 1, t.lanes()).Match(op->index)) {
       std::string value = this->PrintExpr(op->value);
-      this->PrintVecStore(op->buffer_var.get(), t, base.Eval(), value);
+      auto new_code = is_climg? DataType::kCLImgFloatW:DataType::kFloat;
+      this->PrintVecStore(op->buffer_var.get(), t.with_code(new_code), base.Eval(), value);
     } else {
       // The assignment below introduces side-effect, and the resulting value cannot
       // be reused across multiple expression, thus a new scope is needed

@@ -236,6 +236,7 @@ class StoreNode : public StmtNode {
   PrimExpr index;
   /*! \brief The predicate to mask which lanes would be stored. */
   PrimExpr predicate;
+  tvm::runtime::DataType::TypeCode value_storage_type = DataType::kFloat;
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("buffer_var", &buffer_var);

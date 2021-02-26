@@ -207,11 +207,18 @@ Store::Store(Var buffer_var, PrimExpr value, PrimExpr index, PrimExpr predicate,
 
   ObjectPtr<StoreNode> node = make_object<StoreNode>();
   node->buffer_var = std::move(buffer_var);
-  if (value->dtype.is_climgfloat() && 
-      node->buffer_var->name_hint.operator std::string().find(".") == std::string::npos) {
-    //node->buffer_var.mutable_dtype() =
-    //    node->buffer_var.mutable_dtype().with_code(DataType::kCLImgFloatW);
-    value.mutable_dtype() = value.mutable_dtype().with_code(DataType::kCLImgFloatW);
+  if ((value->dtype.is_climgfloat()||value->dtype.is_climgfloatw()) ||
+    (value->value_storage_type == DataType::kCLImgFloatW)||
+    (value->value_storage_type == DataType::kCLImgFloat) ){
+    if (node->buffer_var->name_hint.operator std::string().find(".") == std::string::npos) {
+      value.mutable_dtype() = value.mutable_dtype().with_code(DataType::kCLImgFloatW);
+      node->value_storage_type = DataType::kCLImgFloatW;
+      value.mutable_storage_type() = DataType::kCLImgFloatW;
+    }else{
+      //value.mutable_dtype() = value.mutable_dtype().with_code(DataType::kFloat);
+      node->value_storage_type = DataType::kCLImgFloatW;
+      value.mutable_storage_type() = DataType::kCLImgFloatW;
+    }
   }
   node->value = std::move(value);
   node->index = std::move(index);
@@ -254,6 +261,9 @@ ProducerStore::ProducerStore(DataProducer producer, PrimExpr value, Array<PrimEx
   ObjectPtr<ProducerStoreNode> node = make_object<ProducerStoreNode>();
   node->producer = std::move(producer);
   node->value = std::move(value);
+  if (node->producer->GetDataType().is_climgfloat() || node->producer->GetDataType().is_climgfloatw()) {
+    node->value.mutable_storage_type() = DataType::kCLImgFloatW;
+  }
   node->indices = std::move(indices);
   node->span = std::move(span);
   data_ = std::move(node);
@@ -537,6 +547,12 @@ BufferStore::BufferStore(Buffer buffer, PrimExpr value, Array<PrimExpr> indices,
   ObjectPtr<BufferStoreNode> node = make_object<BufferStoreNode>();
   node->buffer = std::move(buffer);
   node->value = std::move(value);
+  auto ad=std::string(node->buffer->name).find(".local")!=std::string::npos;
+  if (node->buffer.get()->dtype.is_climgfloat() 
+      || node->value->dtype.is_climgfloat()
+      || node->value->dtype.is_climgfloatw()) {
+    node->value.mutable_storage_type() = DataType::kCLImgFloatW;
+  }
   node->indices = std::move(indices);
   node->span = std::move(span);
   data_ = std::move(node);

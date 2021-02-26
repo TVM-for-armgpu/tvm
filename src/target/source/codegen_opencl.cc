@@ -37,6 +37,7 @@ namespace codegen {
 CodeGenOpenCL::CodeGenOpenCL() { restrict_keyword_ = "restrict"; }
 
 void CodeGenOpenCL::InitFuncState(const PrimFunc& f) {
+  in_para_stm = true;
   CodeGenC::InitFuncState(f);
   for (Var arg : f->params) {
     if (arg.dtype().is_handle()) {
@@ -131,7 +132,7 @@ void CodeGenOpenCL::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
     return;
   }
   bool fail = false;
-  if (in_para_stm && (t.is_climgfloat() || t.is_climgfloatw())) {
+  if (in_para_stm && t.is_climgfloatrw()) {
     if (t.lanes() != 4) {
       //LOG(WARNING) << "you are using " << t << "*" << t.lanes()
       //             << " as opencl image object type!!!!!!!";
@@ -243,11 +244,11 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
 // y*Prim is suppose y < anonther_Prim, which will cause y%anonther_Prim=0,
 // Now, I make Prim as 202129, anonther_Prim as 202121.
  void split_img_xy_axes(std::string index_str, std::string& img_x_axes, std::string& img_y_axes) {
- #if USE_CL_RGBA == 0
+#if USE_CL_RGBA == 0
    LOG(FATAL) << "split xy axex function doesnot support 1-changnel image";
 #endif
   trimSpace(index_str);
-   std::string split_dem = "%21193";
+  std::string split_dem = "%21193";
   std::string amp_factor = "/21139";
   size_t pos = index_str.find(split_dem);
   ICHECK(pos != std::string::npos) << index_str << " cant find %202129, kernel CI or CO is equal 202129??";
@@ -274,7 +275,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
   std::ostringstream ossbase;
   PrintExpr(base, ossbase);
   do {
-    if (t.is_climgfloat() || t.is_climgfloatw()) {
+    if (t.is_climgfloatrw()) {
       std::string vid = GetVarID(buffer);
       if (0 && var_buffer_map_.find(vid) == var_buffer_map_.end()) {
         break;
@@ -350,7 +351,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
 }
 std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExpr base) {
   std::ostringstream os;
-  if (t.is_climgfloat()) {
+  if (t.is_climgfloatrw()) {
 #if USE_CL_RGBA
     os << "read_imagef(";
 #else

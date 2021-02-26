@@ -96,7 +96,7 @@ class PrimExprNode : public BaseExprNode {
    * a more fine-grained Type, and we can get the type by running lazy type inference.
    */
   DataType dtype;
-
+  tvm::runtime::DataType::TypeCode value_storage_type = DataType::kFloat; 
   static constexpr const char* _type_key = "PrimExpr";
   static constexpr const uint32_t _type_child_slots = 38;
   TVM_DECLARE_BASE_OBJECT_INFO(PrimExprNode, BaseExprNode);
@@ -121,8 +121,8 @@ class PrimExpr : public BaseExpr {
 
   /*! \return the data type of this expression. */
   DataType dtype() const { return static_cast<const PrimExprNode*>(get())->dtype; }
-  DataType& mutable_dtype() { return static_cast< PrimExprNode*>(data_.get())->dtype;
-  }
+  DataType& mutable_dtype() { return static_cast< PrimExprNode*>(data_.get())->dtype;}
+  DataType::TypeCode& mutable_storage_type() { return static_cast< PrimExprNode*>(data_.get())->value_storage_type;}
   TVM_DEFINE_OBJECT_REF_METHODS(PrimExpr, BaseExpr, PrimExprNode);
 
  private:

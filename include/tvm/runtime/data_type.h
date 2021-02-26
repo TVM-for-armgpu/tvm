@@ -95,6 +95,7 @@ class DataType {
   /*! \return whether type is a float type. */
   bool is_float() const { return code() == DataType::kFloat || code() == DataType::kCLImgFloat|| code() == DataType::kCLImgFloatW; }
   bool is_climgfloat() const { return code() == DataType::kCLImgFloat; }
+  bool is_climgfloatrw() const { return code() == DataType::kCLImgFloat || code() == DataType::kCLImgFloatW; }
   bool is_climgfloatw() const { return code() == DataType::kCLImgFloatW; }
   /*! \return whether type is a float16 type. */
   bool is_float16() const { return is_float() && bits() == 16; }
@@ -137,8 +138,9 @@ class DataType {
    */
   bool operator==(const DataType& other) const {
     bool cv = false;
-    if (((data_.code == kCLImgFloat||data_.code == kCLImgFloatW) && other.data_.code == kFloat) ||
-        (data_.code == kFloat && (other.data_.code == kCLImgFloat||other.data_.code == kCLImgFloatW))||
+    if (((is_climgfloatrw()) && other.data_.code == kFloat) ||
+        (data_.code == kFloat && (other.is_climgfloatrw())) ||
+        (is_climgfloatrw() && other.is_climgfloatrw()) ||
         data_.code == other.data_.code) {
       cv = true;
     }
