@@ -334,6 +334,10 @@ void OpenCLWorkspace::StreamSync(TVMContext ctx, TVMStreamHandle stream) {
   OPENCL_CALL(clFinish(this->GetQueue(ctx)));
 }
 
+void* OpenCLWorkspace::AllocWorkspace(TVMContext ctx, DataShape* size, DLDataType type_hint) {
+  return GetThreadEntry()->pool.AllocWorkspace(ctx, size);
+}
+
 void* OpenCLWorkspace::AllocWorkspace(TVMContext ctx, size_t size, DLDataType type_hint) {
   return GetThreadEntry()->pool.AllocWorkspace(ctx, size);
 }

@@ -140,6 +140,9 @@ DeviceAPI* DeviceAPI::Get(TVMContext ctx, bool allow_missing) {
   return DeviceAPIManager::Get(static_cast<int>(ctx.device_type), allow_missing);
 }
 
+void* DeviceAPI::AllocWorkspace(TVMContext ctx, DataShape* nbytes, DLDataType type_hint) {
+  return AllocDataSpace(ctx, nbytes, kTempAllocaAlignment, type_hint);
+}
 void* DeviceAPI::AllocWorkspace(TVMContext ctx, size_t size, DLDataType type_hint) {
   return AllocDataSpace(ctx, size, kTempAllocaAlignment, type_hint);
 }
@@ -383,9 +386,74 @@ int TVMBackendGetFuncFromEnv(void* mod_node, const char* func_name, TVMFunctionH
   *func = (TVMFunctionHandle)(static_cast<ModuleNode*>(mod_node)->GetFuncFromEnv(func_name));
   API_END();
 }
+#ifdef __GNUC__
+#define clz(x) __builtin_clz(x)
+#define ctz(x) __builtin_ctz(x)
+#else
+#define ALWAYS_INLINE inline
+static uint32_t ALWAYS_INLINE popcnt(uint32_t x) {
+  x -= ((x >> 1) & 0x55555555);
+  x = (((x >> 2) & 0x33333333) + (x & 0x33333333));
+  x = (((x >> 4) + x) & 0x0f0f0f0f);
+  x += (x >> 8);
+  x += (x >> 16);
+  return x & 0x0000003f;
+}
+static uint32_t ALWAYS_INLINE clz(uint32_t x) {
+  x |= (x >> 1);
+  x |= (x >> 2);
+  x |= (x >> 4);
+  x |= (x >> 8);
+  x |= (x >> 16);
+  return 32 - popcnt(x);
+}
+
+static uint32_t ALWAYS_INLINE ctz(uint64_t x) { return popcnt((x & -x) - 1); }
+int log2_bit(uint64_t value) {
+  int x = 0;
+  while (value > 1) {
+    value >>= 1;
+    x++;
+  }
+  return x;
+}
+#endif
 
 void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t size, int dtype_code_hint,
                                int dtype_bits_hint) {
+  auto decode_shape_fold = [](uint64_t encoded_shape) -> std::vector<int> {
+      int ndim = encoded_shape >> 56;
+      ICHECK(ndim == 5 || ndim == 6) << " decode failed, ndim could only be 5 or 6:vs " << ndim;
+      int bit_shift_offset = ndim == 6 ? 2 : 1;
+      uint64_t full = 0xffffffffffffffff;
+      encoded_shape = (full >> (64 - 56)) & encoded_shape;
+      std::vector<int> values(ndim, 0);
+      for (size_t i = 0; i < ndim; ++i) {
+        // 0---63bit---
+        //|---bytes---|-shape dim-|----N----|----C------|--H------|----W-----|-----C-----|
+        //|-----4-----|-----3-----|---12----|-----12----|---12----|----12----|-----8----|
+        //|---bytes---|-shape
+        //dim-|---I-----|----O------|--H------|----W-----|------1----|-----C-----|
+        //|-----4-----|-----3-----|---12----|-----12----|---12----|---12-----|------4----|------4----|
+
+        // for layout IOHW1i4o
+        if (i == 4 && ndim == 6) {
+          values[i] = encoded_shape >> 4;
+          values[i + 1] = encoded_shape & 0xf;
+          break;
+        }
+        int abc = (12 * (ndim - bit_shift_offset - int(i))) - 4 * (i == 4 ? 0 : 1);
+        values[i] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+      }
+      return values;
+  };
+  size = size / (dtype_bits_hint / 8);
+  std::vector<int> shapes = std::move(decode_shape_fold(size));
+  size = (dtype_bits_hint / 8);
+  for (auto sz : shapes) {
+    size *= sz;
+  }
   TVMContext ctx;
   ctx.device_type = static_cast<DLDeviceType>(device_type);
   ctx.device_id = device_id;
@@ -394,7 +462,22 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t size, in
   type_hint.code = static_cast<decltype(type_hint.code)>(dtype_code_hint);
   type_hint.bits = static_cast<decltype(type_hint.bits)>(dtype_bits_hint);
   type_hint.lanes = 1;
-
+  if (type_hint.code == kDLCLImgFloatW || type_hint.code == kDLCLImgFloat) {
+    // DataShape for opencl type
+    std::shared_ptr<DataShape> dshape(new DataShape, DataShapeDeleter);
+    memset(dshape.get(), 0, sizeof(DataShape));
+    // DataShape *dshape = new DataShape;
+    dshape->ctx = ctx;
+    dshape->dtype = type_hint;
+    dshape->ndim = shapes.size();
+    dshape->shape = new int64_t[dshape->ndim];
+    for (int i = 0; i < dshape->ndim; ++i) {
+      dshape->shape[i] = shapes[i];
+    }
+    //======
+    DataShape* abc = dynamic_cast<DataShape*>(dshape.get());
+    return DeviceAPIManager::Get(ctx)->AllocWorkspace(ctx, abc, type_hint);
+  }
   return DeviceAPIManager::Get(ctx)->AllocWorkspace(ctx, static_cast<size_t>(size), type_hint);
 }
 

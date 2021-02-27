@@ -320,6 +320,17 @@ Allocate::Allocate(Var buffer_var, DataType dtype, Array<PrimExpr> extents, Prim
 
 int32_t AllocateNode::constant_allocation_size(const Array<PrimExpr>& extents) {
   int64_t result = 1;
+  // encode all shapes into int64
+  if (extents.size() == 1 && extents[0].dtype().bits() == 64) {
+    std::vector<int> shapes = tvm::runtime::decode_shape_fold(extents[0].as<IntImmNode>()->value);
+    for (size_t i = 0; i < shapes.size(); ++i) {
+      result *= shapes[i];
+      if (result > std::numeric_limits<int32_t>::max()) {
+        return 0;
+      }
+    }
+    return static_cast<int32_t>(result);
+  }
   for (size_t i = 0; i < extents.size(); ++i) {
     if (const IntImmNode* int_size = extents[i].as<IntImmNode>()) {
       result *= int_size->value;

@@ -1130,6 +1130,10 @@ inline PrimExpr foldl(FReduce freduce, PrimExpr init_value, const Array<PrimExpr
 }
 
 }  // namespace tir
+namespace runtime {
+std::vector<int> decode_shape_fold(uint64_t encoded_shape_i);
+PrimExpr encode_shape_fold(Array<PrimExpr> values);
+}  // namespace runtime
 
 // additional const expression overloading
 #define TVM_DEFINE_ASSIGN_OP_OVERLOAD(Name, OpFunc) \

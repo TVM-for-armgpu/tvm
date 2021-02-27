@@ -58,6 +58,7 @@ class TVM_DLL WorkspacePool {
    * \param size The size to be allocated.
    */
   void* AllocWorkspace(TVMContext ctx, size_t size);
+  void* AllocWorkspace(TVMContext ctx, DataShape* size);
   /*!
    * \brief Free temporal workspace in backend execution.
    *
