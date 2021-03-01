@@ -448,12 +448,6 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t size, in
       }
       return values;
   };
-  size = size / (dtype_bits_hint / 8);
-  std::vector<int> shapes = std::move(decode_shape_fold(size));
-  size = (dtype_bits_hint / 8);
-  for (auto sz : shapes) {
-    size *= sz;
-  }
   TVMContext ctx;
   ctx.device_type = static_cast<DLDeviceType>(device_type);
   ctx.device_id = device_id;
@@ -463,6 +457,12 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t size, in
   type_hint.bits = static_cast<decltype(type_hint.bits)>(dtype_bits_hint);
   type_hint.lanes = 1;
   if (type_hint.code == kDLCLImgFloatW || type_hint.code == kDLCLImgFloat) {
+    size = size / (dtype_bits_hint / 8);
+    std::vector<int> shapes = std::move(decode_shape_fold(size));
+    size = (dtype_bits_hint / 8);
+    for (auto sz : shapes) {
+      size *= sz;
+    }
     // DataShape for opencl type
     std::shared_ptr<DataShape> dshape(new DataShape, DataShapeDeleter);
     memset(dshape.get(), 0, sizeof(DataShape));

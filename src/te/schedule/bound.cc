@@ -203,6 +203,11 @@ void InferRootBound(const Stage& stage, const GraphContext& ctx,
   }
   stage->op->GatherBound(stage->op, tmap, rmap);
 }
+void stlDump(const std::unordered_map<IterVar, Range>& d) {
+  for (auto kv : d) {
+    std::cout << kv.first << ":" << kv.second << "\n";
+  }
+}
 
 Map<IterVar, Range> InferBound(const Schedule& sch) {
   // Prepare context
