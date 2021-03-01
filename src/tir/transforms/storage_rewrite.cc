@@ -368,6 +368,7 @@ class StoragePlanRewriter : public StmtExprMutator {
     op = stmt.as<StoreNode>();
     auto it = alloc_map_.find(op->buffer_var.get());
     if (it == alloc_map_.end()) return stmt;
+    const_cast<StoreNode*>(op)->value.mutable_storage_type() = op->value_storage_type;
     return Store(it->second->alloc_var, op->value,
                  RemapIndex(op->value.dtype(), op->index, it->second), op->predicate);
   }

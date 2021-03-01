@@ -320,7 +320,7 @@ inline PrimExpr BufferOffset(const BufferNode* n, Array<PrimExpr> index, DataTyp
 PrimExpr Buffer::vload(Array<PrimExpr> begin, DataType dtype) const {
   // specially handle bool, stored as DataType::Int(8)
   const BufferNode* n = operator->();
-  LOG(WARNING) << "vload " << n->data << " " << long(n) << " code=" << n->dtype.code();
+  //LOG(WARNING) << "vload " << n->data << " " << long(n) << " code=" << n->dtype.code();
   ICHECK(dtype.element_of() == n->dtype.element_of() && dtype.lanes() % n->dtype.lanes() == 0)
       << "Cannot load " << dtype << " from buffer of " << n->dtype;
   if (dtype == DataType::Bool()) {
@@ -335,7 +335,7 @@ PrimExpr Buffer::vload(Array<PrimExpr> begin, DataType dtype) const {
 Stmt Buffer::vstore(Array<PrimExpr> begin, PrimExpr value) const {
   // specially handle bool, stored as DataType::Int(8)
   const BufferNode* n = operator->();
-  LOG(WARNING) << "store " << n->data << " " << long(n) << " code=" << n->dtype.code();
+  //LOG(WARNING) << "store " << n->data << " " << long(n) << " code=" << n->dtype.code();
   DataType dtype = value.dtype();
   if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()){
     value.mutable_storage_type() = DataType::kCLImgFloatW;
@@ -469,7 +469,7 @@ Buffer::Buffer(Var data, DataType dtype, Array<PrimExpr> shape, Array<PrimExpr> 
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
     .set_dispatch<BufferNode>([](const ObjectRef& node, ReprPrinter* p) {
       auto* op = static_cast<const BufferNode*>(node.get());
-      p->stream << "buffer(" << op->name << ", " << op << ")";
+      p->stream << "buffer(" << op->name << ", " << op->shape << ", " << op << ")";
     });
 
 TVM_REGISTER_NODE_TYPE(BufferNode);

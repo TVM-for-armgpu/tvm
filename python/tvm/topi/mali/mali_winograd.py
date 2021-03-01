@@ -135,7 +135,6 @@ def data_transform(data, wino_size, B=None, out_dtype='float32'):
     pt = pl = pb = pr = tile_size - 1
     Data_pad = nn.pad(Data, (0, 0, pt, pl, 0),
                       (0, 0, pb, pr, 0), name="Data_pad")
-    Data_pad.dtype = Data.dtype
 
     def _transform_V(ic, oc, x, y, bo):
         tx = y // wino2W * wino_size + x // wino_size

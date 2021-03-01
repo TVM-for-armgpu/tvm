@@ -346,6 +346,7 @@ class Vectorizer : public StmtMutator, public ExprFunctor<PrimExpr(const PrimExp
     } else {
       int lanes = std::max(value.dtype().lanes(), index.dtype().lanes());
       lanes = std::max(lanes, pred.dtype().lanes());
+      value.mutable_storage_type() = op->value_storage_type;
       return Store(op->buffer_var, BroadcastTo(value, lanes), BroadcastTo(index, lanes),
                    BroadcastTo(pred, lanes));
     }
