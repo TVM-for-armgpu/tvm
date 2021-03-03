@@ -293,6 +293,7 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
 };
 int GetValueType(const Type& type);
 void trimSpace(std::string& s);
+std::vector<std::string> split_string(std::string s, std::string delimiter);
 }  // namespace codegen
 }  // namespace tvm
 #endif  // TVM_TARGET_SOURCE_CODEGEN_C_H_

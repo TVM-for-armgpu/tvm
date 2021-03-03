@@ -27,6 +27,7 @@
 
 #include "../../arith/pattern_match.h"
 #include <tvm/tir/expr_simplify.h>
+#include <regex>
 
 namespace tvm {
 namespace codegen {
@@ -133,59 +134,60 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
   stream << ") {\n";
 
     //============hard kernel for winograd transform
-  bool find_U = false, find_V = false, find_M = false, find_Y = false;
+  bool find_U = false, find_V = false, find_M = false;
   for (size_t i = 0; i < f->params.size(); ++i) {
     tir::Var v = f->params[i];
     auto getVarName = [](const tir::VarNode* v) { return v->name_hint; };
-    if ("mali_conv2d_nchw_winograd_U1" == getVarName(v.get())) {
+    if ("mali_conv2d_nchw_winograd_U" == getVarName(v.get())) {
       find_U = true;
-    } else if ("mali_conv2d_nchw_winograd_V1" == getVarName(v.get())) {
+    } else if ("mali_conv2d_nchw_winograd_V" == getVarName(v.get())) {
       find_V = true;
-    } else if ("mali_conv2d_nchw_winograd_M1" == getVarName(v.get())) {
+    } else if ("mali_conv2d_nchw_winograd_M" == getVarName(v.get())) {
       find_M = true;
-    } else if ("mali_conv2d_nchw_winograd_Y1" == getVarName(v.get())) {
-      find_Y = true;
     }
   }
   // only U,transorm filter
-  if (find_U == true && (find_V | find_M | find_Y) == false)
+  if (find_U == true && (find_V | find_M) == false)
   {
     // NCHW1i4c
     this->stream << R"(
-      #define filter_mat mali_conv2d_nchw_winograd_U 
-      const int nk_pack4 = (get_image_dim(filter).y+3)/4;
-      const int nc = get_image_dim(filter).x/3/3/4;
+
+ #define filter_mat mali_conv2d_nchw_winograd_U 
+      const int nk_pack4 = get_image_dim(filter).x/3/3 ;
+      const int nc = (get_image_dim(filter).y);
 
        const int k_pack4 = get_global_id(0);
   const int c = get_global_id(1);
-
+    //if (k_pack4==0 && c==0)
+     //printf("mali_conv2d_nchw_winograd_U %d,%d",get_image_dim(mali_conv2d_nchw_winograd_U).x,get_image_dim(mali_conv2d_nchw_winograd_U).y);
+     //return;
   if (k_pack4 >= nk_pack4 || c >= nc) return;
 
-  float4 g00 = read_imagef(filter, SAMPLER, (int2)(0 + k_pack4 * 9, c));
-  float4 g01 = read_imagef(filter, SAMPLER, (int2)(1 + k_pack4 * 9, c));
-  float4 g02 = read_imagef(filter, SAMPLER, (int2)(2 + k_pack4 * 9, c));
-  float4 g10 = read_imagef(filter, SAMPLER, (int2)(3 + k_pack4 * 9, c));
-  float4 g11 = read_imagef(filter, SAMPLER, (int2)(4 + k_pack4 * 9, c));
-  float4 g12 = read_imagef(filter, SAMPLER, (int2)(5 + k_pack4 * 9, c));
-  float4 g20 = read_imagef(filter, SAMPLER, (int2)(6 + k_pack4 * 9, c));
-  float4 g21 = read_imagef(filter, SAMPLER, (int2)(7 + k_pack4 * 9, c));
-  float4 g22 = read_imagef(filter, SAMPLER, (int2)(8 + k_pack4 * 9, c));
+  float4 g00 = read_imagef(filter, sampler, (int2)(0 + k_pack4 * 9, c));
+  float4 g01 = read_imagef(filter, sampler, (int2)(1 + k_pack4 * 9, c));
+  float4 g02 = read_imagef(filter, sampler, (int2)(2 + k_pack4 * 9, c));
+  float4 g10 = read_imagef(filter, sampler, (int2)(3 + k_pack4 * 9, c));
+  float4 g11 = read_imagef(filter, sampler, (int2)(4 + k_pack4 * 9, c));
+  float4 g12 = read_imagef(filter, sampler, (int2)(5 + k_pack4 * 9, c));
+  float4 g20 = read_imagef(filter, sampler, (int2)(6 + k_pack4 * 9, c));
+  float4 g21 = read_imagef(filter, sampler, (int2)(7 + k_pack4 * 9, c));
+  float4 g22 = read_imagef(filter, sampler, (int2)(8 + k_pack4 * 9, c));
 
   float4 z00 = g00;
-  float4 z01 = (g00 + g01 + g02) * 0.5;
-  float4 z02 = (g00 - g01 + g02) * 0.5;
+  float4 z01 = (g00 + g01 + g02) * 0.5f;
+  float4 z02 = (g00 - g01 + g02) * 0.5f;
   float4 z03 = g02;
-  float4 z10 = (g00 + g10 + g20) * 0.5;
-  float4 z11 = (g00 + g01 + g02 + g10 + g11 + g12 + g20 + g21 + g22) * 0.25;
-  float4 z12 = (g00 - g01 + g02 + g10 - g11 + g12 + g20 - g21 + g22) * 0.25;
-  float4 z13 = (g02 + g12 + g22) * 0.5;
-  float4 z20 = (g00 - g10 + g20) * 0.5;
-  float4 z21 = (g00 + g01 + g02 - g10 - g11 - g12 + g20 + g21 + g22) * 0.25;
-  float4 z22 = (g00 - g01 + g02 - g10 + g11 - g12 + g20 - g21 + g22) * 0.25;
-  float4 z23 = (g02 - g12 + g22) * 0.5;
+  float4 z10 = (g00 + g10 + g20) * 0.5f;
+  float4 z11 = (g00 + g01 + g02 + g10 + g11 + g12 + g20 + g21 + g22) * 0.25f;
+  float4 z12 = (g00 - g01 + g02 + g10 - g11 + g12 + g20 - g21 + g22) * 0.25f;
+  float4 z13 = (g02 + g12 + g22) * 0.5f;
+  float4 z20 = (g00 - g10 + g20) * 0.5f;
+  float4 z21 = (g00 + g01 + g02 - g10 - g11 - g12 + g20 + g21 + g22) * 0.25f;
+  float4 z22 = (g00 - g01 + g02 - g10 + g11 - g12 + g20 - g21 + g22) * 0.25f;
+  float4 z23 = (g02 - g12 + g22) * 0.5f;
   float4 z30 = g20;
-  float4 z31 = (g20 + g21 + g22) * 0.5;
-  float4 z32 = (g20 - g21 + g22) * 0.5;
+  float4 z31 = (g20 + g21 + g22) * 0.5f;
+  float4 z32 = (g20 - g21 + g22) * 0.5f;
   float4 z33 = g22;
 
   write_imagef(filter_mat, (int2)(k_pack4 * 16 + 0x0, c), z00);
@@ -208,41 +210,47 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
 
     )";
   } 
-  else if (find_V == true && (find_U | find_M | find_Y) == false) {
+  else if (find_V == true && (find_U | find_M) == false) {
+    // only V,transorm data
     // supporse w==h,otherwise it's not correct
     this->stream << R"(
-    #define data input 
+        
+    #define input data
     #define input_mat mali_conv2d_nchw_winograd_V 
-      const int nc_pack4 = (get_image_dim(filter).y/(get_image_dim(filter).x/4)+3)/4;
-      const int nw_pack_wino = (get_image_dim(filter).x/4+2-1)/2;
-      const int nh = get_image_dim(filter).x/4;
-      const int nh_pack_wino = (nh+2-1)/2;
+    const int nc_pack4 = (get_image_dim(data).y/get_image_dim(data).x);
+    const int nh = get_image_dim(data).x;
+    const int nh_pack_wino = (nh+2-1)/2;
+    const int nw_pack_wino = nh_pack_wino;
 
- const int w_pack_wino = get_global_id(0);
+
+    const int w_pack_wino = get_global_id(0);
   const int h_pack_wino = get_global_id(1);
   const int c_pack4 = get_global_id(2);
+//if (w_pack_wino==0&&h_pack_wino==0&&c_pack4==0)
+//printf("mali_conv2d_nchw_winograd_V %d,%d",get_image_dim(mali_conv2d_nchw_winograd_V).x,get_image_dim(mali_conv2d_nchw_winograd_V).y);
+    //return;
 
   if (w_pack_wino >= nw_pack_wino || h_pack_wino >= nh_pack_wino || c_pack4 >= nc_pack4) return;
 
   const int w = (w_pack_wino << 1) - 1;
   const int h = (h_pack_wino << 1) - 1;
 
-  float4 d00 = h >= 0 ? read_imagef(input, SAMPLER, (int2)((w + 0), (h + 0) + c_pack4 * nh)) : 0;
-  float4 d01 = h >= 0 ? read_imagef(input, SAMPLER, (int2)((w + 1), (h + 0) + c_pack4 * nh)) : 0;
-  float4 d02 = h >= 0 ? read_imagef(input, SAMPLER, (int2)((w + 2), (h + 0) + c_pack4 * nh)) : 0;
-  float4 d03 = h >= 0 ? read_imagef(input, SAMPLER, (int2)((w + 3), (h + 0) + c_pack4 * nh)) : 0;
-  float4 d10 = read_imagef(input, SAMPLER, (int2)((w + 0), (h + 1) + c_pack4 * nh));
-  float4 d11 = read_imagef(input, SAMPLER, (int2)((w + 1), (h + 1) + c_pack4 * nh));
-  float4 d12 = read_imagef(input, SAMPLER, (int2)((w + 2), (h + 1) + c_pack4 * nh));
-  float4 d13 = read_imagef(input, SAMPLER, (int2)((w + 3), (h + 1) + c_pack4 * nh));
-  float4 d20 = h + 2 < nh ? read_imagef(input, SAMPLER, (int2)((w + 0), (h + 2) + c_pack4 * nh)) : 0;
-  float4 d21 = h + 2 < nh ? read_imagef(input, SAMPLER, (int2)((w + 1), (h + 2) + c_pack4 * nh)) : 0;
-  float4 d22 = h + 2 < nh ? read_imagef(input, SAMPLER, (int2)((w + 2), (h + 2) + c_pack4 * nh)) : 0;
-  float4 d23 = h + 2 < nh ? read_imagef(input, SAMPLER, (int2)((w + 3), (h + 2) + c_pack4 * nh)) : 0;
-  float4 d30 = h + 3 < nh ? read_imagef(input, SAMPLER, (int2)((w + 0), (h + 3) + c_pack4 * nh)) : 0;
-  float4 d31 = h + 3 < nh ? read_imagef(input, SAMPLER, (int2)((w + 1), (h + 3) + c_pack4 * nh)) : 0;
-  float4 d32 = h + 3 < nh ? read_imagef(input, SAMPLER, (int2)((w + 2), (h + 3) + c_pack4 * nh)) : 0;
-  float4 d33 = h + 3 < nh ? read_imagef(input, SAMPLER, (int2)((w + 3), (h + 3) + c_pack4 * nh)) : 0;
+  float4 d00 = h >= 0 ? read_imagef(input, sampler, (int2)((w + 0), (h + 0) + c_pack4 * nh)) : 0;
+  float4 d01 = h >= 0 ? read_imagef(input, sampler, (int2)((w + 1), (h + 0) + c_pack4 * nh)) : 0;
+  float4 d02 = h >= 0 ? read_imagef(input, sampler, (int2)((w + 2), (h + 0) + c_pack4 * nh)) : 0;
+  float4 d03 = h >= 0 ? read_imagef(input, sampler, (int2)((w + 3), (h + 0) + c_pack4 * nh)) : 0;
+  float4 d10 = read_imagef(input, sampler, (int2)((w + 0), (h + 1) + c_pack4 * nh));
+  float4 d11 = read_imagef(input, sampler, (int2)((w + 1), (h + 1) + c_pack4 * nh));
+  float4 d12 = read_imagef(input, sampler, (int2)((w + 2), (h + 1) + c_pack4 * nh));
+  float4 d13 = read_imagef(input, sampler, (int2)((w + 3), (h + 1) + c_pack4 * nh));
+  float4 d20 = h + 2 < nh ? read_imagef(input, sampler, (int2)((w + 0), (h + 2) + c_pack4 * nh)) : 0;
+  float4 d21 = h + 2 < nh ? read_imagef(input, sampler, (int2)((w + 1), (h + 2) + c_pack4 * nh)) : 0;
+  float4 d22 = h + 2 < nh ? read_imagef(input, sampler, (int2)((w + 2), (h + 2) + c_pack4 * nh)) : 0;
+  float4 d23 = h + 2 < nh ? read_imagef(input, sampler, (int2)((w + 3), (h + 2) + c_pack4 * nh)) : 0;
+  float4 d30 = h + 3 < nh ? read_imagef(input, sampler, (int2)((w + 0), (h + 3) + c_pack4 * nh)) : 0;
+  float4 d31 = h + 3 < nh ? read_imagef(input, sampler, (int2)((w + 1), (h + 3) + c_pack4 * nh)) : 0;
+  float4 d32 = h + 3 < nh ? read_imagef(input, sampler, (int2)((w + 2), (h + 3) + c_pack4 * nh)) : 0;
+  float4 d33 = h + 3 < nh ? read_imagef(input, sampler, (int2)((w + 3), (h + 3) + c_pack4 * nh)) : 0;
 
   float4 z00 = d00 - d02 - d20 + d22;
   float4 z01 = d01 + d02 - d21 - d22;
@@ -278,83 +286,79 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
   write_imagef(input_mat, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xe + c_pack4 * 16), z32);
   write_imagef(input_mat, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xf + c_pack4 * 16), z33);
 }
+
     )";
   } 
-  else if (find_M == true && (find_U | find_V | find_Y) == false) {
+  else if (find_M == true && (find_U | find_V ) == false) {
+    // only M,inverse output
     this->stream << R"(
-    #define input_mat mali_conv2d_nchw_winograd_M 
-      const int nk_pack4 = (get_image_dim(filter).y/(get_image_dim(filter).x/4)+3)/4;
-      const int nw_pack_wino = (get_image_dim(filter).x/4+2-1)/2;
-      const int nh = get_image_dim(filter).x/4;
-      const int nh_pack_wino = (nh+2-1)/2;
+//printf("mali_conv2d_nchw_winograd_output %d,%d",get_image_dim(mali_conv2d_nchw_winograd_output).x,get_image_dim(mali_conv2d_nchw_winograd_output).y);
+   // return;
+        #define output_mat mali_conv2d_nchw_winograd_M 
+        #define output mali_conv2d_nchw_winograd_output 
+        const int nk_pack4 = (get_image_dim(output).y/get_image_dim(output).x);
+        const int nh = get_image_dim(output).x;
+        const int nh_pack_wino = (nh+2-1)/2;
+        const int nw_pack_wino = nh_pack_wino;
 
 
- const int n_pack4 = get_global_id(0);
-  const int m_pack4 = get_global_id(1);
-  const int batch = get_global_id(2);
+  const int w_pack_wino = get_global_id(0);
+  const int h_pack_wino = get_global_id(1);
+  const int k_pack4 = get_global_id(2);
 
-  if (batch >= nbatch || n_pack4 >= nn_pack4 || m_pack4 >= nm_pack4) return;
+  if (w_pack_wino >= nw_pack_wino || h_pack_wino >= nh_pack_wino || k_pack4 >= nk_pack4) return;
 
-  const int n = n_pack4 << 2;
+  const int w = w_pack_wino << 1;
+  const int h = h_pack_wino << 1;
 
-  float4 a0, a1, a2, a3;
-  float4 b0, b1, b2, b3;
-  float4 c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+  float4 d00 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x0 + k_pack4 * 16));
+  float4 d01 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x1 + k_pack4 * 16));
+  float4 d02 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x2 + k_pack4 * 16));
+  float4 d03 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x3 + k_pack4 * 16));
+  float4 d10 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x4 + k_pack4 * 16));
+  float4 d11 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x5 + k_pack4 * 16));
+  float4 d12 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x6 + k_pack4 * 16));
+  float4 d13 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x7 + k_pack4 * 16));
+  float4 d20 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x8 + k_pack4 * 16));
+  float4 d21 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0x9 + k_pack4 * 16));
+  float4 d22 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xa + k_pack4 * 16));
+  float4 d23 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xb + k_pack4 * 16));
+  float4 d30 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xc + k_pack4 * 16));
+  float4 d31 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xd + k_pack4 * 16));
+  float4 d32 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xe + k_pack4 * 16));
+  float4 d33 = read_imagef(output_mat, sampler, (int2)((w_pack_wino + h_pack_wino * nw_pack_wino), 0xf + k_pack4 * 16));
 
-  for (short k_pack4 = 0; k_pack4 < nk_pack4; k_pack4 += 1) {
-    const int k = k_pack4 << 2;
+  float4 z00 = d00 + d10 + d20 + d01 + d11 + d21 + d02 + d12 + d22;
+  float4 z01 = d01 + d11 + d21 - d02 - d12 - d22 - d03 - d13 - d23;
+  float4 z10 = d10 - d20 - d30 + d11 - d21 - d31 + d12 - d22 - d32;
+  float4 z11 = d11 - d21 - d31 - d12 + d22 + d32 - d13 + d23 + d33;
 
-    a0 = read_imagef(A, SAMPLER, (int2)(m_pack4 * nbatch + batch, k + 0));
-    a1 = read_imagef(A, SAMPLER, (int2)(m_pack4 * nbatch + batch, k + 1));
-    a2 = read_imagef(A, SAMPLER, (int2)(m_pack4 * nbatch + batch, k + 2));
-    a3 = read_imagef(A, SAMPLER, (int2)(m_pack4 * nbatch + batch, k + 3));
-
-    b0 = read_imagef(B, SAMPLER, (int2)(n + 0, batch + k_pack4 * nbatch));
-    b1 = read_imagef(B, SAMPLER, (int2)(n + 1, batch + k_pack4 * nbatch));
-    b2 = read_imagef(B, SAMPLER, (int2)(n + 2, batch + k_pack4 * nbatch));
-    b3 = read_imagef(B, SAMPLER, (int2)(n + 3, batch + k_pack4 * nbatch));
-
-    c0 = mad(b0.x, a0, c0);
-    c0 = mad(b0.y, a1, c0);
-    c0 = mad(b0.z, a2, c0);
-    c0 = mad(b0.w, a3, c0);
-
-    c1 = mad(b1.x, a0, c1);
-    c1 = mad(b1.y, a1, c1);
-    c1 = mad(b1.z, a2, c1);
-    c1 = mad(b1.w, a3, c1);
-
-    c2 = mad(b2.x, a0, c2);
-    c2 = mad(b2.y, a1, c2);
-    c2 = mad(b2.z, a2, c2);
-    c2 = mad(b2.w, a3, c2);
-
-    c3 = mad(b3.x, a0, c3);
-    c3 = mad(b3.y, a1, c3);
-    c3 = mad(b3.z, a2, c3);
-    c3 = mad(b3.w, a3, c3);
-  }
-
-  write_imagef(C, (int2)(n + 0, batch + m_pack4 * nbatch), c0);
-  write_imagef(C, (int2)(n + 1, batch + m_pack4 * nbatch), c1);
-  write_imagef(C, (int2)(n + 2, batch + m_pack4 * nbatch), c2);
-  write_imagef(C, (int2)(n + 3, batch + m_pack4 * nbatch), c3);
+  write_imagef(output, (int2)((w + 0), (h + 0) + k_pack4 * nh), z00);
+  write_imagef(output, (int2)((w + 1), (h + 0) + k_pack4 * nh), z01);
+  write_imagef(output, (int2)((w + 0), (h + 1) + k_pack4 * nh), z10);
+  write_imagef(output, (int2)((w + 1), (h + 1) + k_pack4 * nh), z11);
 }
+
     )";
   } 
   else if ((find_M & find_U & find_V) == true) {
+  // all batch gemm
     this->stream << R"(  
-#define A mali_conv2d_nchw_winograd_U 
-#define B mali_conv2d_nchw_winograd_V 
-#define C mali_conv2d_nchw_winograd_M 
-const int nbatch=4*4;
-const int nm_pack4=get_image_dim(mali_conv2d_nchw_winograd_U).x/4/4;
-const int nk_pack4=get_image_dim(mali_conv2d_nchw_winograd_U).y;
-const int nn_pack4=get_image_dim(mali_conv2d_nchw_winograd_V).x;
 
-const int n_pack4 = get_global_id(0);
+    #define A mali_conv2d_nchw_winograd_U 
+    #define B mali_conv2d_nchw_winograd_V 
+    #define C mali_conv2d_nchw_winograd_M 
+    const int nbatch=4*4;
+    const int nm_pack4=get_image_dim(mali_conv2d_nchw_winograd_U).x/4/4;
+    const int nk_pack4=get_image_dim(mali_conv2d_nchw_winograd_U).y;
+    const int nn_pack4=get_image_dim(mali_conv2d_nchw_winograd_V).x;
+
+    const int n_pack4 = get_global_id(0);
   const int m_pack4 = get_global_id(1);
   const int batch = get_global_id(2);
+    //if (m_pack4==0&&batch==0)
+    //printf("mali_conv2d_nchw_winograd_M %d,%d....",get_image_dim(mali_conv2d_nchw_winograd_M).x,get_image_dim(mali_conv2d_nchw_winograd_M).y);
+    //return;
 
   if (batch >= nbatch || n_pack4 >= nn_pack4 || m_pack4 >= nm_pack4) return;
 
@@ -367,15 +371,15 @@ const int n_pack4 = get_global_id(0);
   for (short k_pack4 = 0; k_pack4 < nk_pack4; k_pack4 += 1) {
     const int k = k_pack4 << 2;
 
-    a0 = read_imagef(A, SAMPLER, (int2)(m_pack4 + batch * nm_pack4, k + 0));
-    a1 = read_imagef(A, SAMPLER, (int2)(m_pack4 + batch * nm_pack4, k + 1));
-    a2 = read_imagef(A, SAMPLER, (int2)(m_pack4 + batch * nm_pack4, k + 2));
-    a3 = read_imagef(A, SAMPLER, (int2)(m_pack4 + batch * nm_pack4, k + 3));
+    a0 = read_imagef(A, sampler, (int2)(m_pack4 + batch * nm_pack4, k + 0));
+    a1 = read_imagef(A, sampler, (int2)(m_pack4 + batch * nm_pack4, k + 1));
+    a2 = read_imagef(A, sampler, (int2)(m_pack4 + batch * nm_pack4, k + 2));
+    a3 = read_imagef(A, sampler, (int2)(m_pack4 + batch * nm_pack4, k + 3));
 
-    b0 = read_imagef(B, SAMPLER, (int2)(n + 0, batch + k_pack4 * nbatch));
-    b1 = read_imagef(B, SAMPLER, (int2)(n + 1, batch + k_pack4 * nbatch));
-    b2 = read_imagef(B, SAMPLER, (int2)(n + 2, batch + k_pack4 * nbatch));
-    b3 = read_imagef(B, SAMPLER, (int2)(n + 3, batch + k_pack4 * nbatch));
+    b0 = read_imagef(B, sampler, (int2)(n + 0, batch + k_pack4 * nbatch));
+    b1 = read_imagef(B, sampler, (int2)(n + 1, batch + k_pack4 * nbatch));
+    b2 = read_imagef(B, sampler, (int2)(n + 2, batch + k_pack4 * nbatch));
+    b3 = read_imagef(B, sampler, (int2)(n + 3, batch + k_pack4 * nbatch));
 
     c0 = mad(b0.x, a0, c0);
     c0 = mad(b0.y, a1, c0);
@@ -911,8 +915,50 @@ void CodeGenC::VisitExpr_(const NotNode* op, std::ostream& os) {  // NOLINT(*)
   PrintExpr(op->a, os);
 }
 
+void removeSubstrs(std::string& s, const std::string& p) {
+  std::string::size_type n = p.length();
+
+  for (std::string::size_type i = s.find(p); i != std::string::npos;
+       i = s.find(p))
+    s.erase(i, n);
+}
 void CodeGenC::PrintCallExtern(Type ret_type, String global_symbol, const Array<PrimExpr>& args,
                                bool skip_first_arg, std::ostream& os) {  // NOLINT(*)
+    //read_image or write_image axis func
+    if (global_symbol == "image_axis") {
+      
+      os << "(int2)(";
+      ICHECK_EQ(skip_first_arg, true) << " can't skip_first_arg";
+      ICHECK_EQ(args.size(), 3) << " args for image axis must be 2";
+      //DataType dtype = args[1].dtype();
+      //ICHECK_EQ(dtype.lanes(), 4) << " only rgba is support yet ";
+      for (size_t i = static_cast<size_t>(skip_first_arg); i < args.size(); ++i) {
+        PrimExpr tmp_prim = args[i];
+        if (auto* ptr = tmp_prim.as<tir::RampNode>()) {
+          ICHECK_EQ(ptr->lanes, 4) << " only rgba is support yet ";
+          std::ostringstream temp;
+          this->PrintExpr(ptr->base, temp);
+          // 4 == lanes
+          temp << "/4";
+          std::string img_x_axes = tvm::tir::exprSimp::DoSimplify(temp.str());
+          img_x_axes = Simplify_with_const_var(img_x_axes);
+          os << img_x_axes;
+        } else if (auto* ptr = tmp_prim.as<tir::BroadcastNode>()) {
+          std::ostringstream temp;
+          this->PrintExpr(ptr->value, temp);
+          std::string img_y_axes = Simplify_with_const_var(temp.str());
+          os << img_y_axes;
+        }
+        else {
+          ICHECK(false) << " should not happen";
+        }
+        if (i < args.size() - 1) {
+          os << ", ";
+        }
+      }
+      os << ")";
+      return;
+  }
   if (global_symbol != "mul_must_be_replace") {
     os << global_symbol << "(";
   }
@@ -1047,9 +1093,18 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
 
     arith::PVar<PrimExpr> base;
     bool is_climg_bug_not_cl_rgba = op->dtype.is_climgfloatrw() && (USE_CL_RGBA == 0);
-    if (is_climg_bug_not_cl_rgba == false && arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)) {
-      std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), base.Eval());
-      HandleVolatileLoads(ref, op, os);
+    if (is_climg_bug_not_cl_rgba == false) {
+      if (arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)) {
+        std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), base.Eval());
+        HandleVolatileLoads(ref, op, os);
+      } else if (auto *axis_p = (op->index).as<CallNode>()) {
+        std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), op->index);
+        //std::string ref = PrintExpr(op->index);
+        HandleVolatileLoads(ref, op, os);
+      }
+      else {
+        ICHECK(false) << " should go here";
+      }
     } else {
       std::ostringstream svalue_expr;
       std::string sindex = SSAGetID(PrintExpr(op->index), op->index.dtype());
@@ -1122,10 +1177,19 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
 
    
     bool is_climg_bug_not_cl_rgba = is_climg && (USE_CL_RGBA == 0);
-    if (is_climg_bug_not_cl_rgba == false && arith::ramp(base, 1, t.lanes()).Match(op->index)) {
-      std::string value = this->PrintExpr(op->value);
-      auto new_code = is_climg? DataType::kCLImgFloatW:DataType::kFloat;
-      this->PrintVecStore(op->buffer_var.get(), t.with_code(new_code), base.Eval(), value);
+    if (is_climg_bug_not_cl_rgba == false) {
+      if (arith::ramp(base, 1, t.lanes()).Match(op->index)) {
+        std::string value = this->PrintExpr(op->value);
+        auto new_code = is_climg ? DataType::kCLImgFloatW : DataType::kFloat;
+        this->PrintVecStore(op->buffer_var.get(), t.with_code(new_code), base.Eval(), value);
+      } else if (auto* axis_p = (op->index).as<CallNode>()) {
+        auto new_code = is_climg ? DataType::kCLImgFloatW : DataType::kFloat;
+        std::string value = this->PrintExpr(op->value);
+        this->PrintVecStore(op->buffer_var.get(), t.with_code(new_code), op->index, value);
+      } else {
+      
+      ICHECK(false) << "should not go here";
+      }
     } else {
       // The assignment below introduces side-effect, and the resulting value cannot
       // be reused across multiple expression, thus a new scope is needed
@@ -1408,7 +1472,7 @@ static bool CheckOutermostBracketMatch(const std::string& s) {
 }
 
 // for string delimiter
-static std::vector<std::string> split(std::string s, std::string delimiter) {
+std::vector<std::string> split_string(std::string s, std::string delimiter) {
   size_t pos_start = 0, pos_end;
   std::string token;
   std::vector<std::string> res;
@@ -1466,7 +1530,7 @@ bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
     new_base_index = var_declare_map_[remove_space];
     return true;
   }
-  std::vector<std::string> vec_base = split(remove_space, "+*-/%");
+  std::vector<std::string> vec_base = split_string(remove_space, "+*-/%");
   std::vector<std::string> vec_combine;
   for (const auto& v : vec_base) {
     if (vec_combine.empty()) {
