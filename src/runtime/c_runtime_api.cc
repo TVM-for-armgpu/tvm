@@ -428,23 +428,58 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t size, in
       uint64_t full = 0xffffffffffffffff;
       encoded_shape = (full >> (64 - 56)) & encoded_shape;
       std::vector<int> values(ndim, 0);
-      for (size_t i = 0; i < ndim; ++i) {
-        // 0---63bit---
-        //|---bytes---|-shape dim-|----N----|----C------|--H------|----W-----|-----C-----|
-        //|-----4-----|-----3-----|---12----|-----12----|---12----|----12----|-----8----|
-        //|---bytes---|-shape
-        //dim-|---I-----|----O------|--H------|----W-----|------1----|-----C-----|
-        //|-----4-----|-----3-----|---12----|-----12----|---12----|---12-----|------4----|------4----|
-
-        // for layout IOHW1i4o
-        if (i == 4 && ndim == 6) {
-          values[i] = encoded_shape >> 4;
-          values[i + 1] = encoded_shape & 0xf;
-          break;
-        }
-        int abc = (12 * (ndim - bit_shift_offset - int(i))) - 4 * (i == 4 ? 0 : 1);
-        values[i] = encoded_shape >> abc;
+          //0---63bit---  w is used for winograd w*h
+    //|---bytes---|-shape dim-|----N----|----C------|----H----|----W-----|-----C-----|
+    //|-----4-----|-----3-----|----4----|-----16----|---16----|----16----|-----4----|
+    
+    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
+    //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
+      if (ndim == 5) {
+        int abc = (16*3+4);
+        values[0] = encoded_shape >> abc;
         encoded_shape &= (full >> (64 - abc));
+
+        abc = (16*2+4);
+        values[1] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (16*1+4);
+        values[2] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (16*0+4);
+        values[3] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (0);
+        values[4] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+      }else if(ndim == 6){
+        int abc = (16*2+8);
+        values[0] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (16*1+8);
+        values[1] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (8*1+8);
+        values[2] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (8);
+        values[3] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (4);
+        values[4] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+
+        abc = (0);
+        values[5] = encoded_shape >> abc;
+        encoded_shape &= (full >> (64 - abc));
+      }else{
+        ICHECK(false) << "error layout decode failed";
       }
       return values;
   };

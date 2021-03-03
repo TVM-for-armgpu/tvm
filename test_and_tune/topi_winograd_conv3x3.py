@@ -36,13 +36,13 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     in_channel = CI
     out_channel = CO
     in_size=H
-    open_image = 0
+    open_image = 1
     ddtype = 'float32'
     if open_image:
         ddtype = 'climgfloatr32'
-    data_pl = te.placeholder((1, CI, H, W,4),
+    data_pl = te.placeholder((1, CI//4, H, W,4),
                              name='data', dtype=ddtype)
-    kernel_pl = te.placeholder((CI*4, CO, KW, KH, 1, 4),
+    kernel_pl = te.placeholder((CI, CO//4, KW, KH, 1, 4),
                                name='filter', dtype=ddtype)
     conv_pl = topi.mali.conv2d_nchw_winograd_nchwc_io(data_pl, kernel_pl, 1, 1,
                                      1, ddtype.replace('r','w'))
@@ -79,7 +79,7 @@ dtype = "float32"
 tuning_option = {
     "log_filename": log_file,
     "tuner": "xgb",
-    "n_trial": 2000,
+    "n_trial": 320,
     "use_transfer_learning":True,
     "early_stopping": 450,
     "measure_option": autotvm.measure_option(
@@ -89,7 +89,7 @@ tuning_option = {
             host="0.0.0.0",
             port=TRACKER_PORT,
             number=10,
-            timeout=150,
+            timeout=15,
         ),
     ),
 }
@@ -118,7 +118,7 @@ def tune_tasks(
     tasks,
     measure_option,
     tuner="xgb",
-    n_trial=1000,
+    n_trial=20,
     early_stopping=None,
     log_filename="tuning.log",
     use_transfer_learning=True,
@@ -174,7 +174,7 @@ def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
 
     print("Extract tasks...", os.getpid())
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 64, 64, 3, 3, (1, 1), (1, 1)
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 256, 512, 3, 3, (1, 1), (1, 1)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
     )
