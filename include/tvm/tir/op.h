@@ -663,6 +663,8 @@ TVM_DLL PrimExpr likely(PrimExpr cond, Span span = Span());
  * \param span The location of this operation in the source.
  */
 TVM_DLL PrimExpr pow(PrimExpr x, PrimExpr y, Span span = Span());
+TVM_DLL PrimExpr image_axis(PrimExpr a, PrimExpr b, Span span = Span());
+
 /*!
  * \brief Calculate absolute value of x.
  * \param x The input data
@@ -1228,6 +1230,7 @@ TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD_SPANNED(floormod);
 TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD_SPANNED(right_shift);  // NOLINT(*)
 TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD_SPANNED(left_shift);   // NOLINT(*)
 TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD_SPANNED(bitwise_and);
+//TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD_SPANNED(image_axis);
 TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD_SPANNED(bitwise_or);
 TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD_SPANNED(bitwise_xor);
 TVM_DEFINE_INT_OP_CONST_VAL_OVERLOAD(operator>>);  // NOLINT(*)

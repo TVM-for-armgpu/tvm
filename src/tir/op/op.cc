@@ -308,7 +308,6 @@ PrimExpr encode_shape_fold(Array<PrimExpr> values) {
   }
   ICHECK_LT(encoded_shape, std::numeric_limits<int64_t>::max());
   ICHECK_GT(encoded_shape, 0);
-  LOG(WARNING) << encoded_shape << " float nums" << values;
   return IntImm(DataType::Int(64), encoded_shape);
 };
 }  // namespace runtime
@@ -667,6 +666,15 @@ PrimExpr pow(PrimExpr x, PrimExpr y, Span span) {
 }
 
 TIR_REGISTER_PURE_BINARY_OP("tir.pow").set_attr<TVectorizable>("TVectorizable", true);
+
+PrimExpr image_axis(PrimExpr a, PrimExpr b, Span span) {
+  ICHECK(a.dtype().is_int() || a.dtype().is_uint());
+  ICHECK(b.dtype().is_int() || b.dtype().is_uint());
+  BinaryOpMatchTypes(a, b, span);
+  static auto op = Op::Get("tir.image_axis");
+  return tir::Call(a.dtype(), op, {a, b}, span);
+}
+TIR_REGISTER_PURE_BINARY_OP("tir.image_axis").set_attr<TVectorizable>("TVectorizable", true);
 
 // abs
 PrimExpr abs(PrimExpr x, Span span) {

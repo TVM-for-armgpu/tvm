@@ -1,10 +1,6 @@
 import tvm
 from tvm import te, topi
 from tvm.topi import nn
-import tvm.testing
-from tvm import te
-import numpy
-import numpy as np
 
 # Algorithm
 # kernel transform
@@ -61,6 +57,7 @@ def kernel_transform_shedule(cfg, s, U):
 
     #cpo, cpi = s[U].split(cp, factor=4)
     #kpo, kpi = s[U].split(kp, factor=4)
+
     s[U].bind(cpo, block_x)
     s[U].bind(kpo, block_y)
     s[U].bind(kpi, thread_x)
@@ -181,6 +178,7 @@ def data_transform_shedule(cfg,  s, V):
 
     #hp, Vhp = s[V].split(hp, factor=4)
     #hpo, hpi = s[V].split(hp, factor=4)
+
     s[V].bind(wpo, block_x)
     s[V].bind(hpo, block_y)
     s[V].bind(cpo, block_z)
@@ -260,10 +258,8 @@ def batch_gemm_shedule(cfg, s, M):
     hpo, hpi = cfg["bgemm_hp"].apply(s, M, hp)
 
     #kpo, kpi = s[M].split(kp, factor=4)
-    
     #wp, Mwp = s[M].split(wp, factor=4)
     #wpo, wpi = s[M].split(wp, factor=4)
-
     #hpo, hpi = s[M].split(hp, factor=4)
 
     s[M].bind(wpo, block_x)
@@ -382,15 +378,15 @@ def inverse_transform_shedule(cfg, s, output):
     
 
     cpo, cpi = cfg["inv_cp"].apply(s, O, cp)
-    #cpo, cpi = s[O].split(cp, factor=4)
+    wpo, wpi, Owp=cfg["inv_wp"].apply(s, O, wp)
+    hpo, hpi, Ohp=cfg["inv_hp"].apply(s, O, hp)
 
+    #cpo, cpi = s[O].split(cp, factor=4)
     #wp, Owp = s[O].split(wp, factor=4)
     #wpo, wpi = s[O].split(wp, factor=4)
-    wpo, wpi, Owp = cfg["inv_wp"].apply(s, O, wp)
-
     #hp, Ohp = s[O].split(hp, factor=4)
     #hpo, hpi = s[O].split(hp, factor=4)
-    hpo, hpi, Ohp = cfg["inv_hp"].apply(s, O, hp)
+
 
     s[O].bind(wpo, block_x)
     s[O].bind(hpo, block_y)

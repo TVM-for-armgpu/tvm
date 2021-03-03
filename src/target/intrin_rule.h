@@ -48,6 +48,15 @@ struct FloatSuffix {
   }
 };
 
+struct Int32Suffix {
+  std::string operator()(DataType t, std::string name) const {
+    if (t == DataType::Int(32)) {
+      return name;
+    } else {
+      return "";
+    }
+  }
+};
 // Return the intrinsic name
 struct Direct {
   std::string operator()(DataType t, std::string name) const { return name; }
