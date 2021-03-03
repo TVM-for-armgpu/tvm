@@ -44,6 +44,7 @@ target_host = "llvm -mtriple=%s-linux-android" % arch
 # whether enable to execute test on OpenCL target
 test_opencl = True 
 # whether enable to execute test on Vulkan target
+print(os.getpid())
 test_vulkan = False
 
 
@@ -94,10 +95,10 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     idxmod = tvm.tir.indexmod
     B = te.compute(
         (K_P, H_P,W_P*PACK4),
-        #lambda ff,yy,xx_p4: extern_op.mysum(
-        lambda ff,yy,xx_p4: te.sum(
-            Apad[idxdiv(rc,4),yy,idxmod(rc,4)+idxdiv(xx_p4,4)*4] * W[rc,ff*PACK4+idxmod(xx_p4,4)], axis=[rc]
-            #extern_op.mymul(Apad[idxdiv(rc,4),yy,idxmod(rc,4)+idxdiv(xx_p4,4)*4] , W[rc,ff*PACK4+idxmod(xx_p4,4)]), axis=[rc]
+        lambda ff,yy,xx_p4: extern_op.mysum(
+        #lambda ff,yy,xx_p4: te.sum(
+            #Apad[idxdiv(rc,4),yy,idxmod(rc,4)+idxdiv(xx_p4,4)*4] * W[rc,ff*PACK4+idxmod(xx_p4,4)], axis=[rc]
+            extern_op.mymul(Apad[idxdiv(rc,4),yy,idxmod(rc,4)+idxdiv(xx_p4,4)*4] , W[rc,ff*PACK4+idxmod(xx_p4,4)]), axis=[rc]
         ),
         name="B",
     )
@@ -242,6 +243,7 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     # latency of convolution.
     #
     #print(tvm.lower(s, [A, W, B], simple_mode=True))
+    #exit(0)
 
 
     return s, [A,W, B]
@@ -289,7 +291,7 @@ def test_rpc_module():
     print("test opencl")
     # Compile the Graph for OpenCL target
     if test_opencl:
-        N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 512, 256, 1, 1, (1, 1), (0, 0)
+        N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 512, 256, 1, 1, (1, 1), (0, 0)
         PACK4 = 4
         W_P = H
         H_P = H

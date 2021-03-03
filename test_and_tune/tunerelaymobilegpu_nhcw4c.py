@@ -87,7 +87,6 @@ import sys
 # We can also load models from MXNet, ONNX and TensorFlow.
 
 TRACKER_PORT=9090
-open_image=1
 @autotvm.template("tutorial/conv2d_no_batching")
 def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     assert N == 1, "Only consider batch_size = 1 in this template"
@@ -509,7 +508,7 @@ def tune_and_evaluate(tuning_opt):
         a_tvm = tvm.nd.array(a_tvm_np, ctx=ctx, dtype=arg_bufs[0].dtype)
         w_tvm = tvm.nd.array(w_tvm_np, ctx=ctx, dtype = arg_bufs[1].dtype)
         c_tvm = tvm.nd.empty(arg_bufs[2].shape, ctx=ctx,dtype = arg_bufs[2].dtype)
-        time_f = rlib.time_evaluator(rlib.entry_name, ctx, number=10)
+        time_f = rlib.time_evaluator(rlib.entry_name, ctx, number=3)
         cost = time_f(a_tvm, w_tvm, c_tvm).mean
         print("Time cost of this operator: %f" % cost)
         

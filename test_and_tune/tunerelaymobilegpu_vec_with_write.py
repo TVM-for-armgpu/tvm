@@ -1,64 +1,3 @@
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
-"""
-Auto-tuning a Convolutional Network for Mobile GPU
-==================================================
-**Author**: `Lianmin Zheng <https://github.com/merrymercy>`_, `Eddie Yan <https://github.com/eqy>`_
-
-Auto-tuning for a specific device is critical for getting the best
-performance. This is a tutorial about how to tune a whole convolutional
-network.
-
-The operator implementation for Mobile GPU in TVM is written in template form.
-The template has many tunable knobs (tile factor, vectorization, unrolling, etc).
-We will tune all convolution, depthwise convolution and dense operators
-in the neural network. After tuning, we produce a log file which stores
-the best knob values for all required operators. When the TVM compiler compiles
-these operators, it will query this log file to get the best knob values.
-
-We also released pre-tuned parameters for some arm devices. You can go to
-`Mobile GPU Benchmark <https://github.com/apache/tvm/wiki/Benchmark#mobile-gpu>`_
-to see the results.
-
-Note that this tutorial will not run on Windows or recent versions of macOS. To
-get it to run, you will need to wrap the body of this tutorial in a :code:`if
-__name__ == "__main__":` block.
-"""
-
-######################################################################
-# Install dependencies
-# --------------------
-# To use the autotvm package in tvm, we need to install some extra dependencies.
-# (change "3" to "2" if you use python2):
-#
-# .. code-block:: bash
-#
-#   pip3 install --user psutil xgboost tornado
-#
-# To make TVM run faster during tuning, it is recommended to use cython
-# as FFI of tvm. In the root directory of tvm, execute
-# (change "3" to "2" if you use python2):
-#
-# .. code-block:: bash
-#
-#   pip3 install --user cython
-#   sudo make cython3
-#
-# Now return to python code. Import packages.
 
 import os
 
@@ -97,6 +36,7 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     data = te.placeholder((N, CI, H, W), name="data", dtype=ddtype)
     kernel = te.placeholder((CO, CI, KH, KW), name="filter",dtype=ddtype)
     conv = topi.nn.conv2d_nchw(data, kernel, stride, padding, dilation=0, out_dtype="climgfloatw32")
+    conv.dtype="climgfloatw32"
     s = te.create_schedule([conv.op])
 
     ##### space definition begin #####
@@ -320,7 +260,7 @@ def tune_and_evaluate(tuning_opt):
 
     # run tuning tasks
     print("Tuning...")
-    tune_tasks([tasks], **tuning_opt)
+    #tune_tasks([tasks], **tuning_opt)
 
     # compile kernels with history best records
     with autotvm.apply_history_best(log_file) as dispatch_context:
@@ -332,7 +272,7 @@ def tune_and_evaluate(tuning_opt):
             s, arg_bufs = conv2d_no_batching(N, H, W, CO, CI, KH, KW, strides, padding)
             lib = tvm.build(s, arg_bufs, target_host=target_host)
             func=lib
-            #print(func.imported_modules[0].get_source()) if len(func.imported_modules) > 0 else print("source not imported")
+            print(func.imported_modules[0].get_source()) if len(func.imported_modules) > 0 else print("source not imported")
         # export library
         tmp = tempdir()
         if use_android:
