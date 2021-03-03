@@ -279,18 +279,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
     os << GetVarID(buffer) << ", ";
     if (t.is_climgfloat()) {
       os << "sampler, ";
-    } else {
-      if ("mali_conv2d_nchw_winograd_U1" == vid||
-          "mali_conv2d_nchw_winograd_M1" == vid) {
-        std::string vvv = ossbase.str().substr(7);
-        vvv.pop_back();
-        auto xyb = split_string(vvv, ",");
-        xyb[1] = xyb[1].substr(1);
-        os << "(int2)(" << xyb[1] <<","<< xyb[0] << ")";
-        //os << "(int2)(0,0)";
-        return;
-      }
-    }
+    } 
     os << ossbase.str();
     return;
   }
@@ -403,20 +392,6 @@ void CodeGenOpenCL::PrintVecStore(const VarNode* buffer, DataType t, PrimExpr ba
   }
   if (nt.is_climgfloatrw()) {
 #if USE_CL_RGBA
-    std::ostringstream ossbase;
-    PrintExpr(base, ossbase);
-    std::string vvv = ossbase.str().substr(7);
-    vvv.pop_back();
-    auto xyb = split_string(vvv, ",");
-    xyb[1] = xyb[1].substr(1);
-    if ("mali_conv2d_nchw_winograd_U1" == vid|| "mali_conv2d_nchw_winograd_M1" == vid) {
-      stream << "\nif (" + xyb[0] + "<0||" + xyb[0] + ">=get_image_dim(" + vid + ").x||" + xyb[1] +
-                    "<0||" + xyb[1] + ">=get_image_dim(" + vid + ").y){//printf(\"" + vid +
-                    " over x=%d,y=%d---%d,%d...\"," + vvv + 
-          ",get_image_dim(" + vid + ").x,get_image_dim(" + vid + ").y"+
-          ");\nreturn;}\n";
-
-     }
     stream << "write_imagef(";
     // don't know why t's type was eliminated
     PrintVecAddr(buffer, nt.with_code(kDLCLImgFloatW), base, stream);

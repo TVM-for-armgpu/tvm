@@ -137,6 +137,11 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
   bool find_U = false, find_V = false, find_M = false;
   for (size_t i = 0; i < f->params.size(); ++i) {
     tir::Var v = f->params[i];
+    int vt_code = GetValueType(GetType(v));
+    if ((kDLCLImgFloat != vt_code || kDLCLImgFloatW != vt_code)) {
+      find_U = false, find_V = false, find_M = false;
+      break;
+    }
     auto getVarName = [](const tir::VarNode* v) { return v->name_hint; };
     if ("mali_conv2d_nchw_winograd_U" == getVarName(v.get())) {
       find_U = true;
@@ -1472,7 +1477,7 @@ static bool CheckOutermostBracketMatch(const std::string& s) {
 }
 
 // for string delimiter
-std::vector<std::string> split_string(std::string s, std::string delimiter) {
+std::vector<std::string> split_string(std::string s, std::string delimiter, bool remove_delim) {
   size_t pos_start = 0, pos_end;
   std::string token;
   std::vector<std::string> res;
@@ -1481,7 +1486,7 @@ std::vector<std::string> split_string(std::string s, std::string delimiter) {
     if (delimiter.find(s[pos_end]) != std::string::npos) {
       if (pos_end - pos_start != 0) {
         res.emplace_back(s.substr(pos_start, pos_end - pos_start));
-        pos_start = pos_end;
+        pos_start = pos_end + remove_delim;
       }
     }
   }
