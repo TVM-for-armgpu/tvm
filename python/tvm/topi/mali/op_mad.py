@@ -54,6 +54,6 @@ n = te.var("n")
 m = te.var("m")
 mad = te.comm_reducer(lambda x, y: mymad(x,y),
     lambda t: tvm.tir.const(0, dtype=t), name="mad")
-print("registor op success")
+#print("registor op success")
 
 

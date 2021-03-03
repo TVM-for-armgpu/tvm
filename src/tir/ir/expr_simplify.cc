@@ -26,12 +26,12 @@ struct Token {
 
 inline bool is_valid_punctuation(const std::string& c) {
   return c == "(" || c == ")" || c == "+" || c == "*" || c == "/" || c == "%" || c == "&" ||
-         c == "|" || c == "<<" || c == ">>" || c == "!";
+         c == "|" || c == "<<" || c == ">>" || c == "!";// || c == "-";
 }
 
 constexpr bool is_expon_by_2(int32_t number) { return (number & number - 1) == 0; }
 
-constexpr uint32_t lowbit(uint32_t x) { return x & -x; }
+constexpr uint32_t lowbit(int32_t x) { return x & -x; }
 
 constexpr uint32_t get_nearsest_expo_by2(uint32_t a) {
   int n = a - 1;
@@ -123,7 +123,7 @@ std::vector<Token> lex(const char* expr) {
             if (is_valid_punctuation(token_lit)) {
               token.punctuation = token_lit;
             } else {
-              throw std::runtime_error("unrecognized punctuation");
+              throw std::runtime_error("unrecognized punctuation:'" + token_lit+"' ");
             }
             break;
           case L_TOKEN_INTEGER:
@@ -503,6 +503,9 @@ int simplify_upper_bound_of(const std::shared_ptr<Ast>& ast) {
   if (ast->is_node("+")) {
     return simplify_upper_bound_of(ast->left) + simplify_upper_bound_of(ast->right);
   }
+  //if (ast->is_node("-")) {
+  //  return simplify_upper_bound_of(ast->left) - simplify_upper_bound_of(ast->right);
+  //}
   throw std::logic_error("not implemented yet");
 }
 
