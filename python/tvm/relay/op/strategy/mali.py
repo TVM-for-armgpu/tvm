@@ -74,7 +74,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         wrap_topi_schedule(
                             topi.mali.schedule_conv2d_NCHWc),
                         name="conv2d_nchwc.mali",
-                        plevel=12,
+                        plevel=15,
                     )
 
             elif kernel_layout == "IOHW":
@@ -113,7 +113,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         wrap_compute_conv2d(
                             topi.mali.conv2d_nchw_winograd_nchwc_conv3x3_io),
                         wrap_topi_schedule(
-                            topi.mali.schedule_conv2d_nchw_winograd_nchwc_io),
+                            topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io),
                         name="conv2d_nchw_winograd_nchwc_io.mali",
                         plevel=15,
                     )
@@ -190,7 +190,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         wrap_topi_schedule(
                             topi.mali.schedule_conv2d_NCHWc),
                         name="conv2d_NCHWc.mali",
-                        plevel=20,
+                        plevel=15,
                     )
             elif (
                 kh == 3
@@ -203,9 +203,9 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                 if kernel_layout == "IOHW1i4o":
                     strategy.add_implementation(
                         wrap_compute_conv2d(
-                            topi.mali.conv2d_nchw_winograd_nchwc_io, True, True),
+                            topi.mali.conv2d_nchw_winograd_NCHWc_io, True, True),
                         wrap_topi_schedule(
-                            topi.mali.schedule_conv2d_nchw_winograd_nchwc_io),
+                            topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io),
                         name="conv2d_nchw_winograd_NCHWC_io.mali",
                         plevel=20,
                     )
@@ -218,6 +218,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
         if layout == "NCHW":
             assert kernel_layout in ["IOHW", "OIHW"]
             if kernel_layout == "IOHW":
+                channel_multiplier,__, _,_ = get_const_tuple(kernel.shape)
                 assert kernel_layout == "IOHW"
                 strategy.add_implementation(
                     wrap_compute_conv2d(topi.mali.depthwise_conv2d_nchw_io),
@@ -225,6 +226,31 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         topi.mali.schedule_depthwise_conv2d_nchw_io),
                     name="depthwise_conv2d_nchw_io.mali",
                 )
+                if channel_multiplier == 1:
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.mali.depthwise_conv2d_NCHWc_io_wrap),
+                        wrap_topi_schedule(
+                            topi.mali.schedule_depthwise_conv2d_nchwc_io_wrap),
+                        name="depthwise_conv2d_nchwc_io.mali",
+                        plevel=15,
+                    )
+                else:
+                    _ = "not support for the other channel_multiplier"
+            elif layout == "NCHW4c":
+                if channel_multiplier == 1:
+                    strategy.add_implementation(
+                        wrap_compute_conv2d(
+                            topi.mali.depthwise_conv2d_NCHWc_io),
+                        wrap_topi_schedule(
+                            topi.mali.schedule_depthwise_conv2d_nchwc_io),
+                        name="depthwise_conv2d_nchwc_io.mali",
+                        plevel=15,
+                    )
+                else:
+                    raise RuntimeError(
+                        "Unsupported depthwise_conv2d layout {} for mali when channel_multiplier !=1".format(layout)
+                        )
             else:
                 assert kernel_layout == "OIHW"
                 strategy.add_implementation(
@@ -277,13 +303,14 @@ def conv2d_NCHWc_strategy_mali(attrs, inputs, out_type, target):
     return strategy
 
 @depthwise_conv2d_NCHWc_strategy.register("mali")
-def depthwise_conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target):
+def depthwise_conv2d_NCHWc_strategy_mali(attrs, inputs, out_type, target):
     """depthwise_conv2d_NCHWc adopted from arm_cpu"""
     strategy = _op.OpStrategy()
     strategy.add_implementation(
         wrap_compute_conv2d(topi.mali.depthwise_conv2d_NCHWc_io, True, True),
         wrap_topi_schedule(topi.mali.schedule_depthwise_conv2d_NCHWc_io),
         name="depthwise_conv2d_NCHWc_io.mali",
+        plevel=15,
     )
     return strategy
 
@@ -315,10 +342,10 @@ def conv2d_winograd_without_weight_transfrom_strategy_mali(attrs, inputs, out_ty
         assert len(
             kernel.shape) == 6, "Kernel must be packed into 6d-dim nchwc1i4o"
         strategy.add_implementation(
-            wrap_compute_conv2d(topi.mali.conv2d_nchw_winograd_nchwc_io),
+            wrap_compute_conv2d(topi.mali.conv2d_nchw_winograd_nchwc_io,True,True),
             wrap_topi_schedule(
-                topi.mali.schedule_conv2d_nchw_winograd_nchwc_io),
-            name="conv2d_nchw_winograd_nchwc.mali",
+                topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io),
+            name="conv2d_nchw_winograd_NCHWc_io.mali",
         )
     elif layout == "NHWC":
         if not is_auto_scheduler_enabled():

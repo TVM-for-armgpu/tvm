@@ -141,12 +141,10 @@ def depthwise_conv2d_nchw(cfg, data, kernel, strides, padding, dilation, out_dty
     return nn.depthwise_conv2d_nchw(data, kernel, strides, padding, dilation, out_dtype)
 
 
-def _pack_data(cfg, data, kernel):
+def _pack_data(data, kernel,ic_bn, oc_bn):
     n, ic, ih, iw = get_const_tuple(data.shape)
     filters, cm, kh, kw = get_const_tuple(kernel.shape)
     oc = filters * cm
-    ic_bn, oc_bn = cfg["tile_ic"].size[-1], cfg["tile_oc"].size[-1]
-
     ic_chunk = ic // ic_bn
     oc_chunk = oc // oc_bn
 
@@ -207,6 +205,7 @@ def depthwise_conv2d_NCHWc_io(
         batch, in_channel, in_height, in_width = get_const_tuple(data.shape)
         channel_multiplier, out_channel, filter_height, filter_width = get_const_tuple(
             kernel.shape)
+        ic_bn = oc_bn = 4
     assert channel_multiplier == 1
 
     strides = strides if isinstance(strides, (tuple, list)) else (strides, strides)
@@ -227,9 +226,6 @@ def depthwise_conv2d_NCHWc_io(
 
     cfg.define_knob("tile_ic", [4])
     cfg.define_knob("tile_oc", [4])
-    cfg.define_split("tile_ow", out_width, num_outputs=2, filter=lambda y: y.size[-1] <= 64)
-    cfg.define_knob("unroll_kw", [True, False])
-
     # get workload and related schedule config
     wkl = _get_workload(
         te.placeholder((batch, in_channel, in_height, in_width), dtype=data.dtype),
@@ -241,24 +237,25 @@ def depthwise_conv2d_NCHWc_io(
         dilation,
         out_dtype,
     )
+    cfg.is_fallback = False
     #if cfg.is_fallback:
-        #_fallback_schedule(cfg, wkl)
+    #_fallback_schedule(cfg, wkl)
 
     # Pack data if raw 4-D data is provided.
     # This can only happen when autotuning.
     if len(data.shape) == 4:
         if autotvm.GLOBAL_SCOPE.in_tuning:
             # Directly use modified data layout placeholder.
-            ic_bn = cfg["tile_ic"].size[-1]
+            ic_bn = cfg["tile_ic"].val
             ic_chunk = in_channel // ic_bn
-            oc_bn = cfg["tile_oc"].size[-1]
+            oc_bn = cfg["tile_oc"].val
             oc_chunk = out_channel // oc_bn
             dshape = (batch, ic_chunk, in_height, in_width, ic_bn)
             data = tvm.te.placeholder(dshape, data.dtype, name="data")
             kshape = (1, oc_chunk, filter_height, filter_width, 1, oc_bn)
             kernel = tvm.te.placeholder(kshape, kernel.dtype, name="filter")
         else:
-            data, kernel = _pack_data(cfg, data, kernel)
+            data, kernel = _pack_data(data, kernel,ic_bn, oc_bn)
             _, _, _, _, ic_bn = get_const_tuple(data.shape)
             _, oc_chunk, _, _, _, oc_bn = get_const_tuple(kernel.shape)
 
@@ -342,16 +339,16 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     n, c, y, x,_ = s[conv].op.axis
     bc, tc = cfg.define_split("tile_cp", c, num_outputs=2)
     by, ty, yi = cfg.define_split("tile_hp", y, num_outputs=3)
-    bx, tx, xi = cfg.define_split("tile_wp", x, num_outputs=3,filter=lambda y: y.size[-1] >=2)
+    bx, tx, xi = cfg.define_split("tile_wp", x, num_outputs=3)#,filter=lambda y: y.size[-1] >=2)
     cfg.define_annotate(
         "ann_spatial", [yi, xi], policy="try_unroll_vec")
 
     # fallback support
-    #if cfg.is_fallback:
-    #    ref_log = autotvm.tophub.load_reference_log(
-    #        "mali", "rk3399", "depthwise_conv2d_NCHWc_io.mali"
-    #    )
-    #    cfg.fallback_with_reference_log(ref_log)
+    if cfg.is_fallback:
+        ref_log = autotvm.tophub.load_reference_log(
+            "mali", "rk3399", "depthwise_conv2d_NCHWc_io.mali"
+        )
+        cfg.fallback_with_reference_log(ref_log)
     ###### space definition end ######
 
     # schedule pad and pack
@@ -563,31 +560,36 @@ def tile_and_bind3d(s, tensor, z, y, x, z_factor=2, y_factor=None, x_factor=None
     return zo, zi, yo, yi, xo, xi
 
 
-#@depthwise_conv2d_infer_layout.register("mali1")
-#def _depthwise_conv2d_infer_layout(workload, _):
-#    """Infer input/output shapes and layouts from a workload and cfg.
-#
-#    Parameters
-#    ----------
-#    workload : tuple
-#        conv2d workload
-#
-#    cfg : tuple
-#        tvm.autotvm config
-#
-#    Returns
-#    -------
-#    Output : [tuple of tuple and str, tuple of tuple and str]
-#        Input shapes and layouts, and output shapes and layouts
-#    """
-#    _, data, kernel, strides, padding, _, _ = workload
-#    batch_size, in_channel, in_height, in_width = data[1]
-#    filter_channel, channel_multiplier, k_height, k_width = kernel[1]
-#    out_channel = filter_channel * channel_multiplier
-#    out_height = (in_height + 2 * padding[0] - k_height) // strides[0] + 1
-#    out_width = (in_width + 2 * padding[1] - k_width) // strides[1] + 1
-#    in_shape = (batch_size, in_channel, in_height, in_width)
-#    out_shape = (batch_size, out_channel, out_height, out_width)
-#    in_layout = out_layout = "NCHW"
-#    return ((in_shape, in_layout),), ((out_shape, out_layout),)
-#
+@depthwise_conv2d_infer_layout.register("mali")
+def _depthwise_conv2d_infer_layout(workload, cfg):
+    """Infer input/output shapes and layouts from a workload and cfg.
+
+    Parameters
+    ----------
+    workload : tuple
+        conv2d workload
+
+    cfg : tuple
+        tvm.autotvm config
+
+    Returns
+    -------
+    Output : [tuple of tuple and str, tuple of tuple and str]
+        Input shapes and layouts, and output shapes and layouts
+    """
+    _, data, kernel, strides, padding, dilation, _, _, dtype = workload
+    batch_size, in_channel, in_height, in_width = data[1]
+    filter_channel, channel_multiplier, k_height, k_width = kernel[1]
+    out_channel = filter_channel * channel_multiplier
+    out_height = (in_height + padding[0] + padding[2] -
+                  k_height) // strides[0] + 1
+    out_width = (in_width + padding[1] + padding[3] -
+                 k_width) // strides[1] + 1
+    tile_ic, tile_oc = cfg["tile_ic"].val, cfg["tile_oc"].val
+    in_shape = (batch_size, in_channel // tile_ic, in_height, in_width,
+                tile_ic)
+    in_layout = "NCHW%dc" % tile_ic
+    out_shape = (batch_size, out_channel // tile_oc, out_height, out_width,
+                 tile_oc)
+    out_layout = "NCHW%dc" % tile_oc
+    return ((in_shape, in_layout), ), ((out_shape, out_layout), )
