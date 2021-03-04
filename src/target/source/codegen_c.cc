@@ -1169,7 +1169,7 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     // write_image
     if (is_climg) {
 #if USE_CL_RGBA
-      //LOG(FATAL) << "floatx4 Image store is not supported here";
+      LOG(FATAL) << "floatx4 Image store is not supported here";
 #else
       Store_2Dmemo_floatx1(vid, ref, value);
 #endif

@@ -368,7 +368,7 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     ## schedule dilation
     #if isinstance(kernel.op, tvm.te.ComputeOp) and "dilate" in kernel.op.tag:
     #    s[kernel].compute_inline()
-
+    output = conv
     #cache
     pad_dataL = s.cache_read(pad_data, "local", [conv])
     kernelL = s.cache_read(kernel, "local", [conv])
@@ -377,10 +377,8 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     # schedule conv
     #fuse relu add mul etc.
     if op not in s.outputs:
-        s[conv].compute_inline()
+        s[output].compute_inline()
         output = s.outputs[0].output(0)
-    else:
-        output = conv
 
     len_4_flag = False
     if len(s[output].op.axis) == 4:
@@ -401,7 +399,7 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     s[output].bind(hpi, te.thread_axis("threadIdx.y"))
     s[output].bind(wpo, te.thread_axis("blockIdx.x"))
     s[output].bind(wpi, te.thread_axis("threadIdx.x"))
-
+    s[output].reorder(wpi, hpo, cpo, cpi, hpi, wpo, Ohp, n)
 
     s[OL].compute_at(s[output], n)
 
