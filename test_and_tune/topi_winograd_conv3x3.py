@@ -45,7 +45,7 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     kernel_pl = te.placeholder((CI, CO//4, KW, KH, 1, 4),
                                name='filter', dtype=ddtype)
     conv_pl = topi.mali.conv2d_nchw_winograd_nchwc_io(data_pl, kernel_pl, 1, 1,
-                                     1, ddtype.replace('r','w'))
+                                     1, 'NCHW', 'NCHWc', ddtype.replace('r','w'))
     s = topi.mali.schedule_conv2d_nchw_winograd_nchwc_io([conv_pl])
     return s, [data_pl,kernel_pl,conv_pl]
 
@@ -72,7 +72,7 @@ device_key = "android"
 use_android = True
 
 #### TUNING OPTION ####
-network = "topi_winograd"
+network = "topi_winograd3x3"
 log_file = "%s.%s.log" % (device_key, network)
 dtype = "float32"
 
@@ -174,21 +174,22 @@ def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
 
     print("Extract tasks...", os.getpid())
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 256, 512, 3, 3, (1, 1), (1, 1)
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 256, 256, 3, 3, (1, 1), (1, 1)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
     )
 
     # run tuning tasks
     print("Tuning...")
-    tune_tasks([tasks], **tuning_opt)
+    #tune_tasks([tasks], **tuning_opt)
 
     # compile kernels with history best records
-    with autotvm.apply_history_best(log_file) as dispatch_context:
-        best_config = dispatch_context.query(tasks.target, tasks.workload)
-        print("\nBest config:")
-        print(best_config)
-        print("Compile...")
+    #with autotvm.apply_history_best(log_file) as dispatch_context:
+    #    best_config = dispatch_context.query(tasks.target, tasks.workload)
+    #    print("\nBest config:")
+    #    print(best_config)
+    #    print("Compile...")
+    if 1==1:
         with tvm.target.Target("opencl"):
             s, arg_bufs = conv2d_no_batching(N, H, W, CO, CI, KH, KW, strides, padding)
             lib = tvm.build(s, arg_bufs, target_host=target_host)

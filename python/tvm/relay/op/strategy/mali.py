@@ -167,6 +167,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                 )
         elif layout == "NCHW4c":
             assert kernel_layout in ["OIHW1o4i", "IOHW1i4o"]
+            _, _, kh, kw,_,_ = get_const_tuple(kernel.shape)
             if (
                 kh == 1
                 and kw == 1
@@ -251,11 +252,11 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
 @override_native_generic_func("conv2d_NCHWc_strategy")
 def conv2d_NCHWc_strategy_mali(attrs, inputs, out_type, target):
     """conv2d_NCHWc mali strategy"""
-    logger.warning("conv2d_NCHWc can only be used for this platform.")
+    #logger.warning("conv2d_NCHWc can only be used for this platform.")
     kernel_layout = attrs.kernel_layout
-    assert kernel_layout in ["IOHW1o4i", "OIHW1i4o"]
+    assert kernel_layout in ["IOHW1i4o", "OIHW1o4i"]
     strategy = _op.OpStrategy()
-    if kernel_layout == "IOHW1o4i":
+    if kernel_layout == "OIHW1o4i":
         strategy.add_implementation(
             wrap_compute_conv2d(
                 topi.mali.conv2d_NCHWc,True,True),
@@ -274,6 +275,18 @@ def conv2d_NCHWc_strategy_mali(attrs, inputs, out_type, target):
             plevel=20,
         )
     return strategy
+
+@depthwise_conv2d_NCHWc_strategy.register("mali")
+def depthwise_conv2d_NCHWc_strategy_arm_cpu(attrs, inputs, out_type, target):
+    """depthwise_conv2d_NCHWc adopted from arm_cpu"""
+    strategy = _op.OpStrategy()
+    strategy.add_implementation(
+        wrap_compute_conv2d(topi.mali.depthwise_conv2d_NCHWc_io, True, True),
+        wrap_topi_schedule(topi.mali.schedule_depthwise_conv2d_NCHWc_io),
+        name="depthwise_conv2d_NCHWc_io.mali",
+    )
+    return strategy
+
 
 @conv2d_winograd_without_weight_transfrom_strategy.register("mali")
 def conv2d_winograd_without_weight_transfrom_strategy_mali(attrs, inputs, out_type, target):

@@ -53,7 +53,7 @@ def get_network():
     input_shape = (batch_size,) + image_shape
     output_shape = (batch_size, 1000)
 
-    mod, params = tvm.relay.testing.mobilenet.get_workload(
+    mod, params = tvm.relay.testing.resnet.get_workload(
         batch_size=batch_size, layout=layout, dtype=dtype, image_shape=image_shape
     )
     return mod, params, input_shape, input_dtype
@@ -115,7 +115,7 @@ device_key = "android"
 
 
 #### TUNING OPTION ####
-network = 'mobilenet_v1_1.0_224'
+network = 'mobilenet_v1_1.0_224rs'
 log_file = "%s.%s.log" % (device_key, network)
 dtype = 'float32'
 
@@ -123,8 +123,8 @@ use_android=True
 tuning_option = {
     'log_filename': log_file,
     'tuner': 'xgb',
-    'n_trial': 160,
-    'early_stopping': 80,
+    'n_trial': 1,
+    'early_stopping': 30,
 
     'measure_option': autotvm.measure_option(
         builder=autotvm.LocalBuilder(
@@ -271,7 +271,8 @@ def tune_and_evaluate(tuning_opt):
     tune_tasks(tasks, **tuning_opt)
 
     # compile kernels with history best records
-    with autotvm.apply_history_best(log_file):
+    #with autotvm.apply_history_best(log_file):
+    if 1 ==1:
         print("Compile...")
         with relay.build_config(opt_level=3):
             graph, lib, params = relay.build_module.build(

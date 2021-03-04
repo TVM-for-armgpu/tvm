@@ -425,13 +425,13 @@ def conv2d_NCHWc12(cfg,data, kernel, stride, padding, dilation, layout, out_layo
 def conv2d_nchw_conv1x1(data, kernel, strides, padding, dilation, out_dtype="float32"):
     """Compute conv2d internally using conv2d_nchwc layout for any dtype"""
     packed_out = conv2d_NCHWc(data, kernel, strides,
-                              padding, dilation, "NCHW", "NCHW", out_dtype)
+                              padding, dilation, "NCHW", "NCHW4c", out_dtype)
     return unpack_NCHWc_to_nchw(packed_out, out_dtype)
 
 def conv2d_nchw_conv1x1_io(data, kernel, strides, padding, dilation, out_dtype="float32"):
     """Compute conv2d internally using conv2d_nchwc layout for any dtype"""
     packed_out = conv2d_NCHWc_io(data, kernel, strides,
-                              padding, dilation, "NCHW", "NCHW", out_dtype)
+                              padding, dilation, "NCHW", "NCHW4c", out_dtype)
 
     return unpack_NCHWc_to_nchw(packed_out, out_dtype)
 
@@ -866,20 +866,20 @@ def conv2d_nchw_winograd_nchwc_conv3x3(data, kernel, strides, padding, dilation,
     #TODO 
     """Compute conv2d internally using conv2d_nchwc layout for any dtype"""
     packed_out = conv2d_nchw_winograd_nchwc_io(data, kernel, strides,
-                              padding, dilation, "NCHW", "NCHW", out_dtype)
+                              padding, dilation, "NCHW", "NCHW4c", out_dtype)
     return unpack_NCHWc_to_nchw(packed_out, out_dtype)
 
 
 def conv2d_nchw_winograd_nchwc_conv3x3_io(data, kernel, strides, padding, dilation, out_dtype="float32"):
     """Compute conv2d internally using conv2d_nchwc layout for any dtype"""
     packed_out = conv2d_nchw_winograd_nchwc_io(data, kernel, strides,
-                              padding, dilation, "NCHW", "NCHW", out_dtype)
+                              padding, dilation, "NCHW", "NCHW4c", out_dtype)
 
     return unpack_NCHWc_to_nchw(packed_out, out_dtype)
 
     
 @autotvm.register_topi_compute("conv2d_nchw_winograd_NCHWc_io.mali")
-def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation, out_dtype):
+def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype):
     #assert (
     #    out_dtype == 'climgfloatw32' and data.dtype == 'climgfloatr32' and kernel.dtype == 'climgfloatr32'
     #), "only support opencl image type yet"
@@ -970,8 +970,8 @@ def conv2d_nchw_winograd_nchwc_io(cfg, data, kernel, strides, padding, dilation,
 
     ##### space definition begin #####
     cfg.define_split("inv_cp", oc_chunk, num_outputs=2, max_factor=8)
-    cfg.define_split("inv_wp", NTILE, num_outputs=3,
-                     filter=lambda x: x.size[-1] == 4)
+    cfg.define_split("inv_wp", NTILE, num_outputs=3)
+                     #, filter=lambda x: x.size[-1] == 4)
     cfg.define_split("inv_hp", winop2_tile_size, num_outputs=3,
                      filter=lambda x: x.size[-1] == 4)
                      
@@ -1012,8 +1012,30 @@ def schedule_conv2d_nchw_winograd_nchwc_io(cfg, outs):
     def _callback(op):
         if "winograd_conv2d_output" in op.tag:
             mali_winograd._schedule_winograd_nchwc_io(cfg, s, op)
+    scheduled_ops = []
+    def traverse(out_tensor) -> bool:
+        # _callback end
 
-    traverse_inline(s, outs[0].op, _callback)
+        op = out_tensor.op
+        """Traverse operators from computation graph"""
+        # inline all one-to-one-mapping operators except the last stage (output)
+        if tvm.topi.tag.is_broadcast(op.tag) or tvm.topi.tag.is_injective(op.tag):
+            if op not in s.outputs:
+                s[op].compute_inline()
+        if "winograd_conv2d_output" in op.tag:
+            ret_s = _callback(out_tensor.op)
+            return True
+
+        for tensor in op.input_tensors:
+            if isinstance(tensor.op, te.tensor.ComputeOp) and tensor.op not in scheduled_ops:
+                scheduled_ops.append(op)
+                if True == traverse(tensor):
+                    return True
+        return False
+    #traverse_inline(s, outs[0].op, _callback)
+
+    assert traverse(
+        outs[0]) != False, "sch is None, please check you compute body"
     return s
 
 
@@ -1435,9 +1457,42 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
             "conv2d_nchw_winograd_NCHWc_io.mali",
         )
         dispatch_ctx.update(target, new_workload, cfg)
-        return relay.nn.contrib_conv2d_winograd_without_weight_transform(
-            inputs[0], weight_expr, **new_attrs
+        return relay.nn.conv2d(*inputs, **new_attrs)
+    elif topi_tmpl == "depthwise_conv2d_NCHWc_io.mali":
+        # Converting NCHW to NCHWc.
+        assert data_layout == "NCHW" and kernel_layout == "IOHW"
+
+        batch_size, in_channel, height, width = get_const_tuple(data_tensor.shape)
+        channel_multiplier, oc_chunk, kh, kw = get_const_tuple(kernel_tensor.shape)
+        ic_bn, oc_bn = 4, 4
+        assert channel_multiplier == 1
+        out_channel = oc_chunk * oc_bn
+        # update new attrs
+        new_attrs["channels"] = out_channel
+        new_attrs["data_layout"] = "NCHW%dc" % oc_bn
+        new_attrs["kernel_layout"] = "IOHW1i%do" % oc_bn
+        new_attrs["out_layout"] = "NCHW%dc" % oc_bn
+
+        # Store altered operator's config.
+        new_data = te.placeholder(
+            (batch_size, in_channel // ic_bn, height, width, ic_bn), dtype=data_dtype
         )
+        new_kernel = te.placeholder((1, out_channel // oc_bn, kh, kw, 1, oc_bn), dtype=kernel_dtype)
+        new_workload = autotvm.task.args_to_workload(
+            [
+                new_data,
+                new_kernel,
+                strides,
+                padding,
+                dilation,
+                new_attrs["data_layout"],
+                new_attrs["out_layout"],
+                out_dtype,
+            ],
+            topi_tmpl,
+        )
+        dispatch_ctx.update(target, new_workload, cfg)
+        return relay.nn.contrib_depthwise_conv2d_nchwc(*inputs, **new_attrs)
     elif topi_tmpl == "conv2d_NCHWc.intel_graphics":
         assert data_layout == "NCHW" and kernel_layout == "OIHW"
         batch_size, in_channel, height, width = get_const_tuple(
@@ -1558,7 +1613,7 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
             "conv2d_NCHWc_io.mali",
         )
         dispatch_ctx.update(target, new_workload, cfg)
-        return relay.nn.conv2d(*inputs, **new_attrs)
+        return relay.nn.contrib_conv2d_nchwc(*inputs, **new_attrs)
     else:
         return None
 

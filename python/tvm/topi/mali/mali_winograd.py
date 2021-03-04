@@ -40,6 +40,8 @@ def kernel_transform(kernel, wino_size, G=None, out_dtype='float32'):
 #========shedule begin=================================
 def kernel_transform_shedule(cfg, s, U):
     G, filter_n = s[U].op.input_tensors
+    if isinstance(filter_n.op, tvm.te.tensor.ComputeOp):
+        s[filter_n].compute_inline()
     s[G].compute_inline()
     WL = s.cache_read(filter_n, "local", [U])
     UL = s.cache_write(U, "local")
@@ -155,6 +157,11 @@ def data_transform_shedule(cfg,  s, V):
     B, Data_pad = s[V].op.input_tensors
     s[B].compute_inline()
     s[Data_pad].compute_inline()
+    
+    if isinstance(Data_pad.op, tvm.te.tensor.ComputeOp):
+        packed_data, = s[Data_pad].op.input_tensors
+        if isinstance(packed_data.op, tvm.te.tensor.ComputeOp):
+            s[packed_data].compute_inline()
     WL = s.cache_read(Data_pad, "local", [V])
     VL = s.cache_write(V, "local")
     # Get the GPU thread indices
@@ -359,13 +366,18 @@ def inverse_transform(out_shape, A=None, M=None, out_dtype='float32'):
 #s = te.create_schedule(output.op)
 
 
-def inverse_transform_shedule(cfg, s, output):
+def inverse_transform_shedule(cfg, s, op):
     ##========shedule begin=================================
-    O = output
-    A, M = s[O].op.input_tensors
+    output = op.output(0)
+    A, M = s[output].op.input_tensors
     s[A].compute_inline()
-    ML = s.cache_read(M, "local", [O])
-    OL = s.cache_write(O, "local")
+    ML = s.cache_read(M, "local", [output])
+    OL = s.cache_write(output, "local")
+    #fuse-==========
+    if op not in s.outputs:
+        s[output].compute_inline()
+        output = s.outputs[0].output(0)
+    O = output
     # Get the GPU thread indices
     block_x = te.thread_axis("blockIdx.x")
     block_y = te.thread_axis("blockIdx.y")
@@ -374,9 +386,13 @@ def inverse_transform_shedule(cfg, s, output):
     thread_y = te.thread_axis("threadIdx.y")
     thread_z = te.thread_axis("threadIdx.z")
     # Split the workloads
-    n, cp, hp, wp, Op4 = s[O].op.axis
+    len_4_flag = False
+    if len(s[O].op.axis) == 4:
+        len_4_flag = True
+        n, cp, hp, wp = s[O].op.axis
+    else:
+        n, cp, hp, wp, Op4 = s[O].op.axis
     
-
     cpo, cpi = cfg["inv_cp"].apply(s, O, cp)
     wpo, wpi, Owp=cfg["inv_wp"].apply(s, O, wp)
     hpo, hpi, Ohp=cfg["inv_hp"].apply(s, O, hp)
@@ -387,6 +403,8 @@ def inverse_transform_shedule(cfg, s, output):
     #hp, Ohp = s[O].split(hp, factor=4)
     #hpo, hpi = s[O].split(hp, factor=4)
 
+    if len_4_flag:
+        cpi, Op4 = s[O].split(cpi, factor=4)
 
     s[O].bind(wpo, block_x)
     s[O].bind(hpo, block_y)
@@ -421,14 +439,14 @@ def inverse_transform_shedule(cfg, s, output):
 
 def _schedule_winograd_nchwc_io(cfg, s, op):
     output = op.output(0)
-    O = output
-    A, M = s[O].op.input_tensors
+    A, M = s[output].op.input_tensors
     U, V = s[M].op.input_tensors
     G, filter_n = s[U].op.input_tensors
     B, DataPad = s[V].op.input_tensors
     Data, = s[DataPad].op.input_tensors
-    #========
-    inverse_transform_shedule(cfg, s, output)
+    #==============
+    inverse_transform_shedule(cfg, s, op)
+    U, V = s[M].op.input_tensors
     batch_gemm_shedule(cfg, s, M)
     kernel_transform_shedule(cfg, s, U)
     data_transform_shedule(cfg, s, V)

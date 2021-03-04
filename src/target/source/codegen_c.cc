@@ -138,7 +138,7 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
   for (size_t i = 0; i < f->params.size(); ++i) {
     tir::Var v = f->params[i];
     int vt_code = GetValueType(GetType(v));
-    if ((kDLCLImgFloat != vt_code || kDLCLImgFloatW != vt_code)) {
+    if ((kDLCLImgFloat != vt_code && kDLCLImgFloatW != vt_code)) {
       find_U = false, find_V = false, find_M = false;
       break;
     }
@@ -1097,18 +1097,18 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
     ICHECK(is_one(op->predicate)) << "predicated load is not supported";
 
     arith::PVar<PrimExpr> base;
-    bool is_climg_bug_not_cl_rgba = op->dtype.is_climgfloatrw() && (USE_CL_RGBA == 0);
-    if (is_climg_bug_not_cl_rgba == false) {
+    bool is_climg_cl_rgba_or_float = op->dtype.is_climgfloatrw() && (USE_CL_RGBA == 0);
+    if ((is_climg_cl_rgba_or_float == false) && 
+      (arith::ramp(base, 1, op->dtype.lanes()).Match(op->index))|| (op->index).as<CallNode>()) {
       if (arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)) {
         std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), base.Eval());
         HandleVolatileLoads(ref, op, os);
-      } else if (auto *axis_p = (op->index).as<CallNode>()) {
+      } else if ((op->index).as<CallNode>()) {
         std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), op->index);
-        //std::string ref = PrintExpr(op->index);
         HandleVolatileLoads(ref, op, os);
       }
       else {
-        ICHECK(false) << " should go here";
+        ICHECK(false) << " should not go here";
       }
     } else {
       std::ostringstream svalue_expr;
@@ -1180,20 +1180,19 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     ICHECK(is_one(op->predicate)) << "Predicated store is not supported";
     arith::PVar<PrimExpr> base;
 
-   
-    bool is_climg_bug_not_cl_rgba = is_climg && (USE_CL_RGBA == 0);
-    if (is_climg_bug_not_cl_rgba == false) {
+    bool is_climg_cl_rgba_or_float = is_climg && (USE_CL_RGBA == 0);
+    if ((is_climg_cl_rgba_or_float == false) && 
+      ((op->index).as<CallNode>() || (arith::ramp(base, 1, t.lanes()).Match(op->index)))) {
       if (arith::ramp(base, 1, t.lanes()).Match(op->index)) {
         std::string value = this->PrintExpr(op->value);
         auto new_code = is_climg ? DataType::kCLImgFloatW : DataType::kFloat;
         this->PrintVecStore(op->buffer_var.get(), t.with_code(new_code), base.Eval(), value);
-      } else if (auto* axis_p = (op->index).as<CallNode>()) {
+      } else if ((op->index).as<CallNode>()) {
         auto new_code = is_climg ? DataType::kCLImgFloatW : DataType::kFloat;
         std::string value = this->PrintExpr(op->value);
         this->PrintVecStore(op->buffer_var.get(), t.with_code(new_code), op->index, value);
       } else {
-      
-      ICHECK(false) << "should not go here";
+        ICHECK(false) << "should not go here";
       }
     } else {
       // The assignment below introduces side-effect, and the resulting value cannot
@@ -1568,7 +1567,7 @@ bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
 
 std::string CodeGenC::Simplify_with_const_var(const std::string& base) {
   std::string new_base_index = base;
-  Find_longst_common_str_or_add_key(base, new_base_index);
+  //Find_longst_common_str_or_add_key(base, new_base_index);
   return new_base_index;
 }
 

@@ -26,7 +26,7 @@ struct Token {
 
 inline bool is_valid_punctuation(const std::string& c) {
   return c == "(" || c == ")" || c == "+" || c == "*" || c == "/" || c == "%" || c == "&" ||
-         c == "|" || c == "<<" || c == ">>" || c == "!";// || c == "-";
+         c == "|" || c == "<<" || c == ">>" || c == "!" || c == "-";
 }
 
 constexpr bool is_expon_by_2(int32_t number) { return (number & number - 1) == 0; }
@@ -503,9 +503,9 @@ int simplify_upper_bound_of(const std::shared_ptr<Ast>& ast) {
   if (ast->is_node("+")) {
     return simplify_upper_bound_of(ast->left) + simplify_upper_bound_of(ast->right);
   }
-  //if (ast->is_node("-")) {
-  //  return simplify_upper_bound_of(ast->left) - simplify_upper_bound_of(ast->right);
-  //}
+  if (ast->is_node("-")) {
+    return simplify_upper_bound_of(ast->left) - simplify_upper_bound_of(ast->right);
+  }
   throw std::logic_error("not implemented yet");
 }
 
