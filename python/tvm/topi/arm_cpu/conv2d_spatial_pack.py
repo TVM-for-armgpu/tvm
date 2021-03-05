@@ -182,6 +182,7 @@ def conv2d_spatial_pack_nchw_io(cfg, data, kernel, strides, padding, dilation, o
         name="output_unpack",
         tag="spatial_conv2d_output",
     )
+    cfg.add_flop(N* CO* OH* OW * KH*KW * CI * 2)
     return output
 
 def conv2d_spatial_pack_nchw(cfg, data, kernel, strides, padding, dilation, out_dtype, num_tile):

@@ -20,6 +20,7 @@
 import tvm
 from tvm import te
 from tvm import autotvm
+import numpy as np
 
 from .. import nn
 from ..utils import traverse_inline
@@ -31,7 +32,10 @@ from ..nn.depthwise_conv2d import _get_workload, depthwise_conv2d_infer_layout
 # register original implementation of depthwise_conv2d_nchw since we don't need to change this part
 @autotvm.register_topi_compute("depthwise_conv2d_nchw_io.mali")
 def depthwise_conv2d_nchw_io(cfg, data, kernel, strides, padding, dilation, out_dtype):
-    return nn.depthwise_conv2d_nchw_iohw(data, kernel, strides, padding, dilation, out_dtype)
+    out = nn.depthwise_conv2d_nchw_iohw(data, kernel, strides, padding, dilation, out_dtype)
+    shape = [int(i) for i in out.shape[:]+kernel.shape[2:]]
+    cfg.add_flop(np.prod(shape))
+    return out
 
 # register customized schedule for arm cpu.
 @autotvm.register_topi_schedule("depthwise_conv2d_nchw_io.mali")
@@ -145,8 +149,8 @@ def _pack_data(data, kernel,ic_bn, oc_bn):
     n, ic, ih, iw = get_const_tuple(data.shape)
     filters, cm, kh, kw = get_const_tuple(kernel.shape)
     oc = filters * cm
-    ic_chunk = ic // ic_bn
-    oc_chunk = oc // oc_bn
+    ic_chunk = (ic+ic_bn-1) // ic_bn
+    oc_chunk = (oc+oc_bn-1) // oc_bn
 
     data = te.compute(
         (n, ic_chunk, ih, iw, ic_bn),
@@ -296,6 +300,8 @@ def depthwise_conv2d_NCHWc_io(
         name="DepthwiseConv2d",
         tag="depthwise_conv2d_NCHWc",
     )
+    shape = [batch, oc_chunk, out_height, out_width, oc_bn,filter_height,filter_width]
+    cfg.add_flop(np.prod(shape))
     return Output
 
 

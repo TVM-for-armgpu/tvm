@@ -68,7 +68,7 @@ Tensor Operation::output(size_t i) const {
       (Downcast<String>((*this)->attrs["data_type"]) == String("image"))) {
     node->dtype = DataType::CLImgFloatW(node->dtype.bits(), node->dtype.lanes());
     node->value_storage_type = DataType::kCLImgFloatW;
-    ICHECK_GE(node->shape.size(), 2) << "climgfloat type of tensor must be at least 2 dimention";
+    //ICHECK_GE(node->shape.size(), 2) << "climgfloat type of tensor must be at least 2 dimention";
   }
   // climagefloat is only valid for placehoderop, we need to cast to float for the intermediate tensor
   else if ((node->dtype.is_climgfloatrw())){
@@ -76,7 +76,7 @@ Tensor Operation::output(size_t i) const {
         node->dtype = DataType::Float(node->dtype.bits(), node->dtype.lanes());
         node->value_storage_type = DataType::kCLImgFloatW; 
       }else{
-        ICHECK_GE(node->shape.size(), 2) << "climgfloat type of tensor must be at least 2 dimention";
+        //ICHECK_GE(node->shape.size()>= 2) << "climgfloat type of tensor must be at least 2 dimention";
       }
   }
   return Tensor(node);

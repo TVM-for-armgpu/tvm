@@ -292,8 +292,8 @@ def _pack_data(cfg, data, kernel):
     oc, ic, kh, kw = get_const_tuple(kernel.shape)
     ic_bn, oc_bn = 4, 4
 
-    ic_chunk = ic // ic_bn
-    oc_chunk = oc // oc_bn
+    ic_chunk = (ic+ic_bn-1) // ic_bn
+    oc_chunk = (oc+oc_bn-1) // oc_bn
 
     # Handle dynamic shape to pass tuning dispatch.
     if isinstance(n, tvm.tir.Any):
@@ -496,7 +496,7 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
         ic_bn = 1
 
     cfg.is_fallback = False
-    cfg.cost = 0.0001 if cfg.cost == None else cfg.cost
+    #cfg.cost = 0.0001 if cfg.cost == None else cfg.cost
     cfg.add_flop(n* ic_chunk* ih* iw* ic_bn*oc_chunk*oc_bn*2)
     # Define autotvm tuning space
     is_kernel_1x1 = kernel_height == 1 and kernel_width == 1
@@ -581,7 +581,7 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
     return conv_out
 
 @autotvm.register_topi_compute("conv2d_NCHWc_io.mali")
-def conv2d_NCHWc_io(cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype):
+def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype):
     """Conv2D operator for nChw[x]c layout.
 
     Parameters
@@ -627,71 +627,94 @@ def conv2d_NCHWc_io(cfg, data, kernel, strides, padding, dilation, layout, out_l
         ic_chunk_group, oc_chunk, kernel_height, kernel_width, _, oc_bn = get_const_tuple(
             kernel.shape
         )
-        assert kernel_height==1 and kernel_width==1, "only for conv1x1"
+        #assert kernel_height==1 and kernel_width==1, "only for conv1x1"
+        if ic_chunk == 0:
+            ic_chunk=1
+        if oc_chunk == 0:
+            ic_chunk=1
         in_channel = ic_chunk * ic_bn
         num_filter = oc_chunk * oc_bn
     else:
         n, in_channel, ih, iw = get_const_tuple(data.shape)
         _, num_filter, kernel_height, kernel_width = get_const_tuple(
             kernel.shape)
-        ic_chunk = in_channel
-        oc_chunk = num_filter
-        oc_bn = 1
-        ic_bn = 1
+        oc_bn = 4
+        ic_bn = 4
+        if in_channel == 0:
+            in_channel=1
+        if num_filter == 0:
+            num_filter=1
+        ic_chunk = (in_channel+3)//ic_bn
+        oc_chunk = (num_filter+3)//oc_bn
+        in_channel = ic_chunk * ic_bn
 
-    cfg.is_fallback = False
-    cfg.add_flop(n* ic_chunk* ih* iw* ic_bn*oc_chunk*oc_bn*2)
-    # Define autotvm tuning space
-    is_kernel_1x1 = kernel_height == 1 and kernel_width == 1
-    pt, pl, pb, pr = 0,0,0,0
-    sh, sw = strides if isinstance(strides, (tuple, list)) else (strides, strides)
-    oh = (ih - kernel_height + pt + pb) // sh + 1
-    ow = (iw - kernel_width + pl + pr) // sw + 1
-
-    cfg.define_split("tile_ic", in_channel, num_outputs=3,
-                     filter=lambda x: x.size[-1] == 4)
-    cfg.define_split("tile_oc", num_filter//oc_bn, num_outputs=2)
-    cfg.define_split(
-        "tile_ow", ow, num_outputs=3, filter=lambda y: y.size[-1] % 2 == 0, policy="verbose"
-    )
-    if is_kernel_1x1:
-        cfg.define_split(
-            "tile_oh", oh, num_outputs=3, filter=lambda y: y.size[-1] % 2 == 0, policy="verbose"
-        )
-    else:
-        cfg.define_knob("unroll_kw", [True, False])
     # Pack data if raw 4-D data is provided.
     # This can only happen when autotuning.
     if len(data.shape) == 4:
-        ic_bn = 4
-        oc_chunk = oc_chunk // ic_bn
         if autotvm.GLOBAL_SCOPE.in_tuning:
             # Directly use modified data layout placeholder.
-            dshape = (n, in_channel // 4, ih, iw, 4)
+            dshape = (n, ic_chunk, ih, iw, ic_bn)
             data = tvm.te.placeholder(dshape, data.dtype, name="data")
             kshape = (
                 in_channel,
-                num_filter // 4,
+                oc_chunk,
                 kernel_height,
                 kernel_width,
                 1,
-                4,
+                oc_bn,
             )
             kernel = tvm.te.placeholder(
                 kshape, kernel.dtype, name="kernel_vec")
         else:
             data, kernel = _pack_data(cfg, data, kernel)
 
-    oshape = (n, oc_chunk, ih, iw, ic_bn)
+    cfg.is_fallback = False
+
+    # layout and out_layout are not used here,
+    # we keep them for debug convenience when dumping autotvm workload
+    HSTR, WSTR = stride if isinstance(stride, (tuple, list)) else (stride, stride)
+    dilation_h, dilation_w = (
+        dilation if isinstance(dilation, (tuple, list)) else (dilation, dilation)
+    )
+    assert (#kernel_height == 1 and kernel_width == 1 and
+            (dilation_h == 1 or dilation_h == 0) and
+            (dilation_w == 1 or dilation_w == 0)), " only conv 1x1 support"
+
+    dilated_kernel_h = (kernel_height - 1) * dilation_h + 1
+    dilated_kernel_w = (kernel_width - 1) * dilation_w + 1
+
+    pad_top, pad_left, pad_down, pad_right = padding
+    HPAD = pad_top + pad_down
+    WPAD = pad_left + pad_right
+
+    # output shape
+    out_height = (ih + HPAD - dilated_kernel_h) // HSTR + 1
+    out_width = (iw + WPAD - dilated_kernel_w) // WSTR + 1
+    pad_before = (0, 0, pad_top, pad_left, 0)
+    pad_after = (0, 0, pad_down, pad_right, 0)
     # DOPAD
-    DOPAD =  0
-    if DOPAD:
-        data_pad = data
-        #data_pad = pad(data, pad_before, pad_after, name="data_pad")
+    DOPAD = HPAD != 0 or WPAD != 0
+    if DOPAD and kernel_height > 1:
+        data_pad = nn.pad(data, pad_before, pad_after, name="data_pad_3x3")
     else:
         data_pad = data
-    dilation_h, dilation_w = 0, 0
-    HSTR, WSTR = 1, 1
+    oshape = (n, oc_chunk, out_height, out_width, oc_bn)
+
+
+    # Define autotvm tuning space
+    cfg.define_split("tile_ic", in_channel, num_outputs=3,
+                     filter=lambda x: x.size[-1] % ic_bn==0)
+    cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
+    cfg.define_split("tile_ow",
+                     out_width,
+                     num_outputs=3,
+                     filter=lambda y: y.size[-1] % 2 == 0,
+                     policy="verbose")
+    cfg.define_split(
+        "tile_oh", out_height, num_outputs=3, filter=lambda y: y.size[-1] % 2 == 0, policy="verbose"
+    )
+    #end define autotvm space
+
     ic = te.reduce_axis((0, in_channel), name="ic")
     kh = te.reduce_axis((0, kernel_height), name="kh")
     kw = te.reduce_axis((0, kernel_width), name="kw")
@@ -719,6 +742,7 @@ def conv2d_NCHWc_io(cfg, data, kernel, strides, padding, dilation, layout, out_l
         tag="conv2d_NCHWc",
     )
     conv_out.dtype = out_dtype
+    cfg.add_flop(n * oc_chunk * out_height * out_width * oc_bn * kernel_height * kernel_width * ic_chunk * ic_bn * 2)
     return conv_out
 
     #return te.compute(
@@ -828,7 +852,6 @@ def schedule_conv2d_NCHWc_io(cfg, outs):
                 _,
                 _,
             ) = get_const_tuple(kernel_vec.shape)
-            assert kh == 1 and kw == 1, "only support conv1x1 yet"
             return conv2d_imagex4_1x1._schedule_conv_NCHWc(*args)
     ret_s = None
     scheduled_ops = []

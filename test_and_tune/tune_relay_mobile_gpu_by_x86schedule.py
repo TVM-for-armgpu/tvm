@@ -39,23 +39,25 @@ def load_image():
 # ----------------------------
 # Load mobilenet V1 TFLite model provided by Google
 def get_network():
-    input_dtype = "float32"
+    input_dtype = dtype
     # auto-scheduler prefers NHWC layout
     layout = "NCHW"
     batch_size=1
     if layout == "NHWC":
-        image_shape = (224, 224, 3)
+        image_shape = (224, 224, 4)
     elif layout == "NCHW":
-        image_shape = (3, 224, 224)
+        image_shape = (4, 224, 224)
     else:
         raise ValueError("Invalid layout: " + layout)
 
     input_shape = (batch_size,) + image_shape
     output_shape = (batch_size, 1000)
 
-    mod, params = tvm.relay.testing.resnet.get_workload(
-        batch_size=batch_size, layout=layout, dtype=dtype, image_shape=image_shape
-    )
+    mod, params = tvm.relay.testing.mobilenet.get_workload(
+        batch_size=batch_size,
+        layout=layout,
+        dtype=dtype,
+        image_shape=image_shape)
     return mod, params, input_shape, input_dtype
     def extract(path):
         import tarfile
@@ -115,16 +117,17 @@ device_key = "android"
 
 
 #### TUNING OPTION ####
-network = 'mobilenet_v1_1.0_224rs'
+network = 'mobilenet_v1_1.0_224'
 log_file = "%s.%s.log" % (device_key, network)
 dtype = 'float32'
+#dtype = 'climgfloatr32'
 
 use_android=True
 tuning_option = {
     'log_filename': log_file,
     'tuner': 'xgb',
-    'n_trial': 1,
-    'early_stopping': 30,
+    'n_trial': 128,
+    'early_stopping': 200,
 
     'measure_option': autotvm.measure_option(
         builder=autotvm.LocalBuilder(
@@ -172,8 +175,10 @@ def tune_tasks(tasks,
     tmp_log_file = log_filename + ".tmp"
     #if os.path.exists(tmp_log_file):
     #    os.remove(tmp_log_file)
+    #use_transfer_learning=False
 
     for i, tsk in enumerate(reversed(tasks)):
+        print("tuning ", tsk)
         prefix = "[Task %2d/%2d] " % (i+1, len(tasks))
 
         # create tuner
@@ -203,6 +208,7 @@ def tune_tasks(tasks,
                            autotvm.callback.progress_bar(tsk_trial, prefix=prefix),
                            autotvm.callback.log_to_file(tmp_log_file)
                        ])
+        
 
     # pick best records to a cache file
     autotvm.record.pick_best(tmp_log_file, log_filename)
@@ -246,7 +252,7 @@ def remove_template(tasks, template_names):
 # Finally, we launch tuning jobs and evaluate the end-to-end performance.
 def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
-    print("Extract tasks...")
+    print("Extract tasks... ",os.getpid())
     mod, params, input_shape, _ = get_network()
 
     if use_nchw:
@@ -271,8 +277,8 @@ def tune_and_evaluate(tuning_opt):
     tune_tasks(tasks, **tuning_opt)
 
     # compile kernels with history best records
-    #with autotvm.apply_history_best(log_file):
-    if 1 ==1:
+    with autotvm.apply_history_best(log_file):
+    #if 1 ==1:
         print("Compile...")
         with relay.build_config(opt_level=3):
             graph, lib, params = relay.build_module.build(
@@ -312,4 +318,3 @@ def tune_and_evaluate(tuning_opt):
 # We do not run the tuning in our webpage server since it takes too long.
 # Uncomment the following line to run it by yourself.
 tune_and_evaluate(tuning_option)
-

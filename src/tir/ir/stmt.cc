@@ -558,7 +558,6 @@ BufferStore::BufferStore(Buffer buffer, PrimExpr value, Array<PrimExpr> indices,
   ObjectPtr<BufferStoreNode> node = make_object<BufferStoreNode>();
   node->buffer = std::move(buffer);
   node->value = std::move(value);
-  auto ad=std::string(node->buffer->name).find(".local")!=std::string::npos;
   if (node->buffer.get()->dtype.is_climgfloat() 
       || node->value->dtype.is_climgfloat()
       || node->value->dtype.is_climgfloatw()) {

@@ -89,15 +89,15 @@ TRACKER_PORT=9090
 @autotvm.template("tutorial/conv2d_no_batching")
 def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     assert N == 1, "Only consider batch_size = 1 in this template"
-    
+
     H_P, W_P = H, W
     PACK4=4
     K_P=CO//PACK4
-    C_P=CI//PACK4
+    C_P=(CI+3)//PACK4
     in_channel = CI
     out_channel = CO
     in_size=H
-    open_image = 1
+    open_image = 0
     ddtype = 'float32'
     if open_image:
         ddtype = 'climgfloatr32'
@@ -109,7 +109,7 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
                                      0, 'NCHWc', 'NCHWc', ddtype.replace('r','w'))
     conv_pl.dtype = "climgfloatw32"
     s = topi.mali.schedule_conv2d_NCHWc_io(conv_pl)
-    #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True)) 
+    #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True))
     #exit(0)
 
     return s, [data_pl,kernel_pl,conv_pl]
@@ -137,14 +137,14 @@ device_key = "android"
 use_android = True
 
 #### TUNING OPTION ####
-network = "topinhw4c"
+network = "topinhw4c1"
 log_file = "%s.%s.log" % (device_key, network)
 dtype = "float32"
 
 tuning_option = {
     "log_filename": log_file,
     "tuner": "xgb",
-    "n_trial": 2000,
+    "n_trial": 1,
     "use_transfer_learning":True,
     "early_stopping": 450,
     "measure_option": autotvm.measure_option(
@@ -247,7 +247,8 @@ def tune_and_evaluate(tuning_opt):
     #    ops=(relay.op.get("nn.conv2d"),),
     #)
     # the last layer in resnet
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 512, 256, 1, 1, (1, 1), (0, 0)
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 32, 4, 1, 1, (
+        1, 1), (0, 0)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
     )
@@ -299,7 +300,7 @@ def tune_and_evaluate(tuning_opt):
         out_channel = CO
         in_size=H
         ctx = remote.context(str(target), 0)
-        
+
         #================test data=================
         ao_np = np.arange(in_channel*in_size*in_size)
         a_np = ao_np
@@ -324,7 +325,7 @@ def tune_and_evaluate(tuning_opt):
             B1 = np.vstack((B1, Cnp[i+1::K_P, :]))
         c_np = B1.reshape(K_P, H_P * W_P * PACK4)
 
-        #===============tvm data format 
+        #===============tvm data format
         a_tvm = tvm.nd.array(a_np_tvm, ctx=ctx, dtype=arg_bufs[0].dtype)
         w_tvm = tvm.nd.array(w_np_tvm, ctx=ctx, dtype=arg_bufs[1].dtype)
         c_tvm = tvm.nd.empty(arg_bufs[2].shape, ctx=ctx, dtype=arg_bufs[2].dtype)
@@ -335,7 +336,7 @@ def tune_and_evaluate(tuning_opt):
         cost = time_f(a_tvm, w_tvm, c_tvm).mean
         GFLOPS = W_P*H_P*CI*CO*2/cost/1e9
         print("Time cost of this operator: %f, %f gflops" %( cost,GFLOPS))
-        
+
         c_tvm_o = c_tvm.asnumpy().reshape(K_P,H_P*W_P*PACK4)
         tvm.testing.assert_allclose(c_np, c_tvm_o, rtol=1e-2)
 
@@ -359,6 +360,3 @@ def tune_and_evaluate(tuning_opt):
 # Uncomment the following line to run it by yourself.
 
 tune_and_evaluate(tuning_option)
-
-
-

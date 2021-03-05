@@ -138,3 +138,5 @@ ScopeBuilder = scope_builder.ScopeBuilder
 # Param Serialization
 save_param_dict = param_dict.save_param_dict
 load_param_dict = param_dict.load_param_dict
+
+cl_type_erasure = expr.cl_type_erasure

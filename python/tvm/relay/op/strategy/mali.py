@@ -63,8 +63,6 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                 if (
                     kh == 1
                     and kw == 1
-                    and stride_h == 1
-                    and stride_w == 1
                     and dilation_h == 1
                     and dilation_w == 1
                 ):
@@ -86,11 +84,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                     name="conv2d_nchw_spatial_pack_io.mali",
                 )
                 if (
-                    kh == 1
-                    and kw == 1
-                    and stride_h == 1
-                    and stride_w == 1
-                    and dilation_h == 1
+                    dilation_h == 1
                     and dilation_w == 1
                 ):
                     strategy.add_implementation(
@@ -171,8 +165,6 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
             if (
                 kh == 1
                 and kw == 1
-                and stride_h == 1
-                and stride_w == 1
                 and dilation_h == 1
                 and dilation_w == 1
             ):

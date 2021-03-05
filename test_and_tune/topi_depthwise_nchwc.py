@@ -28,25 +28,25 @@ TRACKER_PORT=9090
 @autotvm.template("tutorial/conv2d_no_batching")
 def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     assert N == 1, "Only consider batch_size = 1 in this template"
-    
+
     H_P, W_P = H, W
     PACK4=4
     K_P=CO//PACK4
     C_P=CI//PACK4
     in_channel = CI
     out_channel = CO
-    in_size=H
-    open_image = 1
+    in_size = H
+    open_image = 0
     ddtype = 'float32'
     if open_image:
         ddtype = 'climgfloatr32'
     data_pl = te.placeholder((1, CI//4, H, W,4),
                              name='data', dtype=ddtype)
-    kernel_pl = te.placeholder((CI, CO//4, KW, KH, 1, 4),
+    kernel_pl = te.placeholder((1, CI//4, KW, KH, 1, 4),
                                name='filter', dtype=ddtype)
-    conv_pl = topi.mali.conv2d_nchw_winograd_NCHWc_io(data_pl, kernel_pl, 1, 1,
-                                     1, 'NCHW', 'NCHWc', ddtype.replace('r','w'))
-    s = topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io([conv_pl])
+    conv_pl = topi.mali.depthwise_conv2d_NCHWc_io(data_pl, kernel_pl, 1, 1,
+                                     1, 'NCHW', 'NCHW4c', ddtype.replace('r','w'))
+    s = topi.mali.schedule_depthwise_conv2d_NCHWc_io([conv_pl])
     return s, [data_pl,kernel_pl,conv_pl]
 
 # ------------------
@@ -72,16 +72,16 @@ device_key = "android"
 use_android = True
 
 #### TUNING OPTION ####
-network = "topi_winograd3x3"
+network = "topi_depthwise3x3"
 log_file = "%s.%s.log" % (device_key, network)
 dtype = "float32"
 
 tuning_option = {
     "log_filename": log_file,
     "tuner": "xgb",
-    "n_trial": 80,
+    "n_trial": 64,
     "use_transfer_learning":True,
-    "early_stopping": 45,
+    "early_stopping": 450,
     "measure_option": autotvm.measure_option(
         builder=autotvm.LocalBuilder(build_func="ndk" if use_android else "default"),
         runner=autotvm.RPCRunner(
@@ -123,7 +123,6 @@ def tune_tasks(
     log_filename="tuning.log",
     use_transfer_learning=True,
 ):
-    use_transfer_learning=False
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
     #if os.path.exists(tmp_log_file):
@@ -174,7 +173,7 @@ def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
 
     print("Extract tasks...", os.getpid())
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 256, 256, 3, 3, (1, 1), (1, 1)
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 512, 256, 3, 3, (1, 1), (1, 1)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
     )
@@ -189,7 +188,7 @@ def tune_and_evaluate(tuning_opt):
         print("\nBest config:")
         print(best_config)
         print("Compile...")
-    #if 1==1:
+        #if 1==1:
         with tvm.target.Target("opencl"):
             s, arg_bufs = conv2d_no_batching(N, H, W, CO, CI, KH, KW, strides, padding)
             lib = tvm.build(s, arg_bufs, target_host=target_host)
@@ -229,10 +228,10 @@ def tune_and_evaluate(tuning_opt):
         out_channel = CO
         in_size=H
         ctx = remote.context(str(target), 0)
-        #===============tvm data format 
+        #===============tvm data format
         a_np_tvm = np.arange(np.prod(a_s)).reshape(a_s)
         w_np_tvm = np.arange(np.prod(w_s)).reshape(w_s)
-        
+
         a_tvm = tvm.nd.array(a_np_tvm, ctx=ctx, dtype=arg_bufs[0].dtype)
         w_tvm = tvm.nd.array(w_np_tvm, ctx=ctx, dtype=arg_bufs[1].dtype)
         c_tvm = tvm.nd.empty(arg_bufs[2].shape, ctx=ctx, dtype=arg_bufs[2].dtype)
@@ -259,7 +258,7 @@ def tune_and_evaluate(tuning_opt):
         prof_res = np.array(a) * 1000  # convert to millisecond
         print(
             "Mean inference time (std dev): %.2f ms (%.2f ms) %f GFLOPS"
-            % (np.mean(prof_res), np.std(prof_res),W*H*CI*CO*2/np.mean(prof_res)/1e6)
+            % (np.mean(prof_res), np.std(prof_res),W*H*CI*2/np.mean(prof_res)/1e6)
         )
 
 
@@ -267,6 +266,3 @@ def tune_and_evaluate(tuning_opt):
 # Uncomment the following line to run it by yourself.
 
 tune_and_evaluate(tuning_option)
-
-
-
