@@ -601,6 +601,222 @@ IntSet IntSet::Interval(PrimExpr min, PrimExpr max) {
   return IntervalSet(min, max);
 }
 
+
+struct EliminableSet;
+EliminableSet::EliminableSet(PrimExpr expr_, PrimExpr max_value_) {
+  auto n = make_object<EliminableSetNode>();
+  n->max_value = std::move(max_value_);
+  n->expr = std::move(expr_);
+  data_ = std::move(n);
+}
+// Simplified version of int set evaluator that operates on IntervalSet
+// We might use better set analysis in the future to replace the intervalset.
+class InequationEvaluator : public ExprFunctor<EliminableSet(const PrimExpr&)> {
+ public:
+  InequationEvaluator(Analyzer* analyzer, const Map<Var, IntSet>& dom_map)
+      : analyzer_(analyzer), dom_map_(dom_map) {}
+  typedef EliminableSet ExprEntry;
+  ExprEntry Eval(const PrimExpr& val) { return this->VisitExpr(val); }
+  // return itself if cant be eliminated else return IntImm(DataType::Int(32), 0)
+  ExprEntry VisitExpr_(const IntImmNode* op) final {
+    ExprEntry entry(IntImm(DataType::Int(32), 0), GetRef<IntImm>(op));
+    return entry;
+  }
+
+  ExprEntry VisitExpr_(const VarNode* op) final {
+    Var var = GetRef<Var>(op);
+    auto it = dom_map_.find(var);
+    if (it != dom_map_.end()) {
+      IntervalSet res = ToIntervalSet((*it).second);
+      ExprEntry entry(IntImm(DataType::Int(32), 0), std::move(res->max_value));
+      return entry;
+    }
+    return ExprEntry(std::move(var), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const AddNode* op) final {
+    ExprEntry a = this->Eval(op->a);
+    ExprEntry b = this->Eval(op->b);
+    // if and only if all of a,b can be eliminated, this op is also eleminated
+    bool elim_a = CanEliminate(a, op->a);
+    bool elim_b = CanEliminate(b, op->b);
+    if (elim_a) {
+      if (elim_b) {
+        return ExprEntry(IntImm(DataType::Int(32), 0), Add(a->max_value, b->max_value));
+      } else {
+        return ExprEntry(op->b, a->max_value);
+      }
+    } else {
+      if (elim_b) {
+        return ExprEntry(op->a, b->max_value);
+      } else {
+        return ExprEntry(GetRef<Add>(op), IntImm(DataType::Int(32), 0));
+      }
+    }
+  }
+
+  ExprEntry VisitExpr_(const SubNode* op) final {
+    if (!(op->b.as<IntImmNode>())) {
+      return ExprEntry(GetRef<Sub>(op), IntImm(DataType::Int(32), 0));
+    }
+    ExprEntry a = this->Eval(op->a);
+    ExprEntry b = this->Eval(op->b);
+    // if and only if all of a,b can be eliminated, this op is also eleminated
+    bool elim_a = CanEliminate(a, op->a);
+    bool elim_b = CanEliminate(b, op->b);
+    if (elim_a) {
+      if (elim_b) {
+        IntervalSet rg = IntervalSetEvaluator(analyzer_, dom_map_).Eval(GetRef<Sub>(op));
+        return ExprEntry(IntImm(DataType::Int(32), 0), rg->max_value);
+      } else {
+        return ExprEntry(-1 * op->b, a->max_value);
+      }
+    } else {
+      if (elim_b) {
+        return ExprEntry(op->a, -1 * b->max_value);
+      } else {
+        return ExprEntry(GetRef<Sub>(op), IntImm(DataType::Int(32), 0));
+      }
+    }
+  }
+
+  ExprEntry VisitExpr_(const MulNode* op) final { return VisitBinaryExpr_<Mul>(op); }
+
+  ExprEntry VisitExpr_(const DivNode* op) final { return VisitBinaryExpr_<Div>(op); }
+
+  ExprEntry VisitExpr_(const ModNode* op) final { return VisitBinaryExpr_<Mod>(op); }
+
+  ExprEntry VisitExpr_(const FloorDivNode* op) final { return VisitBinaryExpr_<FloorDiv>(op); }
+
+  ExprEntry VisitExpr_(const FloorModNode* op) final { return VisitBinaryExpr_<FloorMod>(op); }
+
+  ExprEntry VisitExpr_(const MinNode* op) final { return VisitBinaryExpr_<Min>(op); }
+
+  ExprEntry VisitExpr_(const MaxNode* op) final { return VisitBinaryExpr_<Max>(op); }
+
+  ExprEntry VisitExpr_(const EQNode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const NENode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const LTNode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const LENode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const GTNode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const GENode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const AndNode* op) final { return VisitBinaryExpr_<And>(op); }
+
+  ExprEntry VisitExpr_(const OrNode* op) final { return VisitBinaryExpr_<Or>(op); }
+
+  ExprEntry VisitExpr_(const RampNode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const BroadcastNode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const SelectNode* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExpr_(const CastNode* op) final {
+    return ExprEntry(GetRef<Cast>(op), IntImm(DataType::Int(32), 0));
+  }
+
+  ExprEntry VisitExprDefault_(const Object* op) final {
+    ICHECK(false) << "can't be processed";
+    return ExprEntry(IntImm(DataType::Int(32), 0), IntImm(DataType::Int(32), 0));
+  }
+
+ private:
+  // whether set is exactly single point that equals value.
+  bool CanEliminate(const ExprEntry& set, const PrimExpr& value) const {
+    return (!(set->expr.same_as(value))) &&
+           (!(set->max_value.same_as(IntImm(DataType::Int(32), 0))));
+  }
+
+  template <typename TOp, typename T>
+  inline ExprEntry VisitBinaryExpr_(const T* op) {
+    static_assert(std::is_same<typename TOp::ContainerType, T>::value, "constraint");
+    ExprEntry a = this->Eval(op->a);
+    ExprEntry b = this->Eval(op->b);
+    // if and only if all of a,b can be eliminated, this op is also eleminated
+    if (CanEliminate(a, op->a) && CanEliminate(b, op->b)) {
+      IntervalSet rg = IntervalSetEvaluator(analyzer_, dom_map_).Eval(GetRef<TOp>(op));
+      ExprEntry ret(IntImm(DataType::Int(32), 0), rg->max_value);
+      return ret;
+    }
+    return ExprEntry(std::move(GetRef<TOp>(op)), IntImm(DataType::Int(32), 0));
+  }
+
+  // recursive depth
+  int recur_depth_{0};
+  // analyzer
+  Analyzer* analyzer_;
+  const Map<Var, IntSet>& dom_map_;
+  bool eval_vec_{false};
+};
+
+class InequationAnalyzer::IneqImpl {
+ public:
+  explicit IneqImpl(Analyzer* analyzer) : analyzer_(analyzer) {}
+
+  PrimExpr Eval(const PrimExpr& expr, const Map<Var, IntSet>& dom_map) const {
+    if (auto* ptr = expr.as<LTNode>()) {
+      if (!(ptr->b.as<IntImmNode>())) {
+        return expr;
+      }
+      EliminableSet entry = InequationEvaluator(analyzer_, dom_map).Eval(ptr->a);
+      return LT(entry->expr, analyzer_->rewrite_simplify(ptr->b - entry->max_value));
+    }
+    return expr;
+  }
+
+ private:
+  Analyzer* analyzer_;
+};
+
+InequationAnalyzer::InequationAnalyzer(Analyzer* parent) : impl_(new IneqImpl(parent)) {}
+
+InequationAnalyzer::~InequationAnalyzer() { delete impl_; }
+
+PrimExpr InequationAnalyzer::operator()(const PrimExpr& expr, const Map<Var, IntSet>& dom_map) {
+  return impl_->Eval(expr, dom_map);
+}
+TVM_REGISTER_NODE_TYPE(EliminableSetNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<EliminableSetNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const EliminableSetNode*>(node.get());
+      p->stream << "EliminableSet"
+                << "[" << op->expr << ", " << op->max_value << ']';
+    });
+
+
 // Range related code
 inline bool ProveEqual(Analyzer* analyzer, PrimExpr lhs, PrimExpr rhs) {
   return is_zero(analyzer->Simplify(lhs - rhs));

@@ -208,7 +208,11 @@ void stlDump(const std::unordered_map<IterVar, Range>& d) {
     std::cout << kv.first << ":" << kv.second << "\n";
   }
 }
-
+void stlDump(const std::unordered_map<IterVar, IntSet>& d) {
+  for (auto kv : d) {
+    std::cout << kv.first << ":" << kv.second << "\n";
+  }
+}
 Map<IterVar, Range> InferBound(const Schedule& sch) {
   // Prepare context
   GraphContext ctx;

@@ -374,6 +374,27 @@ class IntSetAnalyzer {
   Impl* impl_;
 };
 
+
+class InequationAnalyzer {
+ public:
+  /*!
+   * \brief Find a symbolic integer set that contains all possible values of
+   *        expr given the domain of each variables.
+   *
+   * \param expr The expression of interest.
+   * \param dom_map The domain map to indicate which variable to relax.
+   * \return the result of the analysis.
+   */
+  TVM_DLL PrimExpr operator()(const PrimExpr& expr, const Map<Var, IntSet>& dom_map);
+ private:
+  friend class Analyzer;
+  explicit InequationAnalyzer(Analyzer* parent);
+  TVM_DLL ~InequationAnalyzer();
+  class IneqImpl;
+  /*! \brief Internal impl */
+  IneqImpl* impl_;
+};
+
 /*!
  * \brief Analyzer that contains bunch of sub-analyzers.
  *
@@ -401,6 +422,7 @@ class TVM_DLL Analyzer {
   CanonicalSimplifier canonical_simplify;
   /*! \brief sub-analyzer: int set */
   IntSetAnalyzer int_set;
+  InequationAnalyzer inequalation_anylyzer;
   /*! \brief constructor */
   Analyzer();
   /*!
@@ -481,6 +503,7 @@ class TVM_DLL Analyzer {
    * \note Analyzer will call into sub-analyzers to get the result.
    */
   PrimExpr Simplify(const PrimExpr& expr, int steps = 2);
+  PrimExpr SimplifyCmpExpr(const PrimExpr& expr, const Map<Var, IntSet>& dom_map);
 };
 
 }  // namespace arith
