@@ -63,11 +63,21 @@ Tensor Operation::output(size_t i) const {
   node->value_index = i;
   node->dtype = (*this)->output_dtype(i);
   node->shape = (*this)->output_shape(i);
+  
+  if (((*this)->name.find(".") == std::string::npos) && (*this)->attrs.count("data_type") &&
+      (Downcast<String>((*this)->attrs["data_type"]) == String("image"))) {
+    node->dtype = DataType::CLImgFloatW(node->dtype.bits(), node->dtype.lanes());
+    node->value_storage_type = DataType::kCLImgFloatW;
+    //ICHECK_GE(node->shape.size(), 2) << "climgfloat type of tensor must be at least 2 dimention";
+  }
   // climagefloat is only valid for placehoderop, we need to cast to float for the intermediate tensor
-  if ((node->dtype.is_climgfloat() || node->dtype.is_climgfloatw()) &&
-      node->op->type_index() != PlaceholderOpNode::RuntimeTypeIndex()) {
-    node->dtype = DataType::Float(node->dtype.bits(), node->dtype.lanes());
-    ICHECK_GE(node->shape.size(), 2) << "climgfloat type of tensor must be at least 2 dimention";
+  else if ((node->dtype.is_climgfloatrw())){
+    if (node->op->type_index() != PlaceholderOpNode::RuntimeTypeIndex()) {
+        node->dtype = DataType::Float(node->dtype.bits(), node->dtype.lanes());
+        node->value_storage_type = DataType::kCLImgFloatW; 
+      }else{
+        //ICHECK_GE(node->shape.size()>= 2) << "climgfloat type of tensor must be at least 2 dimention";
+      }
   }
   return Tensor(node);
 }

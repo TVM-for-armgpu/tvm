@@ -207,6 +207,19 @@ Store::Store(Var buffer_var, PrimExpr value, PrimExpr index, PrimExpr predicate,
 
   ObjectPtr<StoreNode> node = make_object<StoreNode>();
   node->buffer_var = std::move(buffer_var);
+  if ((value->dtype.is_climgfloatrw()) ||
+    (value->value_storage_type == DataType::kCLImgFloatW)||
+    (value->value_storage_type == DataType::kCLImgFloat) ){
+    if (std::string(node->buffer_var->name_hint).find(".") == std::string::npos) {
+      value.mutable_dtype() = value.mutable_dtype().with_code(DataType::kCLImgFloatW);
+      node->value_storage_type = DataType::kCLImgFloatW;
+      value.mutable_storage_type() = DataType::kCLImgFloatW;
+    }else{
+      //value.mutable_dtype() = value.mutable_dtype().with_code(DataType::kFloat);
+      node->value_storage_type = DataType::kCLImgFloatW;
+      value.mutable_storage_type() = DataType::kCLImgFloatW;
+    }
+  }
   node->value = std::move(value);
   node->index = std::move(index);
   node->predicate = std::move(predicate);
@@ -248,6 +261,9 @@ ProducerStore::ProducerStore(DataProducer producer, PrimExpr value, Array<PrimEx
   ObjectPtr<ProducerStoreNode> node = make_object<ProducerStoreNode>();
   node->producer = std::move(producer);
   node->value = std::move(value);
+  if (node->producer->GetDataType().is_climgfloat() || node->producer->GetDataType().is_climgfloatw()) {
+    node->value.mutable_storage_type() = DataType::kCLImgFloatW;
+  }
   node->indices = std::move(indices);
   node->span = std::move(span);
   data_ = std::move(node);
@@ -304,6 +320,17 @@ Allocate::Allocate(Var buffer_var, DataType dtype, Array<PrimExpr> extents, Prim
 
 int32_t AllocateNode::constant_allocation_size(const Array<PrimExpr>& extents) {
   int64_t result = 1;
+  // encode all shapes into int64
+  if (extents.size() == 1 && extents[0].dtype().bits() == 64) {
+    std::vector<int> shapes = tvm::runtime::decode_shape_fold(extents[0].as<IntImmNode>()->value);
+    for (size_t i = 0; i < shapes.size(); ++i) {
+      result *= shapes[i];
+      if (result > std::numeric_limits<int32_t>::max()) {
+        return 0;
+      }
+    }
+    return static_cast<int32_t>(result);
+  }
   for (size_t i = 0; i < extents.size(); ++i) {
     if (const IntImmNode* int_size = extents[i].as<IntImmNode>()) {
       result *= int_size->value;
@@ -531,6 +558,11 @@ BufferStore::BufferStore(Buffer buffer, PrimExpr value, Array<PrimExpr> indices,
   ObjectPtr<BufferStoreNode> node = make_object<BufferStoreNode>();
   node->buffer = std::move(buffer);
   node->value = std::move(value);
+  if (node->buffer.get()->dtype.is_climgfloat() 
+      || node->value->dtype.is_climgfloat()
+      || node->value->dtype.is_climgfloatw()) {
+    node->value.mutable_storage_type() = DataType::kCLImgFloatW;
+  }
   node->indices = std::move(indices);
   node->span = std::move(span);
   data_ = std::move(node);

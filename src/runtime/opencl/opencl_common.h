@@ -243,6 +243,7 @@ class OpenCLWorkspace : public DeviceAPI {
                       TVMStreamHandle stream) final;
   void StreamSync(TVMContext ctx, TVMStreamHandle stream) final;
   void* AllocWorkspace(TVMContext ctx, size_t size, DLDataType type_hint) final;
+  void* AllocWorkspace(TVMContext ctx, DataShape* size, DLDataType type_hint) final;
   void FreeWorkspace(TVMContext ctx, void* data) final;
   void get_image_t_size(TVMContext ctx, DataShape* dsize, size_t& height, size_t& width);
   /*!

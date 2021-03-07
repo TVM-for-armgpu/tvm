@@ -91,6 +91,12 @@ RELAY_REGISTER_BINARY_OP("power")
     .set_support_level(4)
     .set_attr<FTVMCompute>("FTVMCompute", RELAY_BINARY_COMPUTE(topi::power));
 
+RELAY_REGISTER_BINARY_OP("image_axis")
+    .describe("Elementwise bitwise AND with broadcasting")
+    .set_support_level(4)
+    .set_attr<FTVMCompute>("FTVMCompute", RELAY_BINARY_COMPUTE(topi::image_axiser));
+
+
 RELAY_REGISTER_BINARY_OP("mod")
     .describe("Elementwise mod with broadcasting")
     .set_support_level(1)

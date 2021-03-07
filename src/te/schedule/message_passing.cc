@@ -537,10 +537,15 @@ std::vector<PrimExpr> MakeBoundCheck(const Stage& stage, const Map<IterVar, Rang
 
   std::vector<PrimExpr> preds;
   Map<Var, IntSet> iset_dmap;
+  Map<Var, IntSet> cmp_expr_dmap;
 
   // setup domain map for set analysis
   for (const auto& kv : dom_map) {
     iset_dmap.Set(kv.first->var, IntSet::FromRange(kv.second));
+    if (std::string(kv.first->var->name_hint).find("threadId") == std::string::npos &&
+        std::string(kv.first->var->name_hint).find("blockId") == std::string::npos) {
+      cmp_expr_dmap.Set(kv.first->var, IntSet::FromRange(kv.second));
+    }
   }
 
   for (auto entry : dom_map) {
@@ -572,7 +577,12 @@ std::vector<PrimExpr> MakeBoundCheck(const Stage& stage, const Map<IterVar, Rang
         preds.emplace_back(value >= 0);
       }
       if (vmax.dtype() != value.dtype() || !analyzer.CanProve(vmax < iv->dom->extent)) {
-        preds.emplace_back(value < iv->dom->extent);
+        //if (cmp_expr_dmap.size() < iset_dmap.size()) {
+        //  PrimExpr ret_cmp = analyzer.SimplifyCmpExpr(value < iv->dom->extent, cmp_expr_dmap);
+        //  preds.emplace_back(ret_cmp);
+        //} else {
+          preds.emplace_back(value < iv->dom->extent);
+        //}
       }
     }
   }

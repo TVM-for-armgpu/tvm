@@ -538,3 +538,6 @@ def bind(expr, binds):
         The expression or function after binding.
     """
     return _ffi_api.Bind(expr, binds)
+
+def cl_type_erasure(vartype):
+    return vartype.replace('climg','').replace('w','').replace('r','')

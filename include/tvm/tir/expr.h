@@ -712,7 +712,7 @@ class LoadNode : public PrimExprNode {
   PrimExpr index;
   /*! \brief The predicate to mask which lanes would be loaded. */
   PrimExpr predicate;
-
+  tvm::runtime::DataType::TypeCode value_storage_type = DataType::kFloat; 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("dtype", &dtype);
     v->Visit("buffer_var", &buffer_var);

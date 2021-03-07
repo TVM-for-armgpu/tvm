@@ -56,6 +56,7 @@ TVM_REGISTER_GLOBAL("tvm.intrin.rule.opencl.tanh").set_body(DispatchPureExtern<D
 TVM_REGISTER_GLOBAL("tvm.intrin.rule.opencl.sqrt").set_body(DispatchPureExtern<Direct>);
 
 TVM_REGISTER_GLOBAL("tvm.intrin.rule.opencl.pow").set_body(DispatchPureExtern<Direct>);
+TVM_REGISTER_GLOBAL("tvm.intrin.rule.opencl.image_axis").set_body(DispatchPureExtern<Direct>);
 
 TVM_REGISTER_GLOBAL("tvm.intrin.rule.opencl.popcount").set_body(DispatchPureExtern<Direct>);
 

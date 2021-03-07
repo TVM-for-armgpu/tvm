@@ -210,7 +210,7 @@ dtype = "float32"
 tuning_option = {
     "log_filename": log_file,
     "tuner": "xgb",
-    "n_trial": 2000,
+    "n_trial": 200,
     "use_transfer_learning":True,
     "early_stopping": 450,
     "measure_option": autotvm.measure_option(
@@ -313,7 +313,7 @@ def tune_and_evaluate(tuning_opt):
     #    ops=(relay.op.get("nn.conv2d"),),
     #)
     # the last layer in resnet
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 32, 32, 512, 256, 1, 1, (1, 1), (0, 0)
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 512, 256, 1, 1, (1, 1), (0, 0)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
     )
@@ -332,7 +332,8 @@ def tune_and_evaluate(tuning_opt):
             s, arg_bufs = conv2d_no_batching(N, H, W, CO, CI, KH, KW, strides, padding)
             lib = tvm.build(s, arg_bufs, target_host=target_host)
             func=lib
-            #print(func.imported_modules[0].get_source()) if len(func.imported_modules) > 0 else print("source not imported")
+            print(func.imported_modules[0].get_source()) if len(func.imported_modules) > 0 else print("source not imported")
+            #exit(0)
         # export library
         tmp = tempdir()
         if use_android:

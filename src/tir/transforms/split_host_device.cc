@@ -94,6 +94,13 @@ class VarUseDefAnalysis : public StmtExprMutator {
   }
 
   Stmt VisitStmt_(const StoreNode* op) final {
+    if (auto* ptr = op->buffer_var->type_annotation.as<PointerTypeNode>()) {
+      if (auto* prim = ptr->element_type.as<PrimTypeNode>()) {
+        if(prim->dtype.is_climgfloatrw()){
+          data_type_count_[op->buffer_var.get()] = DataType::kCLImgFloatW;
+        }
+      }
+    }
     this->HandleUse(op->buffer_var);
     return StmtExprMutator::VisitStmt_(op);
   }
@@ -142,6 +149,13 @@ class VarUseDefAnalysis : public StmtExprMutator {
   }
 
   PrimExpr VisitExpr_(const LoadNode* op) final {
+    if (auto* ptr = op->buffer_var->type_annotation.as<PointerTypeNode>()) {
+      if (auto* prim = ptr->element_type.as<PrimTypeNode>()) {
+        if(prim->dtype.is_climgfloatrw() && data_type_count_.count(op->buffer_var.get()) == 0){
+          data_type_count_[op->buffer_var.get()] = DataType::kCLImgFloat;
+        }
+      }
+    }
     this->HandleUse(op->buffer_var);
     return StmtExprMutator::VisitExpr_(op);
   }
@@ -177,6 +191,7 @@ class VarUseDefAnalysis : public StmtExprMutator {
   Array<IterVar> thread_axis_;
   Array<PrimExpr> thread_extent_;
   std::unordered_map<const VarNode*, int> use_count_;
+  std::unordered_map<const VarNode*, int> data_type_count_;
   std::unordered_map<const VarNode*, int> def_count_;
 
  private:
@@ -239,10 +254,20 @@ class HostDeviceSplitter : public StmtMutator {
         // Create a new version of v.
         auto it = handle_data_type_.find(var.get());
         if (it != handle_data_type_.end()) {
-          tir::Var new_var(var->name_hint, PointerType(PrimType((*it).second->dtype)));
+          int type_code = m.data_type_count_.count(var.get())?m.data_type_count_[var.get()]:(*it).second->dtype.code();
+          DataType dtype = (*it).second->dtype.with_code(type_code);
+          tir::Var new_var(var->name_hint, PointerType(PrimType(dtype)));
           params.push_back(new_var);
           remap_vars.Set(var, new_var);
         } else {
+          if (auto* ptr = var->type_annotation.as<PointerTypeNode>()) {
+            if (auto* prim = ptr->element_type.as<PrimTypeNode>()) {
+              if (m.data_type_count_.count(var.get())){
+                const_cast<PrimTypeNode*>(prim)->dtype=prim->dtype.with_code(m.data_type_count_[var.get()]);
+              }
+            }
+          }
+
           params.push_back(var);
         }
         arguments.push_back(var);

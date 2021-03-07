@@ -43,6 +43,51 @@ class WorkspacePool::Pool {
     allocated_.push_back(e);
   }
   // allocate from pool
+  void* Alloc(TVMContext ctx, DeviceAPI* device, DataShape* shape) {
+    // Allocate align to page.
+    size_t nbytes = 1;
+    for (int i = 0; i < shape->ndim; ++i) {
+      nbytes *= shape->shape[i];
+    }
+    nbytes = (nbytes + (kWorkspacePageSize - 1)) / kWorkspacePageSize * kWorkspacePageSize;
+    if (nbytes == 0) nbytes = kWorkspacePageSize;
+    Entry e;
+    DLDataType type;
+    type.code = kDLUInt;
+    type.bits = 8;
+    type.lanes = 1;
+    if (free_list_.size() == 2) {
+      e = free_list_.back();
+      free_list_.pop_back();
+      if (e.size < nbytes) {
+        // resize the page
+        device->FreeDataSpace(ctx, e.data);
+        e.data = device->AllocDataSpace(ctx, shape, kTempAllocaAlignment, type);
+        e.size = nbytes;
+      }
+    } else if (free_list_.size() == 1) {
+      e.data = device->AllocDataSpace(ctx, shape, kTempAllocaAlignment, type);
+      e.size = nbytes;
+    } else {
+      if (free_list_.back().size >= nbytes) {
+        // find smallest fit
+        auto it = free_list_.end() - 2;
+        for (; it->size >= nbytes; --it) {
+        }
+        e = *(it + 1);
+        free_list_.erase(it + 1);
+      } else {
+        // resize the page
+        e = free_list_.back();
+        free_list_.pop_back();
+        device->FreeDataSpace(ctx, e.data);
+        e.data = device->AllocDataSpace(ctx, shape, kTempAllocaAlignment, type);
+        e.size = nbytes;
+      }
+    }
+    allocated_.push_back(e);
+    return e.data;
+  }
   void* Alloc(TVMContext ctx, DeviceAPI* device, size_t nbytes) {
     // Allocate align to page.
     nbytes = (nbytes + (kWorkspacePageSize - 1)) / kWorkspacePageSize * kWorkspacePageSize;
@@ -147,6 +192,16 @@ WorkspacePool::~WorkspacePool() {
       delete array_[i];
     }
   }
+}
+
+void* WorkspacePool::AllocWorkspace(TVMContext ctx, DataShape* size) {
+  if (static_cast<size_t>(ctx.device_id) >= array_.size()) {
+    array_.resize(ctx.device_id + 1, nullptr);
+  }
+  if (array_[ctx.device_id] == nullptr) {
+    array_[ctx.device_id] = new Pool();
+  }
+  return array_[ctx.device_id]->Alloc(ctx, device_, size);
 }
 
 void* WorkspacePool::AllocWorkspace(TVMContext ctx, size_t size) {

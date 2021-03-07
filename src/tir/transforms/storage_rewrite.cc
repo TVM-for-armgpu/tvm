@@ -368,6 +368,7 @@ class StoragePlanRewriter : public StmtExprMutator {
     op = stmt.as<StoreNode>();
     auto it = alloc_map_.find(op->buffer_var.get());
     if (it == alloc_map_.end()) return stmt;
+    const_cast<StoreNode*>(op)->value.mutable_storage_type() = op->value_storage_type;
     return Store(it->second->alloc_var, op->value,
                  RemapIndex(op->value.dtype(), op->index, it->second), op->predicate);
   }
@@ -556,9 +557,14 @@ class StoragePlanRewriter : public StmtExprMutator {
         }
 
         if (e->allocs.size() == 1) {
-          // simply use the original allocation.
-          PrimExpr sz = foldl([](PrimExpr a, PrimExpr b, Span span) { return mul(a, b, span); },
-                              make_const(DataType::Int(32), 1), e->allocs[0]->extents);
+          PrimExpr sz;
+          if (alloc_type.is_climgfloatrw()) {
+            sz = tvm::runtime::encode_shape_fold(e->allocs[0]->extents);
+          } else {
+            // simply use the original allocation.
+            sz = foldl([](PrimExpr a, PrimExpr b, Span span) { return mul(a, b, span); },
+                                make_const(DataType::Int(32), 1), e->allocs[0]->extents);
+          }
           e->new_alloc =
               Allocate(e->alloc_var, alloc_type, {sz}, e->allocs[0]->condition, Evaluate(0));
           if (e->scope.tag.length() != 0) {

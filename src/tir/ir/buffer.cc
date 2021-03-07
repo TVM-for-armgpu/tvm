@@ -259,7 +259,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
           DONT_USE_SPLIT = 1;
           fclose(fp);
         }
-        if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()) {
+        if (n->dtype.is_climgfloatrw()) {
           int how_much_item_is_for_x_axes = 1;
           if (index.size() == 5) {
             how_much_item_is_for_x_axes = 2;
@@ -275,7 +275,8 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
           for (size_t i = i_last + 1; i < index.size(); ++i) {
             offset_x = MergeMulMod(&ana, offset_x * n->shape[i] + index[i]);
           }
-          base = base + indexmod(tvm::tir::Mul(offset, 21139), 21193) + offset_x;
+          //base = base + indexmod(tvm::tir::Mul(offset, 21139), 21193) + offset_x;
+          base = image_axis(base + offset_x, offset);
         } else {
           for (size_t i = 1; i < index.size(); ++i) {
             offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
@@ -320,6 +321,7 @@ inline PrimExpr BufferOffset(const BufferNode* n, Array<PrimExpr> index, DataTyp
 PrimExpr Buffer::vload(Array<PrimExpr> begin, DataType dtype) const {
   // specially handle bool, stored as DataType::Int(8)
   const BufferNode* n = operator->();
+  //LOG(WARNING) << "vload " << n->data << " " << long(n) << " code=" << n->dtype.code();
   ICHECK(dtype.element_of() == n->dtype.element_of() && dtype.lanes() % n->dtype.lanes() == 0)
       << "Cannot load " << dtype << " from buffer of " << n->dtype;
   if (dtype == DataType::Bool()) {
@@ -334,7 +336,11 @@ PrimExpr Buffer::vload(Array<PrimExpr> begin, DataType dtype) const {
 Stmt Buffer::vstore(Array<PrimExpr> begin, PrimExpr value) const {
   // specially handle bool, stored as DataType::Int(8)
   const BufferNode* n = operator->();
+  //LOG(WARNING) << "store " << n->data << " " << long(n) << " code=" << n->dtype.code();
   DataType dtype = value.dtype();
+  if (n->dtype.is_climgfloat() || n->dtype.is_climgfloatw()){
+    value.mutable_storage_type() = DataType::kCLImgFloatW;
+  }
   ICHECK(dtype.element_of() == n->dtype.element_of() && dtype.lanes() % n->dtype.lanes() == 0)
       << "Cannot store " << dtype << " to buffer of " << n->dtype;
   if (value.dtype() == DataType::Bool()) {
@@ -464,7 +470,7 @@ Buffer::Buffer(Var data, DataType dtype, Array<PrimExpr> shape, Array<PrimExpr> 
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
     .set_dispatch<BufferNode>([](const ObjectRef& node, ReprPrinter* p) {
       auto* op = static_cast<const BufferNode*>(node.get());
-      p->stream << "buffer(" << op->name << ", " << op << ")";
+      p->stream << "buffer(" << op->name << ", " << op->shape << ", " << op << ")";
     });
 
 TVM_REGISTER_NODE_TYPE(BufferNode);

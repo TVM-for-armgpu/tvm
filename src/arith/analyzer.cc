@@ -33,7 +33,8 @@ Analyzer::Analyzer()
       modular_set(this),
       rewrite_simplify(this),
       canonical_simplify(this),
-      int_set(this) {}
+      int_set(this),
+      inequalation_anylyzer(this) {}
 
 void Analyzer::Bind(const Var& var, const PrimExpr& expr, bool allow_override) {
   PrimExpr new_expr = expr;
@@ -114,6 +115,11 @@ bool Analyzer::CanProve(const PrimExpr& expr) {
   }
   return false;
 }
+
+PrimExpr Analyzer::SimplifyCmpExpr(const PrimExpr& expr, const Map<Var, IntSet>& dom_map) { 
+    return inequalation_anylyzer(expr, dom_map);
+}
+  
 
 PrimExpr Analyzer::Simplify(const PrimExpr& expr, int steps) {
   if (tir::is_const_int(expr)) return expr;

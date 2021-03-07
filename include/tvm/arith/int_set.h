@@ -136,6 +136,25 @@ class IntSet : public ObjectRef {
   TVM_DEFINE_OBJECT_REF_METHODS(IntSet, ObjectRef, IntSetNode);
 };
 
+// internal entry for Inequation
+struct EliminableSetNode : public Object {
+  PrimExpr max_value;
+  PrimExpr expr;
+  // visitor overload.
+  void VisitAttrs(tvm::AttrVisitor* v) {
+    v->Visit("expr", &expr);
+    v->Visit("max_value", &max_value);
+  }
+  static constexpr const char* _type_key = "EliminableSet";
+  static constexpr bool _type_has_method_sequal_reduce = false;
+  TVM_DECLARE_BASE_OBJECT_INFO(EliminableSetNode, Object);
+};
+struct EliminableSet : public ObjectRef {
+  explicit EliminableSet(PrimExpr expr_, PrimExpr max_value_);
+
+  TVM_DEFINE_OBJECT_REF_METHODS(EliminableSet, ObjectRef, EliminableSetNode);
+};
+
 //-----------------------------------------------
 // Integer set legacy API.
 //------------------------------------------------

@@ -20,5 +20,6 @@
 from __future__ import absolute_import as _abs
 
 from .conv2d import *
+from .mali_winograd import *
 from .depthwise_conv2d import *
 from .dense import *

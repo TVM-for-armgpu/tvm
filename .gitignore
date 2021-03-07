@@ -236,3 +236,4 @@ conda/pkg
 install/*
 tvm.si4project/*
 build_orig/*
+arm_runtime/*

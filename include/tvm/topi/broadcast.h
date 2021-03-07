@@ -327,6 +327,7 @@ TOPI_DEFINE_BCAST_OP(minimum, { return tvm::min(a, b); });
  * \return The result.
  */
 TOPI_DEFINE_BCAST_OP(power, { return tvm::pow(a, b); });
+TOPI_DEFINE_BCAST_OP(image_axiser, { return tvm::image_axis(a, b); });
 
 /*!
  * \fn left_shift

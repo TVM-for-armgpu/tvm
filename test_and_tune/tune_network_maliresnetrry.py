@@ -4,6 +4,11 @@ from tvm import relay, auto_scheduler
 import tvm.relay.testing
 from tvm.contrib import graph_runtime
 import os
+import logging
+import sys
+logging.getLogger("compile_engine").setLevel(logging.INFO)
+logging.getLogger("compile_engine").addHandler(logging.StreamHandler(sys.stdout))
+
 
 use_ndk = True
 def get_network(name, batch_size, layout="NHWC", dtype="float32"):
@@ -172,7 +177,7 @@ def tune_and_evaluate():
         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
     )
 
-    tuner.tune(tune_option)
+    #tuner.tune(tune_option)
 
     # Compile the whole network
     print("Compile...")

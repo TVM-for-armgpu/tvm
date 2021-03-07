@@ -177,7 +177,7 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
       p->stream << '{';
       for (auto it = op->begin(); it != op->end(); ++it) {
         if (it != op->begin()) {
-          p->stream << ", ";
+          p->stream << ",\n ";
         }
         if (it->first->IsInstance<StringObj>()) {
           p->stream << '\"' << Downcast<String>(it->first) << "\": ";

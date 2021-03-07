@@ -13,11 +13,12 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     Apad = data_vec
     W = kernel_vec
     B = conv_out
-#=========
+    #=========
     B = op.output(0)
     Apad, W = s[B].op.input_tensors
-#==========
-
+    #==========
+    if isinstance(s[Apad].op, tvm.te.ComputeOp) and "pad" in Apad.op.tag:
+        s[Apad].compute_inline()
     AL = s.cache_read(Apad, "local", [B])
     WL = s.cache_read(W, "local", [B])
     BL = s.cache_write(B, "local")
@@ -39,7 +40,7 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     rc, _, _ = s[BL].op.reduce_axis
 
     n, f, y, x, b_p4 = n, kp, hp, wp, p4
-    
+
     bf, kpi = cfg["tile_oc"].apply(s, B, f)
     by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
     bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
@@ -67,7 +68,7 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     _, kp, hp, wp, p4 = s[BL].op.axis
     whp = s[BL].fuse(wp, hp)
     rc, _, _ = s[BL].op.reduce_axis
-    
+
     rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
     #rco, rci = s[BL].split(rc, factor=4)
     #rco, rcm = s[BL].split(rco, factor=1)
