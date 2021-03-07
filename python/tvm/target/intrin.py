@@ -116,6 +116,9 @@ def _rule_float_direct(op):
     """
     if str(op.dtype).startswith("float"):
         return call_pure_extern(op.dtype, op.op.name[4:], *op.args)
+    if 'climgfloat' in str(op.dtype):
+        l_dtype = str(op.dtype).replace("climg",'').replace('r','').replace('w','')
+        return call_pure_extern(l_dtype, op.op.name[4:], *op.args)
     return None
 
 
