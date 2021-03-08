@@ -159,6 +159,7 @@ TVM_REGISTER_GLOBAL("tvm.intrin.rule.llvm.sinh")
       PrimExpr ret = (exp_posx - exp_negx) / two;
       *rv = ret;
     });
+TVM_REGISTER_GLOBAL("tvm.intrin.rule.llvm.general_axis").set_body(DispatchPureExternLLVM<Direct>);
 
 }  // namespace llvm
 }  // namespace codegen

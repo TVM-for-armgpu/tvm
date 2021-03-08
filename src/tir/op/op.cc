@@ -48,6 +48,11 @@ using namespace tir;
   TVM_REGISTER_OP(OpName).set_num_inputs(2).set_attr<TCallEffectKind>( \
       "TCallEffectKind", Integer(CallEffectKind::kPure))
 
+// macro to register an binary op
+#define TIR_REGISTER_PURE_TERNARY_OP(OpName)                            \
+  TVM_REGISTER_OP(OpName).set_num_inputs(3).set_attr<TCallEffectKind>( \
+      "TCallEffectKind", Integer(CallEffectKind::kPure))
+
 runtime::DataType GetRuntimeDataType(const Type& type) {
   if (auto* n = type.as<PrimTypeNode>()) {
     return n->dtype;
@@ -257,7 +262,7 @@ namespace runtime{
 std::vector<int> decode_shape_fold(uint64_t encoded_shape_i) {
   uint64_t encoded_shape = encoded_shape_i;
   int ndim = encoded_shape >> 56;
-  ICHECK(ndim == 5 || ndim == 6) << " decode failed, ndim could only be 5 or 6:vs " << ndim;
+  ICHECK((ndim > 0) && (ndim < 7)) << " decode failed, (ndim > 0) && (ndim < 7):vs " << ndim;
   int bit_shift_offset = ndim == 6 ? 2 : 1;
   uint64_t full = 0xffffffffffffffff;
   encoded_shape &= (full >> (64 - 56));
@@ -268,7 +273,17 @@ std::vector<int> decode_shape_fold(uint64_t encoded_shape_i) {
     
     //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
     //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
-  if (ndim == 5) {
+
+    //1-4 dim
+    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|
+    //|-----4-----|-----3-----|---14----|-----14----|----14---|----14----|
+  if (ndim < 5) {
+    for(size_t i=0;i<ndim;++i){
+      int abc = (14*(values.size()-i-1));
+      values[i] = encoded_shape >> abc;
+      encoded_shape &= (full >> (64 - abc));
+    }
+  } else if (ndim == 5) {
     int abc = (16*3+4);
     values[0] = encoded_shape >> abc;
     encoded_shape &= (full >> (64 - abc));
@@ -319,19 +334,29 @@ std::vector<int> decode_shape_fold(uint64_t encoded_shape_i) {
   return values;
 }
 PrimExpr encode_shape_fold(Array<PrimExpr> values) {
-  ICHECK(values.size() == 5 || values.size() == 6) << " can only encode 5 or 6 dim shape";
+  CHECK(values.size() > 0 && values.size() < 7) << " can only encode 1 to 6 dim shape";
   int64_t encoded_shape = (values.size()) << (56);
-  int bit_shift_offset = values.size() == 6 ? 2 : 1;
     
     //0---63bit---  w is used for winograd w*h
+    //5 dim
     //|---bytes---|-shape dim-|----N----|----C------|----H----|----W-----|-----C-----|
     //|-----4-----|-----3-----|----4----|-----16----|---16----|----16----|-----4----|
     
+    //6 dim
     //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
     //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
 
+    //1-4 dim
+    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|
+    //|-----4-----|-----3-----|---14----|-----14----|----14---|----14----|
+  if (values.size() < 5) {
+    for(size_t i=0;i<values.size();++i){
+      int64_t va_ = std::abs(values[0].as<IntImmNode>()->value);
+      encoded_shape |= va_ << (14*(values.size()-i-1));
+    }
+  }
     // for layout IOHW1i4o
-  if (values.size() == 5) {
+  else if (values.size() == 5) {
     int64_t va_ = std::abs(values[0].as<IntImmNode>()->value);
     ICHECK_LE(va_, 15);
     encoded_shape |= (va_ << (16*3+4));
@@ -748,6 +773,18 @@ PrimExpr image_axis(PrimExpr a, PrimExpr b, Span span) {
   return tir::Call(a.dtype(), op, {a, b}, span);
 }
 TIR_REGISTER_PURE_BINARY_OP("tir.image_axis").set_attr<TVectorizable>("TVectorizable", true);
+
+PrimExpr general_axis(PrimExpr a, PrimExpr b, PrimExpr c,Span span) {
+  ICHECK(a.dtype().is_int() || a.dtype().is_uint());
+  ICHECK(b.dtype().is_int() || b.dtype().is_uint());
+  ICHECK(c.dtype().is_int() || c.dtype().is_uint());
+  BinaryOpMatchTypes(a, b, span);
+  BinaryOpMatchTypes(a, c, span);
+  static auto op = Op::Get("tir.general_axis");
+  return tir::Call(a.dtype(), op, {a, b, c}, span);
+}
+TIR_REGISTER_PURE_TERNARY_OP("tir.general_axis").set_attr<TVectorizable>("TVectorizable", true);
+
 
 // abs
 PrimExpr abs(PrimExpr x, Span span) {

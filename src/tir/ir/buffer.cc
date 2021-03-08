@@ -251,6 +251,10 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
       ICHECK_EQ(n->shape.size(), index.size());
       if (index.size() > 0) {
         PrimExpr offset = index[0];
+        PrimExpr offset_general = index[0];
+        for (size_t i = 1; i < index.size(); ++i) {
+            offset_general = MergeMulMod(&ana, offset_general * n->shape[i] + index[i]);
+          }
 #if USE_CL_RGBA
         int DONT_USE_SPLIT = 0;
         FILE* fp = fopen("./dont_use_split", "r");
@@ -261,33 +265,55 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
         }
         if (n->dtype.is_climgfloatrw()) {
           int how_much_item_is_for_x_axes = 1;
-          if (index.size() == 5) {
-            how_much_item_is_for_x_axes = 2;
-          } else if (index.size() == 6) {
-            how_much_item_is_for_x_axes = 5;
+          switch (index.size()) {
+            case 6: {
+              how_much_item_is_for_x_axes = 5;
+              break;
+            }
+            case 5: {
+              how_much_item_is_for_x_axes = 2;
+              break;
+            }
+            case 4: {
+              how_much_item_is_for_x_axes = 2;
+              break;
+            }
+            case 3: {
+              how_much_item_is_for_x_axes = 2;
+              break;
+            }
+            case 2: {
+              how_much_item_is_for_x_axes = 2;
+              break;
+            }
+            default : {
+              how_much_item_is_for_x_axes = 1;
+              break;
+            }
           }
+
           for (size_t i = 1; i < index.size() - how_much_item_is_for_x_axes; ++i) {
             offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
           }
           int i_last = index.size() - how_much_item_is_for_x_axes;
-          ICHECK(i_last > 0) << "opencl image object dimention must greater than 2";
-          PrimExpr offset_x = index[i_last];
-          for (size_t i = i_last + 1; i < index.size(); ++i) {
-            offset_x = MergeMulMod(&ana, offset_x * n->shape[i] + index[i]);
+          if (i_last == 0) {
+            PrimExpr offset_y = IntImm(DataType::Int(32), 0);
+            PrimExpr offset_x = offset;
+            base = general_axis(base + offset_x, offset_y, offset_general+base);
+          } else {
+            //ICHECK(i_last > 0) << "opencl image object dimention must greater than 2";
+            PrimExpr offset_x = index[i_last];
+            for (size_t i = i_last + 1; i < index.size(); ++i) {
+              offset_x = MergeMulMod(&ana, offset_x * n->shape[i] + index[i]);
+            }
+            //base = base + indexmod(tvm::tir::Mul(offset, 21139), 21193) + offset_x;
+            base = general_axis(base + offset_x, offset, offset_general+base);
           }
-          //base = base + indexmod(tvm::tir::Mul(offset, 21139), 21193) + offset_x;
-          base = image_axis(base + offset_x, offset);
         } else {
-          for (size_t i = 1; i < index.size(); ++i) {
-            offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
-          }
-          base = base + offset;
+          base = base + offset_general;
         }
 #else
-        for (size_t i = 1; i < index.size(); ++i) {
-          offset = MergeMulMod(&ana, offset * n->shape[i] + index[i]);
-        }
-        base = base + offset;
+        base = base + offset_general;
 #endif
 
       }

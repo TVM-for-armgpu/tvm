@@ -423,7 +423,7 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t size, in
                                int dtype_bits_hint) {
   auto decode_shape_fold = [](uint64_t encoded_shape) -> std::vector<int> {
       int ndim = encoded_shape >> 56;
-      ICHECK(ndim == 5 || ndim == 6) << " decode failed, ndim could only be 5 or 6:vs " << ndim;
+      ICHECK((ndim > 0) && (ndim < 7)) << " decode failed, (ndim > 0) && (ndim < 7):vs " << ndim;
       int bit_shift_offset = ndim == 6 ? 2 : 1;
       uint64_t full = 0xffffffffffffffff;
       encoded_shape = (full >> (64 - 56)) & encoded_shape;
@@ -434,7 +434,17 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t size, in
     
     //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
     //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
-      if (ndim == 5) {
+
+    //1-4 dim
+    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|
+    //|-----4-----|-----3-----|---14----|-----14----|----14---|----14----|
+      if (ndim < 5) {
+        for(size_t i=0;i<ndim;++i){
+          int abc = (14*(values.size()-i-1));
+          values[i] = encoded_shape >> abc;
+          encoded_shape &= (full >> (64 - abc));
+        }
+      } else if (ndim == 5) {
         int abc = (16*3+4);
         values[0] = encoded_shape >> abc;
         encoded_shape &= (full >> (64 - abc));

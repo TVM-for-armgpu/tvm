@@ -756,6 +756,10 @@ llvm::Value* CodeGenLLVM::GetVarValue(const VarNode* v) const {
 
 llvm::Value* CodeGenLLVM::CreateCallExtern(Type ret_type, String global_symbol,
                                            const Array<PrimExpr>& args, bool skip_first_arg) {
+
+  if (global_symbol == "general_axis"){
+    return MakeValue(args[3]);
+  }
   std::vector<llvm::Value*> arg_value;
   std::vector<llvm::Type*> arg_type;
   for (size_t i = static_cast<size_t>(skip_first_arg); i < args.size(); ++i) {

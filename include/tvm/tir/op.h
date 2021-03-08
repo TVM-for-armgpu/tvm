@@ -664,6 +664,7 @@ TVM_DLL PrimExpr likely(PrimExpr cond, Span span = Span());
  */
 TVM_DLL PrimExpr pow(PrimExpr x, PrimExpr y, Span span = Span());
 TVM_DLL PrimExpr image_axis(PrimExpr a, PrimExpr b, Span span = Span());
+TVM_DLL PrimExpr general_axis(PrimExpr a, PrimExpr b, PrimExpr c, Span span = Span());
 
 /*!
  * \brief Calculate absolute value of x.
