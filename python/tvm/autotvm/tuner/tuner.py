@@ -89,7 +89,7 @@ class Tuner(object):
             result for measurement
         """
 
-    def tune(self, n_trial, measure_option, early_stopping=None, callbacks=(), si_prefix="G"):
+    def tune(self, n_trial, measure_option, early_stopping=None, callbacks=(), si_prefix="G", filt=lambda s, args: True):
         """Begin tuning
 
         Parameters
@@ -129,7 +129,8 @@ class Tuner(object):
 
             configs = self.next_batch(min(n_parallel, n_trial - i))
 
-            inputs = [MeasureInput(self.task.target, self.task, config) for config in configs]
+            inputs = [MeasureInput(self.task.target, self.task, config)
+                for config in configs if filt(config)]
             results = measure_batch(inputs)
 
             # keep best config
