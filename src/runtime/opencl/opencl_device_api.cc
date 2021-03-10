@@ -144,6 +144,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
     LOG(WARNING) << "attention:size == 0, may cause the wrong ans";
   }
   mptr = clCreateBuffer(this->context, CL_MEM_READ_WRITE, size, nullptr, &err_code);
+  LOG(WARNING) << "buffersize="<<size << " type_hint="<<type_hint << " " << mptr;
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }
@@ -154,7 +155,7 @@ void OpenCLWorkspace::get_image_t_size(TVMContext ctx, DataShape* dsize, size_t&
   int lans = dsize->dtype.lanes;
   lans = 4;
   ICHECK(lans == 1 || lans == 4) << "opencl image only surpport CL_RGBA and CL_R now";
-  ICHECK(dsize->ndim >= 2 && dsize->ndim <= 6 ) << "opencl image memory shape must be at least 2D";
+  ICHECK(dsize->ndim > 0 && dsize->ndim <= 6 ) << "opencl image memory shape must be at least 2D";
   if (dsize->ndim == 6) {
     width = dsize->shape[4] * dsize->shape[3] * dsize->shape[2] * dsize->shape[1] *
             dsize->shape[5] / lans;
@@ -162,20 +163,18 @@ void OpenCLWorkspace::get_image_t_size(TVMContext ctx, DataShape* dsize, size_t&
   } else if (dsize->ndim == 5) {
     width = dsize->shape[3] * dsize->shape[4] / lans;
     height = dsize->shape[2] * dsize->shape[1] * dsize->shape[0];
-  } else if (dsize->ndim > 3) {
-    if (dsize->shape[2] == 1 && dsize->shape[3] == 1) {
-      width = dsize->shape[1] / lans;
-      height = dsize->shape[0];
-    } else {
+  } else if (dsize->ndim == 4) {
       width = dsize->shape[2] * dsize->shape[3] / lans;
       height = dsize->shape[1] * dsize->shape[0];
-    }
-  } else if (dsize->ndim > 2) {
-    width = dsize->shape[2] / lans;
-    height = dsize->shape[1] * dsize->shape[0];
-  } else {
+  } else if (dsize->ndim == 3){
+    width = dsize->shape[1] * dsize->shape[2] / lans;
+    height = dsize->shape[0];
+  } else if (dsize->ndim == 2) {
     width = dsize->shape[1] / lans;
     height = dsize->shape[0];
+  } else {
+    width = dsize->shape[0] / lans;
+    height = 1;
   }
   #else
     //HWCN
@@ -222,6 +221,10 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   size_t height = 0, width = 0;
   get_image_t_size(ctx, dsize, height, width);
 
+  std::ostringstream os;
+  for (int i = 0; i < dsize->ndim; ++i) {
+    os << dsize->shape[i] << ",";
+  }
 
   cl_mem_flags mf = CL_MEM_READ_WRITE;
   TVMRetValue imgh, imgw;
@@ -243,6 +246,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
                         0};
 
   cl_mem mptr = clCreateImage(this->context, mf, &fmt, &desc, NULL, &err_code);
+  LOG(WARNING) << "image sie x=" << width << " y=" << height << " shape " << os.str() << " " << mptr;
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }
@@ -288,7 +292,7 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
                                      TVMContext ctx_to, DLDataType type_hint,
                                      TVMStreamHandle stream) {
   this->Init();
-  ICHECK(dsize->ndim >= 2) << "opencl image memory shape must be at least 2D";
+  ICHECK(dsize->ndim > 0 && dsize->ndim <= 6 ) << "opencl image memory shape must be at least 2D";
   size_t height = 0, width = 0;
   get_image_t_size(ctx_to, dsize, height, width);
 

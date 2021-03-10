@@ -33,6 +33,7 @@
 #include <tvm/ir/type.h>
 #include <tvm/tir/expr.h>
 #include <tvm/tir/stmt.h>
+#include <tvm/runtime/registry.h>
 
 #include <algorithm>
 #include <limits>
@@ -1134,8 +1135,7 @@ inline PrimExpr foldl(FReduce freduce, PrimExpr init_value, const Array<PrimExpr
 
 }  // namespace tir
 namespace runtime {
-std::vector<int> decode_shape_fold(uint64_t encoded_shape_i);
-PrimExpr encode_shape_fold(Array<PrimExpr> values);
+PrimExpr encode_shape_fold_primexpr(Array<PrimExpr> values);
 }  // namespace runtime
 
 // additional const expression overloading

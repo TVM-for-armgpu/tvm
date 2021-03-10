@@ -297,6 +297,170 @@ class Registry {
  */
 #define TVM_ADD_FILELINE "\n\nDefined in " __FILE__ ":L" TVM_STRINGIZE(__LINE__)
 
+template <class T>
+inline std::vector<T> decode_shape_fold(uint64_t encoded_shape) {
+  size_t ndim = encoded_shape >> 56;
+  ICHECK((ndim > 0) && (ndim < 7)) << " decode failed, (ndim > 0) && (ndim < 7):vs " << ndim;
+  uint64_t full = 0xffffffffffffffff;
+  encoded_shape &= (full >> (64 - 56));
+  std::vector<T> values(ndim, 0);
+    //0---63bit---  w is used for winograd w*h
+    //|---bytes---|-shape dim-|----N----|----C------|----H----|----W-----|-----C-----|
+    //|-----4-----|-----3-----|----4----|-----16----|---16----|----16----|-----4----|
+    
+    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
+    //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
+
+  // 1-4 dim
+  //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|
+  //|-----4-----|-----3-----|---14----|-----14----|----14---|----14----|
+  if (ndim < 3) {
+    for(size_t i=0;i<ndim;++i){
+      int abc = (28*(values.size()-i-1));
+      values[i] = encoded_shape >> abc;
+      encoded_shape &= (full >> (64 - abc));
+    }
+  } else if (ndim < 5) {
+    for(size_t i=0;i<ndim;++i){
+      int abc = (14*(values.size()-i-1));
+      values[i] = encoded_shape >> abc;
+      encoded_shape &= (full >> (64 - abc));
+    }
+  } else if (ndim == 5) {
+    int abc = (16*3+4);
+    values[0] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (16*2+4);
+    values[1] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (16*1+4);
+    values[2] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (16*0+4);
+    values[3] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (0);
+    values[4] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+  }else if(ndim == 6){
+    int abc = (16*2+8);
+    values[0] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (16*1+8);
+    values[1] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (8*1+8);
+    values[2] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (8);
+    values[3] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (4);
+    values[4] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+
+    abc = (0);
+    values[5] = encoded_shape >> abc;
+    encoded_shape &= (full >> (64 - abc));
+  }else{
+    ICHECK(false) << "error layout decode failed";
+  }
+  // for layout IOHW1i4o
+  return values;
+}
+template <class T>
+inline int64_t encode_shape_fold(std::vector<T> values) {
+  CHECK(values.size() > 0 && values.size() < 7) << " can only encode 1 to 6 dim shape";
+  int64_t encoded_shape = (values.size()) << (56);
+    
+    //0---63bit---  w is used for winograd w*h
+    //5 dim
+    //|---bytes---|-shape dim-|----N----|----C------|----H----|----W-----|-----C-----|
+    //|-----4-----|-----3-----|----4----|-----16----|---16----|----16----|-----4----|
+    
+    //6 dim
+    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
+    //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
+
+    //1-4 dim
+    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|
+    //|-----4-----|-----3-----|---14----|-----14----|----14---|----14----|
+  if (values.size() <= 2) {
+    for(size_t i=0;i<values.size();++i){
+      int64_t va_ = std::abs(values[i]);
+      ICHECK_LE(va_, 8192*8192-1) << " elments is bigger than 2^28 size=" <<values.size() << " " << values[0] <<" "<< values[1];
+      encoded_shape |= va_ << (28*(values.size()-i-1));
+    }
+  }
+  else if (values.size() <= 4) {
+    for(size_t i=0;i<values.size();++i){
+      int64_t va_ = std::abs(values[i]);
+      ICHECK_LE(va_, 8191) << " elments is bigger than 2^14 size=" <<values.size() << " " << values[0] <<" "<< values[1];
+      encoded_shape |= va_ << (14*(values.size()-i-1));
+    }
+  }
+    // for layout IOHW1i4o
+  else if (values.size() == 5) {
+    int64_t va_ = std::abs(values[0]);
+    ICHECK_LE(va_, 15);
+    encoded_shape |= (va_ << (16*3+4));
+
+    va_ = std::abs(values[1]);
+    ICHECK_LE(va_, 65535);
+    encoded_shape |= (va_ << (16*2+4));
+
+    va_ = std::abs(values[2]);
+    ICHECK_LE(va_, 65535);
+    encoded_shape |= (va_ << (16*1+4));
+
+    va_ = std::abs(values[3]);
+    ICHECK_LE(va_, 65535);
+    encoded_shape |= (va_ << (16*0+4));
+
+    va_ = std::abs(values[4]);
+    ICHECK_LE(va_, 15);
+    encoded_shape |= va_;
+  }else if (values.size() == 6){
+    int64_t va_ = std::abs(values[0]);
+    ICHECK_LE(va_, 65535);
+    encoded_shape |= (va_ << (16*2+8));
+
+    va_ = std::abs(values[1]);
+    ICHECK_LE(va_, 65535);
+    encoded_shape |= (va_ << (8*2+8));
+
+    va_ = std::abs(values[2]);
+    ICHECK_LE(va_, 256);
+    encoded_shape |= (va_ << (8*1+8));
+
+    va_ = std::abs(values[3]);
+    ICHECK_LE(va_, 256);
+    encoded_shape |= (va_ << (8));
+
+    va_ = std::abs(values[4]);
+    ICHECK_LE(va_, 15);
+    encoded_shape |= va_ << 4;
+
+    va_ = std::abs(values[5]);
+    ICHECK_LE(va_, 15);
+    encoded_shape |= va_;
+  } else{
+    ICHECK(false) << " doesnot surpport this layout";
+  }
+
+  ICHECK_LT(encoded_shape, std::numeric_limits<int64_t>::max());
+  ICHECK_GT(encoded_shape, 0);
+  return encoded_shape;
+};
+
 }  // namespace runtime
 }  // namespace tvm
 #endif  // TVM_RUNTIME_REGISTRY_H_

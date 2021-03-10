@@ -559,7 +559,7 @@ class StoragePlanRewriter : public StmtExprMutator {
         if (e->allocs.size() == 1) {
           PrimExpr sz;
           if (alloc_type.is_climgfloatrw()) {
-            sz = tvm::runtime::encode_shape_fold(e->allocs[0]->extents);
+            sz = tvm::runtime::encode_shape_fold_primexpr(e->allocs[0]->extents);
           } else {
             // simply use the original allocation.
             sz = foldl([](PrimExpr a, PrimExpr b, Span span) { return mul(a, b, span); },

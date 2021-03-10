@@ -30,6 +30,7 @@
 #include <tvm/tir/op_attr_types.h>
 
 #include <cmath>
+#include <vector>
 // Centralized header for constant folders.
 #include "../../arith/const_fold.h"
 #include "../../target/datatype/registry.h"
@@ -259,153 +260,16 @@ bool is_const_power_of_two_integer(const PrimExpr& x, int* shift) {
 }
 }  // namespace tir
 namespace runtime{
-std::vector<int> decode_shape_fold(uint64_t encoded_shape_i) {
-  uint64_t encoded_shape = encoded_shape_i;
-  int ndim = encoded_shape >> 56;
-  ICHECK((ndim > 0) && (ndim < 7)) << " decode failed, (ndim > 0) && (ndim < 7):vs " << ndim;
-  int bit_shift_offset = ndim == 6 ? 2 : 1;
-  uint64_t full = 0xffffffffffffffff;
-  encoded_shape &= (full >> (64 - 56));
-  std::vector<int> values(ndim, 0);
-    //0---63bit---  w is used for winograd w*h
-    //|---bytes---|-shape dim-|----N----|----C------|----H----|----W-----|-----C-----|
-    //|-----4-----|-----3-----|----4----|-----16----|---16----|----16----|-----4----|
-    
-    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
-    //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
 
-    //1-4 dim
-    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|
-    //|-----4-----|-----3-----|---14----|-----14----|----14---|----14----|
-  if (ndim < 5) {
-    for(size_t i=0;i<ndim;++i){
-      int abc = (14*(values.size()-i-1));
-      values[i] = encoded_shape >> abc;
-      encoded_shape &= (full >> (64 - abc));
-    }
-  } else if (ndim == 5) {
-    int abc = (16*3+4);
-    values[0] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (16*2+4);
-    values[1] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (16*1+4);
-    values[2] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (16*0+4);
-    values[3] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (0);
-    values[4] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-  }else if(ndim == 6){
-    int abc = (16*2+8);
-    values[0] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (16*1+8);
-    values[1] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (8*1+8);
-    values[2] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (8);
-    values[3] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (4);
-    values[4] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-
-    abc = (0);
-    values[5] = encoded_shape >> abc;
-    encoded_shape &= (full >> (64 - abc));
-  }else{
-    ICHECK(false) << "error layout decode failed";
+PrimExpr encode_shape_fold_primexpr(Array<PrimExpr> values) {
+  CHECK(values.size() > 0 && values.size() < 7)
+      << " can only encode 1 to 6 dim shape:vs" << values.size();
+  std::vector<int> value_vec;
+  for (auto pe : values) {
+    int va_ = std::abs(pe.as<IntImmNode>()->value);
+    value_vec.push_back(va_);
   }
-  // for layout IOHW1i4o
-  return values;
-}
-PrimExpr encode_shape_fold(Array<PrimExpr> values) {
-  CHECK(values.size() > 0 && values.size() < 7) << " can only encode 1 to 6 dim shape";
-  int64_t encoded_shape = (values.size()) << (56);
-    
-    //0---63bit---  w is used for winograd w*h
-    //5 dim
-    //|---bytes---|-shape dim-|----N----|----C------|----H----|----W-----|-----C-----|
-    //|-----4-----|-----3-----|----4----|-----16----|---16----|----16----|-----4----|
-    
-    //6 dim
-    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|------1----|-----C-----|
-    //|-----4-----|-----3-----|---16----|-----16----|----8----|----8-----|------4----|------4----|
-
-    //1-4 dim
-    //|---bytes---|-shape dim-|---I-----|----O------|----H----|----W-----|
-    //|-----4-----|-----3-----|---14----|-----14----|----14---|----14----|
-  if (values.size() < 5) {
-    for(size_t i=0;i<values.size();++i){
-      int64_t va_ = std::abs(values[0].as<IntImmNode>()->value);
-      encoded_shape |= va_ << (14*(values.size()-i-1));
-    }
-  }
-    // for layout IOHW1i4o
-  else if (values.size() == 5) {
-    int64_t va_ = std::abs(values[0].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 15);
-    encoded_shape |= (va_ << (16*3+4));
-
-    va_ = std::abs(values[1].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 65535);
-    encoded_shape |= (va_ << (16*2+4));
-
-    va_ = std::abs(values[2].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 65535);
-    encoded_shape |= (va_ << (16*1+4));
-
-    va_ = std::abs(values[3].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 65535);
-    encoded_shape |= (va_ << (16*0+4));
-
-    va_ = std::abs(values[4].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 15);
-    encoded_shape |= va_;
-  }else if (values.size() == 6){
-    int64_t va_ = std::abs(values[0].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 65535);
-    encoded_shape |= (va_ << (16*2+8));
-
-    va_ = std::abs(values[1].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 65535);
-    encoded_shape |= (va_ << (8*2+8));
-
-    va_ = std::abs(values[2].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 256);
-    encoded_shape |= (va_ << (8*1+8));
-
-    va_ = std::abs(values[3].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 256);
-    encoded_shape |= (va_ << (8));
-
-    va_ = std::abs(values[4].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 15);
-    encoded_shape |= va_ << 4;
-
-    va_ = std::abs(values[5].as<IntImmNode>()->value);
-    ICHECK_LE(va_, 15);
-    encoded_shape |= va_;
-  } else{
-    ICHECK(false) << " doesnot surpport this layout";
-  }
-
-  ICHECK_LT(encoded_shape, std::numeric_limits<int64_t>::max());
-  ICHECK_GT(encoded_shape, 0);
+  int64_t encoded_shape = encode_shape_fold(value_vec);
   return IntImm(DataType::Int(64), encoded_shape);
 };
 }  // namespace runtime
