@@ -1,4 +1,3 @@
-import tvm
 from tvm import tir
 from tvm import te
 
@@ -167,7 +166,7 @@ def validate_config(access_map, cfg, nthread_phys, nthread_logic, mem_hierarchy)
 
 
 class ArchDetail:
-    def __init__(nthread_phys: int, nthread_logic: int, mem_hierarchy: list):
+    def __init__(self, nthread_phys: int, nthread_logic: int, mem_hierarchy: list):
         self.nthread_phys = nthread_phys
         self.nthread_logic = nthread_logic
         self.mem_hierarchy = mem_hierarchy
