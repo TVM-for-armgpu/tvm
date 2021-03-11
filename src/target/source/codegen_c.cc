@@ -82,7 +82,7 @@ int GetValueType(const Type& type) {  // NOLINT(*)
   } else if (auto* ptr = type.as<PointerTypeNode>()) {
     return GetValueType(ptr->element_type);
   } else if (IsVoidType(type)) {
-    return NULL;
+    return 0;
   } else {
     LOG(FATAL) << "Type " << type << " does not have a corresponding C Type";
     return 0;
@@ -524,7 +524,16 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
     }
     os << "[(";
     std::ostringstream tmpos;
-    PrintExpr(index, tmpos);
+    if (auto* ptr = index.as<CallNode>()) {
+      // if index is general_axis,then we just use args[3];
+      if (auto* ptr1 = ptr->args[3].as<tir::RampNode>()) {
+        PrintExpr(ptr1->base, tmpos);
+      }else {
+        PrintExpr(ptr->args[3], tmpos);
+      }
+    }else {
+      PrintExpr(index, tmpos);
+    }
     std::string strind = Simplify_with_const_var(tmpos.str());
     os << strind;
     os << ")";
@@ -930,17 +939,18 @@ void removeSubstrs(std::string& s, const std::string& p) {
 void CodeGenC::PrintCallExtern(Type ret_type, String global_symbol, const Array<PrimExpr>& args,
                                bool skip_first_arg, std::ostream& os) {  // NOLINT(*)
     //read_image or write_image axis func
-    if (global_symbol == "image_axis") {
-      
-      os << "(int2)(";
+    if (global_symbol == "general_axis") {
       ICHECK_EQ(skip_first_arg, true) << " can't skip_first_arg";
-      ICHECK_EQ(args.size(), 3) << " args for image axis must be 2";
+      ICHECK_EQ(args.size(), 4) << " args for image axis must be 2";
       //DataType dtype = args[1].dtype();
       //ICHECK_EQ(dtype.lanes(), 4) << " only rgba is support yet ";
-      for (size_t i = static_cast<size_t>(skip_first_arg); i < args.size(); ++i) {
+      size_t cl_img_arg_size = args.size()-1;
+      os << "(int2)(";
+      for (size_t i = static_cast<size_t>(skip_first_arg); i < cl_img_arg_size; ++i) {
         PrimExpr tmp_prim = args[i];
         if (auto* ptr = tmp_prim.as<tir::RampNode>()) {
           ICHECK_EQ(ptr->lanes, 4) << " only rgba is support yet ";
+          
           std::ostringstream temp;
           this->PrintExpr(ptr->base, temp);
           // 4 == lanes
@@ -955,9 +965,9 @@ void CodeGenC::PrintCallExtern(Type ret_type, String global_symbol, const Array<
           os << img_y_axes;
         }
         else {
-          ICHECK(false) << " should not happen";
+          ICHECK(false) << " should not happen args="<<args;
         }
-        if (i < args.size() - 1) {
+        if (i < cl_img_arg_size-1) {
           os << ", ";
         }
       }
@@ -1099,7 +1109,7 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
     arith::PVar<PrimExpr> base;
     bool is_climg_cl_rgba_or_float = op->dtype.is_climgfloatrw() && (USE_CL_RGBA == 0);
     if ((is_climg_cl_rgba_or_float == false) && 
-      (arith::ramp(base, 1, op->dtype.lanes()).Match(op->index))|| (op->index).as<CallNode>()) {
+      (arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)|| (op->index).as<CallNode>())) {
       if (arith::ramp(base, 1, op->dtype.lanes()).Match(op->index)) {
         std::string ref = GetVecLoad(op->dtype, op->buffer_var.get(), base.Eval());
         HandleVolatileLoads(ref, op, os);
@@ -1139,6 +1149,7 @@ void CodeGenC::VisitExpr_(const LoadNode* op, std::ostream& os) {  // NOLINT(*)
         if (elem_type.is_climgfloatrw()) {
 #if USE_CL_RGBA
           LOG(FATAL) << "Not support read 1 element from 4-channel image";
+          //value_temp<<"(int2)(0,0)";
 #else 
           value_temp << get_2Dmemo_floatx1_int2(vid, index_temp.str()) << ").x";
 #endif
@@ -1169,6 +1180,7 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
     // write_image
     if (is_climg) {
 #if USE_CL_RGBA
+      //Store_2Dmemo_floatx1(vid, ref, value);
       LOG(FATAL) << "floatx4 Image store is not supported here";
 #else
       Store_2Dmemo_floatx1(vid, ref, value);

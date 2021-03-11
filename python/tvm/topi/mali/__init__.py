@@ -23,3 +23,5 @@ from .conv2d import *
 from .mali_winograd import *
 from .depthwise_conv2d import *
 from .dense import *
+from .softmax import *
+from .pooling import *

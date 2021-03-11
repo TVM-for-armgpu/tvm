@@ -272,15 +272,30 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
 
 void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr base,
                                  std::ostream& os) {  // NOLINT(*)
-   std::string vid = GetVarID(buffer);
+  std::string vid = GetVarID(buffer);
   std::ostringstream ossbase;
   PrintExpr(base, ossbase);
-  if (auto* axis_p = base.as<CallNode>()) {
-    os << GetVarID(buffer) << ", ";
-    if (t.is_climgfloat()) {
-      os << "sampler, ";
-    } 
-    os << ossbase.str();
+  if (auto* ptr = base.as<CallNode>()) {
+    if (t.is_climgfloatrw()) {
+      os << ossbase.str();
+    } else {
+      if (!HandleTypeMatch(buffer, t.element_of())) {
+        os << '(';
+        auto it = alloc_storage_scope_.find(buffer);
+        if (it != alloc_storage_scope_.end()) {
+          PrintStorageScope(it->second, os);
+        }
+        PrintType(t.element_of(), os);
+        os << "*)";
+        os << vid << "+";
+        // if index is general_axis,then we just use args[3];
+        if (auto* ptr1 = ptr->args[3].as<tir::RampNode>()) {
+          PrintExpr(ptr1->base, os);
+        }else {
+          PrintExpr(ptr->args[3], os);
+        }
+      }
+    }
     return;
   }
   do {
@@ -360,9 +375,19 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
 
 std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExpr base) {
   std::ostringstream os;
+  std::string scope;
+  std::string vid = GetVarID(buffer);
+  if (alloc_storage_scope_.count(buffer)) {
+    scope = alloc_storage_scope_.at(buffer);
+  }
+  if (scope.compare(0, sizeof("image") - 1, "image") != 0) {
+    t = t.with_code(kDLFloat);
+  } else {
+    t = t.with_code(kDLCLImgFloat);
+  }
   if (t.is_climgfloatrw()) {
 #if USE_CL_RGBA
-    os << "read_imagef(";
+    os << "read_imagef(" << vid << ", sampler, ";;
     t = t.with_code(kDLCLImgFloat);
 #else
     LOG(FATAL) << "floatx4 Image load is not supported here";
@@ -376,7 +401,7 @@ std::string CodeGenOpenCL::GetVecLoad(DataType t, const VarNode* buffer, PrimExp
 }
 void CodeGenOpenCL::Store_2Dmemo_floatx1(const std::string& vid, const std::string& addr,
     const std::string& value) {
-  stream << "write_imagef(" << vid << "," << addr << " , (float4)(" << value << "));\n";
+  stream << "write_imagef(" << vid << ", " << addr << ", (float4)(" << value << "));\n";
 }
 
 
@@ -392,7 +417,7 @@ void CodeGenOpenCL::PrintVecStore(const VarNode* buffer, DataType t, PrimExpr ba
   }
   if (nt.is_climgfloatrw()) {
 #if USE_CL_RGBA
-    stream << "write_imagef(";
+    stream << "write_imagef(" << vid << ", ";;
     // don't know why t's type was eliminated
     PrintVecAddr(buffer, nt.with_code(kDLCLImgFloatW), base, stream);
     stream << ", " << value;
@@ -563,6 +588,7 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
 #if USE_CL_RGBA
     LOG(FATAL) << "Not support fetch one elments froms 4-channel image! want " << vid << " "
                << index;
+    //os <<"(int2)(0,0)";
 #else
     std::ostringstream indexexp_os;
     PrintExpr(index, indexexp_os);

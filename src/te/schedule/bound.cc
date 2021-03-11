@@ -34,6 +34,8 @@
 
 namespace tvm {
 namespace te {
+void stlDump(const std::unordered_map<IterVar, Range>& d);
+void stlDump(const std::unordered_map<IterVar, IntSet>& d);
 
 using runtime::StorageRank;
 using runtime::StorageScope;

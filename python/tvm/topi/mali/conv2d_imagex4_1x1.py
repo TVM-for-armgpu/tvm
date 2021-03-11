@@ -67,13 +67,13 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
 
     _, kp, hp, wp, p4 = s[BL].op.axis
     whp = s[BL].fuse(wp, hp)
-    rc, _, _ = s[BL].op.reduce_axis
+    rc, kh, kw = s[BL].op.reduce_axis
 
     rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
     #rco, rci = s[BL].split(rc, factor=4)
     #rco, rcm = s[BL].split(rco, factor=1)
 
-    s[BL].reorder(rco, rcm, rci, whp, p4)
+    s[BL].reorder(rco, rcm, rci, whp, p4, kh, kw)
     s[BL].vectorize(p4)  # vectorize memory load
     s[BL].unroll(whp)
     s[BL].unroll(rci)

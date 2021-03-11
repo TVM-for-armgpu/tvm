@@ -683,6 +683,8 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
     dilated_kernel_h = (kernel_height - 1) * dilation_h + 1
     dilated_kernel_w = (kernel_width - 1) * dilation_w + 1
 
+    if isinstance(padding, int):
+        padding = [padding, padding, padding, padding]
     pad_top, pad_left, pad_down, pad_right = padding
     HPAD = pad_top + pad_down
     WPAD = pad_left + pad_right
@@ -708,10 +710,16 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
     cfg.define_split("tile_ow",
                      out_width,
                      num_outputs=3,
-                     filter=lambda y: y.size[-1] % 2 == 0,
+                     max_factor=16,
+                     filter=lambda y: y.size[-1] <= 8 and y.size[-1] % 2 == 0,
                      policy="verbose")
     cfg.define_split(
-        "tile_oh", out_height, num_outputs=3, filter=lambda y: y.size[-1] % 2 == 0, policy="verbose"
+        "tile_oh",
+        out_height,
+        num_outputs=3,
+        max_factor=16,
+        filter=lambda y: y.size[-1] <= 8 and y.size[-1] % 2 == 0,
+        policy="verbose",        
     )
     #end define autotvm space
 
