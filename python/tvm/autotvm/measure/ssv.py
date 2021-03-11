@@ -75,9 +75,7 @@ def collect_data_fabric(access_map):
 
     return rv
 
-LAST_ACCESS_MAP = None
-@tir.transform.prim_func_pass(opt_level=0)
-def extract_access_map(f, mod, ctx):
+def extract_access_map(f):
     class AccessFootPrint:
         def __init__(self, bufload_op):
             self.name = bufload_op.buffer.name
@@ -109,9 +107,7 @@ def extract_access_map(f, mod, ctx):
 
     v = Visitor()
     tir.stmt_functor.post_order_visit(f.body, v)
-    global LAST_ACCESS_MAP
-    LAST_ACCESS_MAP = v.access_map
-    return f
+    return v.access_map
 
 class Config:
     def __init__(self, s):
@@ -134,60 +130,58 @@ class Config:
             return default
         return x
 
-class SearchSpaceValidator:
-    def __init__(self, nthread_phys: int, nthread_logic: int, mem_hierarchy: list):
+def threading_score_higher_the_better(access_map, cfg, nthread_phys, nthread_logic):
+    nthread = cfg.get_or_default("threadIdx.x", 1) * cfg.get_or_default("threadIdx.y", 1) * cfg.get_or_default("threadIdx.z", 1)
+    if nthread < nthread_phys // 2:
+        return 0
+    if nthread > nthread_logic:
+        return 0
+    return nthread
+
+def memory_score_lower_the_better(access_map, cfg, mem_hierarchy):
+    fabrics = collect_data_fabric(access_map)
+
+    mx_fabric_size = 0
+    for output_var_name, input_vars, fabric_idx_var_names in fabrics:
+        fabric_size = 0
+        for input_var in input_vars:
+            var_access_size = 1
+            for idx in input_var.idxs:
+                if idx in fabric_idx_var_names:
+                    var_access_size *= cfg.get_or_default(idx, 1)
+                    #print('idx', idx, "=", cfg.get_or_default(idx, 1))
+            fabric_size += var_access_size
+        mx_fabric_size = max(mx_fabric_size, fabric_size)
+
+    for i, size in enumerate(mem_hierarchy):
+        if mx_fabric_size < size:
+            return i
+    return len(mem_hierarchy)
+
+# YOU CAN CHANGE THESE RULES
+def validate_config(access_map, cfg, nthread_phys, nthread_logic, mem_hierarchy):
+    threading_score = threading_score_higher_the_better(access_map, cfg, nthread_phys, nthread_logic)
+    memory_score = memory_score_lower_the_better(access_map, cfg, mem_hierarchy)
+    return threading_score > 0 and memory_score < 2
+
+
+
+class ArchDetail:
+    def __init__(nthread_phys: int, nthread_logic: int, mem_hierarchy: list):
         self.nthread_phys = nthread_phys
         self.nthread_logic = nthread_logic
         self.mem_hierarchy = mem_hierarchy
 
-    def threading_score_higher_the_better(self, access_map, cfg):
-        nthread = cfg.get_or_default("threadIdx.x", 1) * cfg.get_or_default("threadIdx.y", 1) * cfg.get_or_default("threadIdx.z", 1)
-        if nthread < self.nthread_phys // 2:
-            return 0
-        if nthread > self.nthread_logic:
-            return 0
-        return nthread
-    def memory_score_lower_the_better(self, access_map, cfg):
-        fabrics = collect_data_fabric(access_map)
+def validate_config_pass(opts: dict):
+    arch_detail = opts["ssv.arch_detail"]
+    nthread_phys = arch_detail.nthread_phys
+    nthread_logic = arch_detail.nthread_logic
+    mem_hierarchy = arch_detail.mem_hierarchy
 
-        mx_fabric_size = 0
-        for output_var_name, input_vars, fabric_idx_var_names in fabrics:
-            fabric_size = 0
-            for input_var in input_vars:
-                var_access_size = 1
-                for idx in input_var.idxs:
-                    if idx in fabric_idx_var_names:
-                        var_access_size *= cfg.get_or_default(idx, 1)
-                        #print('idx', idx, "=", cfg.get_or_default(idx, 1))
-                fabric_size += var_access_size
-            mx_fabric_size = max(mx_fabric_size, fabric_size)
-
-        for i, size in enumerate(self.mem_hierarchy):
-            if mx_fabric_size < size:
-                return i
-        return len(self.mem_hierarchy)
-
-    # YOU CAN CHANGE THIS
-    def _is_acceptable_threading(self, access_map, cfg):
-        threading_score = self.threading_score_higher_the_better(access_map, cfg)
-        #print("thread score =", threading_score)
-        return threading_score > 0
-
-    # YOU CAN CHANGE THIS
-    def _is_acceptable_memory(self, access_map, cfg):
-        memory_score = self.memory_score_lower_the_better(access_map, cfg)
-        #print("mem score =", memory_score)
-        return memory_score < 2
-
-    def is_acceptable(self, s, args):
-        access_map = None
-        # Lower to TIR and optimize.
-        with tvm.transform.PassContext(config={"tir.add_lower_pass": [(0, extract_access_map)]}):
-            tvm.lower(s, args)
-            access_map = LAST_ACCESS_MAP
-
+    def inner(f, *_):
+        access_map = extract_access_map(f)
         cfg = Config(s)
-        return self._is_acceptable_threading(access_map, cfg) and self._is_acceptable_memory(access_map, cfg)
+        assert validate_config(access_map, cfg, nthread_phys, nthread_logic, mem_hierarchy), "SSV denied further compilattion of this config"
+        return f
 
-    def __call__(self, s, args):
-        return self.is_acceptable(s, args)
+    return tir.transform.prim_func_pass(inner, opt_level=0)

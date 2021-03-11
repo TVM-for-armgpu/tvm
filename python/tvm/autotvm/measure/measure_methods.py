@@ -45,6 +45,7 @@ from ..task.space import InstantiationError
 
 from .measure import MeasureResult, MeasureErrorNo, Builder, Runner
 from .local_executor import LocalExecutor
+from .ssv import validate_config_pass
 
 logger = logging.getLogger("autotvm")
 
@@ -414,6 +415,8 @@ def _build_func_common(measure_input, check_gpu=None, cuda_arch=None, build_opti
             opts["tir.add_lower_pass"] = [(2, gpu_verify_pass(**check_gpu))]
         if cuda_arch:
             set_cuda_target_arch(cuda_arch)
+
+        opts["tir.add_lower_padd"] += [(0, validate_config_pass(**opts))]
 
         # if target is vta, we need to use vta build
         if (

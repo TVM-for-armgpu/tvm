@@ -26,3 +26,4 @@ from .measure import (
 from .measure_methods import LocalBuilder, LocalRunner, RPCRunner, request_remote
 from .executor import Executor
 from .local_executor import LocalExecutor
+from .ssv import ArchDetail, validate_config_pass
