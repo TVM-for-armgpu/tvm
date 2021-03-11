@@ -215,6 +215,7 @@ class RPCRunner(Runner):
         min_repeat_ms=0,
         cooldown_interval=0.1,
         enable_cpu_cache_flush=False,
+        arch_detail=None,
     ):
         super(RPCRunner, self).__init__(timeout, n_parallel)
 
@@ -230,6 +231,8 @@ class RPCRunner(Runner):
 
         self.enable_cpu_cache_flush = enable_cpu_cache_flush
         self.cooldown_interval = cooldown_interval
+
+        self.arch_detail = arch_detail
 
         self.executor = LocalExecutor(timeout=timeout * (self.n_parallel + 1))
 
@@ -274,6 +277,8 @@ class RPCRunner(Runner):
                 kwargs["cuda_arch"] = "sm_" + "".join(ctx.compute_version.split("."))
         if self.task.target.device_name == "micro_dev":
             kwargs.setdefault("build_option", {})["tir.disable_vectorize"] = True
+
+        kwargs.setdefault("build_option", {})["ssv.arch_detail"] = self.arch_detail
 
         return kwargs
 
@@ -358,6 +363,7 @@ class LocalRunner(RPCRunner):
         min_repeat_ms=0,
         cooldown_interval=0.1,
         enable_cpu_cache_flush=False,
+        arch_detail=None,
     ):
         super(LocalRunner, self).__init__(
             "",
@@ -371,6 +377,7 @@ class LocalRunner(RPCRunner):
             min_repeat_ms=min_repeat_ms,
             cooldown_interval=cooldown_interval,
             enable_cpu_cache_flush=enable_cpu_cache_flush,
+            arch_detail=arch_detail,
         )
         self.tracker = None
         self.server = None
