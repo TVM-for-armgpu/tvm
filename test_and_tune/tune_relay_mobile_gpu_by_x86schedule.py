@@ -9,7 +9,10 @@ from tvm.autotvm.tuner import XGBTuner, GATuner, RandomTuner, GridSearchTuner
 from tvm.contrib import utils, ndk
 from tvm.contrib.utils import tempdir
 import tvm.contrib.graph_runtime as runtime
-
+import logging
+import sys
+#logging.getLogger("autotvm").setLevel(logging.DEBUG)
+#logging.getLogger("autotvm").addHandler(logging.StreamHandler(sys.stdout))
 ######################################################################
 # Load a test image
 # -----------------
@@ -117,16 +120,18 @@ device_key = "android"
 
 
 #### TUNING OPTION ####
-network = 'mobilenet_v1_1.0_224'
-log_file = "%s.%s.log" % (device_key, network)
 dtype = 'float32'
-#dtype = 'climgfloatr32'
+dtype = 'climgfloatr32'
+
+network = 'mobilenet_v1_1.0_224'
+log_file = "%s.%s.log" % (dtype, network)
+
 
 use_android=True
 tuning_option = {
     'log_filename': log_file,
     'tuner': 'xgb',
-    'n_trial': 128,
+    'n_trial': 32,
     'early_stopping': 200,
 
     'measure_option': autotvm.measure_option(
@@ -208,7 +213,8 @@ def tune_tasks(tasks,
                            autotvm.callback.progress_bar(tsk_trial, prefix=prefix),
                            autotvm.callback.log_to_file(tmp_log_file)
                        ])
-        
+        #break
+
 
     # pick best records to a cache file
     autotvm.record.pick_best(tmp_log_file, log_filename)
@@ -274,11 +280,11 @@ def tune_and_evaluate(tuning_opt):
 
     # run tuning tasks
     print("Tuning...")
-    tune_tasks(tasks, **tuning_opt)
+    #tune_tasks(tasks, **tuning_opt)
 
     # compile kernels with history best records
     with autotvm.apply_history_best(log_file):
-    #if 1 ==1:
+        #if 1 ==1:
         print("Compile...")
         with relay.build_config(opt_level=3):
             graph, lib, params = relay.build_module.build(
@@ -304,7 +310,7 @@ def tune_and_evaluate(tuning_opt):
         # upload parameters to device
         ctx = remote.context(str(target), 0)
         module = runtime.create(graph, rlib, ctx)
-        data_tvm = tvm.nd.array((np.random.uniform(size=input_shape)).astype(dtype))
+        data_tvm = tvm.nd.array((np.random.uniform(size=input_shape)).astype('float32'),dtype=dtype)
         module.set_input('data', data_tvm)
         module.set_input(**params)
 

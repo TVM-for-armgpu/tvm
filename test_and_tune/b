@@ -1,0 +1,41 @@
+
+__kernel void fused_nn_contrib_conv2d_NCHWc_add_nn_relu_kernel0(__read_only image2d_t placeholder, __read_only image2d_t placeholder1, __write_only image2d_t T_relu, __read_only image2d_t placeholder2) {
+  float4 conv2d_NCHWc_local[4];
+  float placeholder_local[16];
+  float4 placeholder_d_local[4];
+  for (int ow_c_oh_c_fused_init = 0; ow_c_oh_c_fused_init < 4; ++ow_c_oh_c_fused_init) {
+    vstore4(((float4)(0.000000e+00f, 0.000000e+00f, 0.000000e+00f, 0.000000e+00f)), 0, (float*)conv2d_NCHWc_local + (ow_c_oh_c_fused_init * 4));
+  }
+  for (int ic_outer = 0; ic_outer < 8; ++ic_outer) {
+    for (int ax2 = 0; ax2 < 2; ++ax2) {
+      for (int ax3 = 0; ax3 < 2; ++ax3) {
+        if (((((int)get_group_id(1)) * 2) + ax2) < 7) {
+          if (((((int)get_group_id(0)) * 2) + ax3) < 7) {
+            vstore4(read_imagef(placeholder, sampler, (int2)(((2 * (int)get_group_id(0)) + (1 * ax3)), (((ic_outer * 7) + (((int)get_group_id(1)) * 2)) + ax2))), 0, placeholder_local + ((ax2 * 8) + (ax3 * 4)));
+          }
+        }
+      }
+    }
+    for (int ax0 = 0; ax0 < 4; ++ax0) {
+      vstore4(read_imagef(placeholder1, sampler, (int2)((1 * (int)get_group_id(2)), ((ic_outer * 4) + ax0))), 0, (float*)placeholder_d_local + (ax0 * 4));
+    }
+    for (int ic_inner_inner = 0; ic_inner_inner < 4; ++ic_inner_inner) {
+      for (int ow_c_oh_c_fused = 0; ow_c_oh_c_fused < 4; ++ow_c_oh_c_fused) {
+        if (((((int)get_group_id(1)) * 2) + (ow_c_oh_c_fused >> 1)) < 7) {
+          if (((((int)get_group_id(0)) * 2) + (ow_c_oh_c_fused & 1)) < 7) {
+            conv2d_NCHWc_local[(ow_c_oh_c_fused*4) / 4] = mad(((placeholder_local))[(((ow_c_oh_c_fused * 4) + ic_inner_inner))], vload4(0, (float*)placeholder_d_local + (ic_inner_inner * 4)), vload4(0, (float*)conv2d_NCHWc_local + (ow_c_oh_c_fused * 4)));
+          }
+        }
+      }
+    }
+  }
+  for (int ax2_inner_inner = 0; ax2_inner_inner < 2; ++ax2_inner_inner) {
+    for (int ax3_inner_inner = 0; ax3_inner_inner < 2; ++ax3_inner_inner) {
+      if (((((int)get_group_id(1)) * 2) + ax2_inner_inner) < 7) {
+        if (((((int)get_group_id(0)) * 2) + ax3_inner_inner) < 7) {
+          write_imagef(T_relu,(int2)(((2 * (int)get_group_id(0)) + (1 * ax3_inner_inner)), (((((int)get_group_id(2)) * 7) + (((int)get_group_id(1)) * 2)) + ax2_inner_inner)), max((vload4(0, (float*)conv2d_NCHWc_local + ((ax2_inner_inner * 8) + (ax3_inner_inner * 4))) + read_imagef(placeholder2, sampler, (int2)(0, ((int)get_group_id(2))))), ((float4)(0.000000e+00f, 0.000000e+00f, 0.000000e+00f, 0.000000e+00f))));
+        }
+      }
+    }
+  }
+}

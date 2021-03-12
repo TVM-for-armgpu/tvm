@@ -76,8 +76,8 @@ from tvm.topi.testing import conv2d_nchw_python
 
 import logging
 import sys
-#logging.getLogger("autotvm").setLevel(logging.DEBUG)
-#logging.getLogger("autotvm").addHandler(logging.StreamHandler(sys.stdout))
+logging.getLogger("autotvm").setLevel(logging.DEBUG)
+logging.getLogger("autotvm").addHandler(logging.StreamHandler(sys.stdout))
 #################################################################
 # Define network
 # --------------
@@ -144,9 +144,9 @@ dtype = "float32"
 tuning_option = {
     "log_filename": log_file,
     "tuner": "xgb",
-    "n_trial": 1,
+    "n_trial": 1000,
     "use_transfer_learning":True,
-    "early_stopping": 450,
+    "early_stopping": 850,
     "measure_option": autotvm.measure_option(
         builder=autotvm.LocalBuilder(build_func="ndk" if use_android else "default"),
         runner=autotvm.RPCRunner(
@@ -247,7 +247,7 @@ def tune_and_evaluate(tuning_opt):
     #    ops=(relay.op.get("nn.conv2d"),),
     #)
     # the last layer in resnet
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 32, 4, 1, 1, (
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 10, 10, 2048, 1024, 1, 1, (
         1, 1), (0, 0)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host

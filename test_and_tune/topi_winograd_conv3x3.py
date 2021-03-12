@@ -174,7 +174,7 @@ def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
 
     print("Extract tasks...", os.getpid())
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 256, 256, 3, 3, (1, 1), (1, 1)
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 47, 47, 512, 512, 3, 3, (1, 1), (1, 1)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
     )
