@@ -31,7 +31,7 @@ from tvm.te import tensor
 from tvm.te import schedule
 from tvm.target import Target
 from tvm.tir import stmt_functor
-
+from .ssv import ArchDetail, validate_config
 
 def get_binds(args, compact=False, binds=None):
     """Internal function to get binds and arg_list given arguments.
@@ -117,6 +117,8 @@ def form_irmodule(sch, args, name, binds):
 
     stmt = schedule.SchedulePostProcRewriteForTensorCore(stmt, sch, binds)
     func = schedule.SchedulePostProcToPrimFunc(arg_list, stmt, binds)
+
+    validate_config(func, None) #arch_detail
 
     func = func.with_attr("global_symbol", name)
 

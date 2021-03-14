@@ -45,7 +45,6 @@ from ..task.space import InstantiationError
 
 from .measure import MeasureResult, MeasureErrorNo, Builder, Runner
 from .local_executor import LocalExecutor
-from .ssv import validate_config_pass
 
 logger = logging.getLogger("autotvm")
 
@@ -278,8 +277,6 @@ class RPCRunner(Runner):
         if self.task.target.device_name == "micro_dev":
             kwargs.setdefault("build_option", {})["tir.disable_vectorize"] = True
 
-        kwargs.setdefault("build_option", {})["ssv.arch_detail"] = self.arch_detail
-
         return kwargs
 
     def run(self, measure_inputs, build_results):
@@ -363,7 +360,7 @@ class LocalRunner(RPCRunner):
         min_repeat_ms=0,
         cooldown_interval=0.1,
         enable_cpu_cache_flush=False,
-        arch_detail=None,
+        arch_detail=None
     ):
         super(LocalRunner, self).__init__(
             "",
@@ -422,8 +419,6 @@ def _build_func_common(measure_input, check_gpu=None, cuda_arch=None, build_opti
             opts["tir.add_lower_pass"] = [(2, gpu_verify_pass(**check_gpu))]
         if cuda_arch:
             set_cuda_target_arch(cuda_arch)
-
-        opts["tir.add_lower_padd"] += [(0, validate_config_pass(**opts))]
 
         # if target is vta, we need to use vta build
         if (
