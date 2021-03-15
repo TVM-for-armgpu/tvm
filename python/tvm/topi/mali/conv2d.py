@@ -705,20 +705,18 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
 
     # Define autotvm tuning space
     cfg.define_split("tile_ic", in_channel, num_outputs=3,
-                     filter=lambda x: x.size[-1] % ic_bn==0)
+                     filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
     cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
     cfg.define_split("tile_ow",
                      out_width,
                      num_outputs=3,
-                     max_factor=16,
-                     filter=lambda y: y.size[-1] <= 8 and y.size[-1] % 2 == 0,
+                     filter=lambda y: y.size[-1] <= 12 ,
                      policy="verbose")
     cfg.define_split(
         "tile_oh",
         out_height,
         num_outputs=3,
-        max_factor=16,
-        filter=lambda y: y.size[-1] <= 8 and y.size[-1] % 2 == 0,
+        filter=lambda y: y.size[-1] <= 12,
         policy="verbose",        
     )
     #end define autotvm space

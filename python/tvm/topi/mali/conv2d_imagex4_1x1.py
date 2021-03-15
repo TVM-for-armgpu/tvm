@@ -37,7 +37,6 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
         n, kp, hp, wp, p4 = s[B].op.axis
     #==========
     #n, kp, hp, wp, p4 = s[B].op.axis
-    rc, _, _ = s[BL].op.reduce_axis
 
     n, f, y, x, b_p4 = n, kp, hp, wp, p4
 

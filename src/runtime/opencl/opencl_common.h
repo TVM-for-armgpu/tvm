@@ -318,6 +318,8 @@ class OpenCLModuleNode : public ModuleNode {
   cl_kernel InstallKernel(cl::OpenCLWorkspace* w, cl::OpenCLThreadEntry* t,
                           const std::string& func_name, const KTRefEntry& e);
 
+ public:
+  std::vector<double> time_vec_;
  private:
   // The workspace, need to keep reference to use it in destructor.
   // In case of static destruction order problem.

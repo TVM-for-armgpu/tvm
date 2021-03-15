@@ -131,8 +131,8 @@ use_android=True
 tuning_option = {
     'log_filename': log_file,
     'tuner': 'xgb',
-    'n_trial': 32,
-    'early_stopping': 200,
+    'n_trial': 1200,
+    'early_stopping': 1800,
 
     'measure_option': autotvm.measure_option(
         builder=autotvm.LocalBuilder(
@@ -178,9 +178,9 @@ def tune_tasks(tasks,
                use_transfer_learning=True):
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
-    #if os.path.exists(tmp_log_file):
-    #    os.remove(tmp_log_file)
-    #use_transfer_learning=False
+    if os.path.exists(tmp_log_file):
+        os.remove(tmp_log_file)
+    use_transfer_learning=False
 
     for i, tsk in enumerate(reversed(tasks)):
         print("tuning ", tsk)
@@ -280,7 +280,7 @@ def tune_and_evaluate(tuning_opt):
 
     # run tuning tasks
     print("Tuning...")
-    #tune_tasks(tasks, **tuning_opt)
+    tune_tasks(tasks, **tuning_opt)
 
     # compile kernels with history best records
     with autotvm.apply_history_best(log_file):
@@ -316,7 +316,7 @@ def tune_and_evaluate(tuning_opt):
 
         # evaluate
         print("Evaluate inference time cost...")
-        ftimer = module.module.time_evaluator("run", ctx, number=1, repeat=10)
+        ftimer = module.module.time_evaluator("run", ctx, number=1, repeat=1)
         prof_res = np.array(ftimer().results) * 1000  # convert to millisecond
         print("Mean inference time (std dev): %.2f ms (%.2f ms)" %
               (np.mean(prof_res), np.std(prof_res)))

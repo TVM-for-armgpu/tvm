@@ -344,8 +344,8 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     ##### space definition begin #####
     n, c, y, x,_ = s[conv].op.axis
     bc, tc = cfg.define_split("tile_cp", c, num_outputs=2)
-    by, ty, yi = cfg.define_split("tile_hp", y, num_outputs=3, max_factor=16, filter=lambda y: y.size[-1] <=8)
-    bx, tx, xi = cfg.define_split("tile_wp", x, num_outputs=3, max_factor=16, filter=lambda y: y.size[-1] <=8)
+    by, ty, yi = cfg.define_split("tile_hp", y, num_outputs=3, filter=lambda y: y.size[-1] <=8)
+    bx, tx, xi = cfg.define_split("tile_wp", x, num_outputs=3, filter=lambda y: y.size[-1] <=8)
     cfg.define_annotate(
         "ann_spatial", [yi, xi], policy="try_unroll_vec")
 
