@@ -1,5 +1,5 @@
 import tvm
-from tvm import te, topi
+from tvm import te, topi,autotvm
 from tvm.topi import nn
 import tvm.testing
 from tvm import te
@@ -8,6 +8,7 @@ import numpy as np
 import timeit
 from tvm.topi.mali import mali_winograd as tune_winograd
 from tvm.topi.testing import conv2d_nchw_python
+from tvm.contrib.utils import tempdir
 
 # The size of the matrix
 # (M, K) x (K, N)
@@ -20,7 +21,7 @@ OC=320
 # The default tensor type in tvm
 ddtype = "climgfloatr32"
 out_dtype = "climgfloatw32"
-ddtype=out_dtype='float32'
+#ddtype=out_dtype='float32'
 # using Intel AVX2(Advanced Vector Extensions) ISA for SIMD
 # To get the best performance, please change the following line
 # to llvm -mcpu=core-avx2, or specific type of CPU you use
@@ -36,9 +37,9 @@ m = 2
 A, B, G = tvm.topi.nn.winograd_util.winograd_transform_matrices(m, r, 'float32')
 
 
-data_shape = (1, 512 // 4, 32, 32, 4)
-kernel_shape = (512, 512 // 4, 3, 3, 1, 4)
-out_shape = (1, 512 // 4, 32, 32, 4)
+data_shape = (1, 128 // 4, 28, 28, 4)
+kernel_shape = (128, 64 // 4, 3, 3, 1, 4)
+out_shape = (1, 128 // 4, 28, 28, 4)
 
 tile_size = 2
 wino_size = tile_size + 2
@@ -407,19 +408,48 @@ cfg.define_split("bgemm_hp", oc_chunk, num_outputs=2)
 #tune_winograd._schedule_winograd_nchwc_io(cfg, s, output.op)
 shecule_default()
 ##========shedule end=================================
+#============for andriod=====================
+arch = "arm64"
+target_host = tvm.target.Target("llvm -mtriple=%s-linux-android" % arch)
+target = tvm.target.Target("opencl -device=mali")
+
+# Also replace this with the device key in your tracker
+device_key = "android"
+use_android=True
+
+#===============anriod end==================
 func = tvm.build(s, [Data,filter_n,output], target=target)
 #assert func
 #print(tvm.lower(s, [M,output], simple_mode=True))
 #print(tvm.lower(s, [filter_n,Data,output], simple_mode=True))
-with open('dd.cl','w') as fp:
-    print(func.imported_modules[0].get_source(), file=fp) if len(
-        func.imported_modules) > 0 else print("source not imported", file=fp)
+#with open('dd.cl','w') as fp:
+#    print(func.imported_modules[0].get_source(), file=fp) if len(
+#        func.imported_modules) > 0 else print("source not imported", file=fp)
 dsp = tuple(int(i) for i in Data.shape)
 fsp = tuple(int(i) for i in filter_n.shape)
 osp = tuple(int(i) for i in output.shape)
 ###############test data=====================
-ao_np = np.arange(np.prod(dsp))
-a_np = ao_np
+#########andriod======================
+tmp = tempdir()
+if use_android:
+    from tvm.contrib import ndk
+    filename = "net.so"
+    func.export_library(tmp.relpath(filename), ndk.create_shared)
+else:
+    filename = "net.tar"
+    func.export_library(tmp.relpath(filename))
+
+# upload module to device
+print("Upload...")
+remote = autotvm.measure.request_remote(device_key, '0.0.0.0', 9090,
+                                        timeout=10000)
+remote.upload(tmp.relpath(filename))
+rlib = remote.load_module(filename)
+
+# upload parameters to device
+ctx = remote.context(str(target), 0)
+#===============================================
+a_np = np.arange(np.prod(dsp))
 PACK4=4
 H_P =img_H
 W_P =img_W
@@ -427,28 +457,40 @@ C_P = CI//4
 in_channel=CI
 out_channel=CO
 K_P=CO//4
-a_np = a_np.reshape(C_P*PACK4, H_P*W_P)
-a_np_t = a_np.reshape(1,C_P*PACK4, H_P, W_P)
+a_np = a_np.reshape(1, C_P*PACK4, H_P, W_P)
+a_np_t = a_np
+
 w_np_t = np.arange(in_channel*out_channel*9).reshape(out_channel,in_channel,3,3)
 w_np = w_np_t
 #==A-tvm data prepare
-a_np_tvm = a_np.T.reshape(C_P*H_P*W_P, 4)
-B1 = a_np_tvm[0::C_P, :]
-for i in range(C_P-1):
-    B1 = np.vstack((B1, a_np_tvm[i+1::C_P, :]))
-a_np_tvm = B1.reshape(1, C_P, H_P, W_P, PACK4) * 1.0
+a_np_tvm=np.ndarray(0)
+for i in range(0,in_channel,4):
+    b=a_np[:,i:i+4,:,:].transpose(0,2,3,1)
+    ct=np.expand_dims(b,axis=1)
+    if len(a_np_tvm.shape)!=5:
+        a_np_tvm=ct
+    else:
+        a_np_tvm=np.concatenate((a_np_tvm,ct),axis=1)
+
+a_np_tvm =  a_np_tvm*1.0
 #==W-tvm data prepare
-w_np_tvm = w_np.reshape(CI*K_P*3*3, 4)
-B1 = w_np_tvm[0::K_P, :]
-for i in range(K_P-1):
-    B1 = np.vstack((B1, w_np_tvm[i+1::C_P, :]))
-w_np_tvm = B1.reshape(CI, K_P, 3, 3,1, PACK4) * 1.0
+w_np_tvm=np.ndarray(0)
+for i in range(0,out_channel,4):
+    b=w_np[:,i:i+4,:,:].transpose(0,2,3,1)
+    ct=np.expand_dims(b,axis=1)
+    if len(w_np_tvm.shape)!=5:
+        w_np_tvm=ct
+    else:
+        w_np_tvm=np.concatenate((w_np_tvm,ct),axis=1)
+w_np_tvm = np.expand_dims(w_np_tvm, axis=-2)
+
+w_np_tvm =  w_np_tvm* 1.0
 
 ##################=========end================
 strides=1
 padding=1
 
-#c_np = conv2d_nchw_python(a_np_t, w_np_t, strides, padding)
+c_np = conv2d_nchw_python(a_np_t, w_np_t, strides, padding)
 #=============##############
 #data_tvm = tvm.nd.array(numpy.random.rand(*dsp).astype('float32'), ctx,dtype=ddtype)
 #filter_tvm = tvm.nd.array(numpy.random.rand(
@@ -461,11 +503,11 @@ func(data_tvm, filter_tvm, output_tvm)
 #==C-tvm data prepare
 c_tvm_o = output_tvm.asnumpy()
 
-#c_np_v = c_np.T.reshape(K_P*H_P*W_P, 4)
-#B1 = c_np_v[0::K_P, :]
-#for i in range(K_P-1):
-#    B1 = np.vstack((B1, c_np_v[i+1::K_P, :]))
-#c_np_v = B1.reshape(1, K_P, H_P, W_P, PACK4) * 1.0
+c_np_v = c_np.T.reshape(K_P*H_P*W_P, 4)
+B1 = c_np_v[0::K_P, :]
+for i in range(K_P-1):
+    B1 = np.vstack((B1, c_np_v[i+1::K_P, :]))
+c_np_v = B1.reshape(1, K_P, H_P, W_P, PACK4) * 1.0
 #tvm.testing.assert_allclose(c_np_v, c_tvm_o, rtol=1e-2)
 #exit(0)
 evaluator = func.time_evaluator(func.entry_name, ctx, number=1)
