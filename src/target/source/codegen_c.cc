@@ -157,7 +157,9 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
     // NCHW1i4c
     this->stream << R"(
 
- #define filter_mat mali_conv2d_nchw_winograd_U 
+    #define filter_mat mali_conv2d_nchw_winograd_U 
+    #define filter placeholder  
+
       const int nk_pack4 = get_image_dim(filter).x/3/3 ;
       const int nc = (get_image_dim(filter).y);
 
@@ -220,10 +222,11 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
     // supporse w==h,otherwise it's not correct
     this->stream << R"(
         
-    #define input data
+     #define input placeholder 
     #define input_mat mali_conv2d_nchw_winograd_V 
-    const int nc_pack4 = (get_image_dim(data).y/get_image_dim(data).x);
-    const int nh = get_image_dim(data).x;
+
+    const int nc_pack4 = (get_image_dim(input).y/get_image_dim(input).x);
+    const int nh = get_image_dim(input).x;
     const int nh_pack_wino = (nh+2-1)/2;
     const int nw_pack_wino = nh_pack_wino;
 
@@ -355,7 +358,7 @@ void CodeGenC::AddFunction(const PrimFunc& f) {
     #define C mali_conv2d_nchw_winograd_M 
     const int nbatch=4*4;
     const int nm_pack4=get_image_dim(mali_conv2d_nchw_winograd_U).x/4/4;
-    const int nk_pack4=get_image_dim(mali_conv2d_nchw_winograd_U).y;
+    const int nk_pack4=get_image_dim(mali_conv2d_nchw_winograd_U).y/4;
     const int nn_pack4=get_image_dim(mali_conv2d_nchw_winograd_V).x;
 
     const int n_pack4 = get_global_id(0);
@@ -1197,8 +1200,8 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
       ((op->index).as<CallNode>() || (arith::ramp(base, 1, t.lanes()).Match(op->index)))) {
       if (arith::ramp(base, 1, t.lanes()).Match(op->index)) {
         std::string value = this->PrintExpr(op->value);
-        auto new_code = is_climg ? DataType::kCLImgFloatW : DataType::kFloat;
-        this->PrintVecStore(op->buffer_var.get(), t.with_code(new_code), base.Eval(), value);
+        // only possible be float, because ,all imgfloat contrsuct by general_image_axis
+        this->PrintVecStore(op->buffer_var.get(), t.with_code(DataType::kFloat), base.Eval(), value);
       } else if ((op->index).as<CallNode>()) {
         auto new_code = is_climg ? DataType::kCLImgFloatW : DataType::kFloat;
         std::string value = this->PrintExpr(op->value);

@@ -717,7 +717,7 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
         out_height,
         num_outputs=3,
         filter=lambda y: y.size[-1] <= 12,
-        policy="verbose",        
+        policy="verbose",
     )
     #end define autotvm space
 
@@ -929,6 +929,7 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         ic_bn = 1
     # Pack data if raw 4-D data is provided.
     # This can only happen when autotuning.
+    pre_computed = False
     if len(data.shape) == 4:
         ic_bn = 4
         oc_bn = 4
@@ -936,7 +937,7 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         if autotvm.GLOBAL_SCOPE.in_tuning:
             # Directly use modified data layout placeholder.
             dshape = (N, ic_chunk, IH, IW, ic_bn)
-            data = tvm.te.placeholder(dshape, data.dtype, name="data")
+            data = tvm.te.placeholder(dshape, data.dtype, name="placeholder")
             kshape = (
                 CI,
                 CO // 4,
@@ -945,12 +946,15 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
                 1,
                 oc_bn,
             )
-            kernel = tvm.te.placeholder(
-                kshape, kernel.dtype, name="kernel_vec")
+            kernel = tvm.te.placeholder(kshape,
+                                        kernel.dtype,
+                                        name="placeholder")
         else:
             data, kernel = _pack_data(cfg, data, kernel)
     else:
         oc_chunk = CO // oc_bn
+        if KH == 4 or KH == 6:
+            pre_computed = True
     wino = tile_size
     winop2 = tile_size + 2
     wino_size = winop2
@@ -968,7 +972,6 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     else:
         dilation_h, dilation_w = dilation
     assert dilation_h == 1 and dilation_w == 1
-    pre_computed = False
 
     #if len(kernel.shape) == 4:
     #    if dilation_h != 1 or dilation_w != 1:
@@ -1019,7 +1022,10 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     cfg.define_split("bgemm_hp", oc_chunk, num_outputs=2)
     ##### space definition end #####
 
-    U = mali_winograd.kernel_transform(kernel, wino_size, G=G, out_dtype=out_dtype)
+    if pre_computed:
+        U = kernel
+    else:
+        U = mali_winograd.kernel_transform(kernel, wino_size, G=G, out_dtype=out_dtype)
     V = mali_winograd.data_transform(data, wino_size, B=B, out_dtype=out_dtype)
     M = mali_winograd.batch_gemm(U, V, out_dtype=out_dtype)
     output = mali_winograd.inverse_transform(
@@ -1461,32 +1467,48 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
         assert data_layout == "NCHW" and kernel_layout == "IOHW"
         N, CI, H, W = get_const_tuple(data.shape)
         CO, _, KH, KW = get_const_tuple(kernel.shape)
-        tile_size = _pick_tile_size(data, kernel)
-        VC = cfg["tile_bna"].val
+        #tile_size = _pick_tile_size(data, kernel)
+        tile_size = 2
+        VC = 4
 
+        data_expr = inputs[0]
         weight_expr = inputs[1]
         weight_expr = relay.nn.contrib_conv2d_winograd_weight_transform(
             weight_expr, tile_size=tile_size
         )
-        weight_expr = relay.reshape(
-            weight_expr, newshape=(
-                KH + tile_size - 1, KW + tile_size - 1, idxd(CO, VC), VC, CI)
-        )
-        weight_expr = relay.transpose(weight_expr, axes=[0, 1, 2, 4, 3])
+        #TODO results is not correct yet
+        weight_expr = relay.reshape(weight_expr,
+                                    newshape=(
+                                        idxd(CO, VC),
+                                        CI, KH + tile_size - 1,
+                                        KW + tile_size - 1,
+                                        1,
+                                        VC,
+                                    ))
+        #weight_expr = relay.transpose(weight_expr, axes=[0, 1, 2, 4, 3])
+        data_expr = relay.reshape(data_expr,
+                                  newshape=(
+                                      N,
+                                      idxd(CI, VC),
+                                      H,
+                                      W,
+                                      VC,
+                                  ))
 
         new_attrs["tile_size"] = tile_size
+        new_attrs["data_layout"] = "NCHW%dc" % VC
+        new_attrs["kernel_layout"] = "IOHW1i%do" % VC
 
-        new_data = data
-        new_kernel = te.placeholder(
-            (KH + tile_size - 1, KW + tile_size -
-             1, idxd(CO, VC), CI, VC), kernel.dtype
-        )
+        new_data = te.placeholder((N, idxd(CI, VC), H, W, VC), data.dtype)
+        new_kernel = te.placeholder((idxd(CO, VC), CI, KH + tile_size - 1,
+                                    KW + tile_size - 1, 1, VC), kernel.dtype)
         new_workload = autotvm.task.args_to_workload(
             [new_data, new_kernel, strides, padding, dilation, out_dtype],
             "conv2d_nchw_winograd_NCHWc_io.mali",
         )
         dispatch_ctx.update(target, new_workload, cfg)
-        return relay.nn.conv2d(*inputs, **new_attrs)
+        return relay.nn.contrib_conv2d_winograd_without_weight_transform(
+            data_expr, weight_expr, **new_attrs)
     elif topi_tmpl == "depthwise_conv2d_NCHWc_io.mali":
         # Converting NCHW to NCHWc.
         assert data_layout == "NCHW" and kernel_layout == "IOHW"

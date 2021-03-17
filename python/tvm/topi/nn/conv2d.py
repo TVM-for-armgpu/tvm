@@ -759,7 +759,7 @@ def conv2d_winograd_weight_transform(kernel, tile_size):
     r = tile_size + K - 1
     shape = (r, r) + shape[:2]
 
-    _, _, G = winograd_transform_matrices(tile_size, K, kernel.dtype)
+    _, _, G = winograd_transform_matrices(tile_size, K, kernel.dtype.replace("climg",'').replace('r','').replace('w',''))
 
     r_kh = te.reduce_axis((0, K), name="r_kh")
     r_kw = te.reduce_axis((0, K), name="r_kw")
