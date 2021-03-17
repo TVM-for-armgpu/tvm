@@ -111,7 +111,7 @@ target_host = tvm.target.Target("llvm -mtriple=%s-linux-android" % arch)
 target = tvm.target.Target("opencl -device=mali")
 
 # Also replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 
 
 #### TUNING OPTION ####

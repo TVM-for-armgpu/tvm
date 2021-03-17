@@ -60,7 +60,7 @@ print(task.compute_dag)
 #   :any:`auto_scheduler.LocalRPCMeasureContext` for more parameters.
 
 log_file = "conv2d.json"
-device_key = "android"
+device_key = "Adreno640"
 use_android = True
 use_ndk=True
 tune_option = auto_scheduler.TuningOptions(

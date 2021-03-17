@@ -4,12 +4,12 @@ function log() {
 }
 
 function check_device() {
-    /mnt/d/Programs/platform-tools/adb.exe devices|grep 9A221FFBA005D8
+    adb devices|grep 9A221FFBA005D8
     ret=$?
     return $ret
 }
 function wait_device() {
-	#/mnt/d/Programs/platform-tools/adb.exe tcpip 5555
+	#adb tcpip 5555
     check_device
     ret=$?
     while [[ $ret -ne 0 ]]
@@ -37,14 +37,14 @@ function wait_network() {
 	return $ret
 }
 function wait_port_released() {
-	/mnt/d/Programs/platform-tools/adb.exe -s 9A221FFBA005D8  shell su -c "pkill -9 tvm_rpc"
-	/mnt/d/Programs/platform-tools/adb.exe -s 9A221FFBA005D8  shell su -c "netstat -an|grep 9000" |grep tcp
+	adb -s 9A221FFBA005D8  shell su -c "pkill -9 tvm_rpc"
+	adb -s 9A221FFBA005D8  shell su -c "netstat -an|grep 9000" |grep tcp
 	ret=$?
 	while [[ $ret == 0 ]];
 	do
 		log "\rwait port 9000 available.."
 		sleep 5
-		/mnt/d/Programs/platform-tools/adb.exe -s 9A221FFBA005D8  shell su -c "netstat -an|grep 9000" |grep tcp
+		adb -s 9A221FFBA005D8  shell su -c "netstat -an|grep 9000" |grep tcp
 		ret=$?
 	done
 	log "port 9000 is available now"
@@ -54,7 +54,7 @@ while true; do
     log "start to connect to device 9A221FFBA005D8......................"
     wait_device
 
-    /mnt/d/Programs/platform-tools/adb.exe -s 9A221FFBA005D8  shell su -c "svc usb setFunctions rndis"
+    adb -s 9A221FFBA005D8  shell su -c "svc usb setFunctions rndis"
 
 	#wait_network
 	#ret=$?
@@ -65,7 +65,7 @@ while true; do
     #sudo ifconfig enp0s26u1u2 192.168.42.2
 	wait_port_released
     log "start rpc_server"
-    /mnt/d/Programs/platform-tools/adb.exe -s 9A221FFBA005D8  shell su -c "chmod +x /data/local/tmp/run.sh"
-    /mnt/d/Programs/platform-tools/adb.exe -s 9A221FFBA005D8  shell su -c "/data/local/tmp/run.sh" >> log.txt
+    adb -s 9A221FFBA005D8  shell su -c "chmod +x /data/local/tmp/arm_runtime_jicheng/run.sh"
+    adb -s 9A221FFBA005D8  shell su -c "/data/local/tmp/arm_runtime_jicheng/run.sh" >> log.txt
     sleep 2
 done

@@ -66,7 +66,7 @@ arch = "arm64"
 target_host = "llvm -mtriple=%s-linux-android" % arch
 
 # Also replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 
 # Set this to True if you use android phone
 use_android = True
@@ -181,7 +181,7 @@ def tune_and_evaluate(tuning_opt):
 
     # run tuning tasks
     print("Tuning...")
-    tune_tasks([tasks], **tuning_opt)
+    #tune_tasks([tasks], **tuning_opt)
 
     # compile kernels with history best records
     with autotvm.apply_history_best(log_file) as dispatch_context:

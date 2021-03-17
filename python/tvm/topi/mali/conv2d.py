@@ -683,9 +683,8 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
     dilated_kernel_h = (kernel_height - 1) * dilation_h + 1
     dilated_kernel_w = (kernel_width - 1) * dilation_w + 1
 
-    if isinstance(padding, int):
-        padding = [padding, padding, padding, padding]
-    pad_top, pad_left, pad_down, pad_right = padding
+    pad_top, pad_left, pad_down, pad_right = padding if isinstance(
+        padding, (tuple, list)) else (padding, padding, padding, padding)
     HPAD = pad_top + pad_down
     WPAD = pad_left + pad_right
 

@@ -98,7 +98,7 @@ log_file = "%s-%s-B%d-%s.json" % (network, layout, batch_size, target.kind.name)
 # and register devices to the tracker.
 
 # Replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 
 
 #################################################################

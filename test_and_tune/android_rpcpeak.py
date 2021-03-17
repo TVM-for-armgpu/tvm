@@ -18,7 +18,7 @@
 
 To use it, start an RPC tracker with "python -m tvm.exec.rpc_tracker".
 Use the tracker's address and port when configuring the RPC app.
-Use "android" as the key if you wish to avoid modifying this script.
+Use "Adreno640" as the key if you wish to avoid modifying this script.
 """
 
 import tvm
@@ -33,7 +33,7 @@ from tvm.topi.testing import conv2d_nchw_python
 # Set to be address of tvm proxy.
 tracker_host = '127.0.0.1'
 tracker_port = 9090
-key = "android"
+key = "Adreno640"
 
 # Change target configuration.
 # Run `adb shell cat /proc/cpuinfo` to find the arch.

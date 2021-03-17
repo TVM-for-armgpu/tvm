@@ -41,7 +41,7 @@ def load_image():
 # Load pretrained TFLite model
 # ----------------------------
 # Load mobilenet V1 TFLite model provided by Google
-def get_network():
+def get_network(network):
     input_dtype = dtype
     # auto-scheduler prefers NHWC layout
     layout = "NCHW"
@@ -49,18 +49,27 @@ def get_network():
     if layout == "NHWC":
         image_shape = (224, 224, 4)
     elif layout == "NCHW":
-        image_shape = (4, 224, 224)
+        if network == "resnet":
+            image_shape = (4,299,299)
+        else:
+            image_shape = (4, 224, 224)
     else:
         raise ValueError("Invalid layout: " + layout)
 
     input_shape = (batch_size,) + image_shape
     output_shape = (batch_size, 1000)
-
-    mod, params = tvm.relay.testing.mobilenet.get_workload(
-        batch_size=batch_size,
-        layout=layout,
-        dtype=dtype,
-        image_shape=image_shape)
+    if network == "resnet":
+        mod, params = tvm.relay.testing.resnet.get_workload(
+            batch_size=batch_size,
+            layout=layout,
+            dtype=dtype,
+            image_shape=image_shape)
+    else:
+        mod, params = tvm.relay.testing.mobilenet.get_workload(
+            batch_size=batch_size,
+            layout=layout,
+            dtype=dtype,
+            image_shape=image_shape)
     return mod, params, input_shape, input_dtype
     def extract(path):
         import tarfile
@@ -116,15 +125,16 @@ target_host = tvm.target.Target("llvm -mtriple=%s-linux-android" % arch)
 target = tvm.target.Target("opencl -device=mali")
 
 # Also replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 
 
 #### TUNING OPTION ####
 dtype = 'float32'
 dtype = 'climgfloatr32'
 
-network = 'mobilenet_v1_1.0_224'
-log_file = "%s.%s.log" % (dtype, network)
+network_name = 'resnet'
+network_name = 'mobilenet'
+log_file = "%s.%s.log" % (dtype, network_name)
 
 
 use_android=True
@@ -181,41 +191,48 @@ def tune_tasks(tasks,
     if os.path.exists(tmp_log_file):
         os.remove(tmp_log_file)
     use_transfer_learning=False
+    import threading
+    import time
 
     for i, tsk in enumerate(reversed(tasks)):
-        print("tuning ", tsk)
-        prefix = "[Task %2d/%2d] " % (i+1, len(tasks))
+        print(tsk)
+        continue
+        if 'wino' in tsk.name:
+            n_trial_=320
+        else:
+            n_trial_ = n_trial
 
+        print("tunning ", tsk)
+        prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
+        return
         # create tuner
-        if tuner == 'xgb' or tuner == 'xgb-rank':
-            tuner_obj = XGBTuner(tsk, loss_type='rank')
-        elif tuner == 'xgb_knob':
-            tuner_obj = XGBTuner(tsk, loss_type='rank', feature_type='knob')
-        elif tuner == 'ga':
+        if tuner == "xgb" or tuner == "xgb-rank":
+            tuner_obj = XGBTuner(tsk, loss_type="rank")
+        elif tuner == "ga":
             tuner_obj = GATuner(tsk, pop_size=50)
-        elif tuner == 'random':
+        elif tuner == "random":
             tuner_obj = RandomTuner(tsk)
-        elif tuner == 'gridsearch':
+        elif tuner == "gridsearch":
             tuner_obj = GridSearchTuner(tsk)
         else:
             raise ValueError("Invalid tuner: " + tuner)
 
         if use_transfer_learning:
             if os.path.isfile(tmp_log_file):
+                print("load previous results")
                 tuner_obj.load_history(autotvm.record.load_from_file(tmp_log_file))
 
         # do tuning
-        tsk_trial = min(n_trial, len(tsk.config_space))
-        tuner_obj.tune(n_trial=tsk_trial,
-                       early_stopping=early_stopping,
-                       measure_option=measure_option,
-                       callbacks=[
-                           autotvm.callback.progress_bar(tsk_trial, prefix=prefix),
-                           autotvm.callback.log_to_file(tmp_log_file)
-                       ])
-        #break
-
-
+        tsk_trial = min(n_trial_, len(tsk.config_space))
+        tuner_obj.tune(
+            n_trial=tsk_trial,
+            early_stopping=early_stopping,
+            measure_option=measure_option,
+            callbacks=[
+                autotvm.callback.progress_bar(tsk_trial, prefix=prefix),
+                autotvm.callback.log_to_file(tmp_log_file),
+            ],
+        )
     # pick best records to a cache file
     autotvm.record.pick_best(tmp_log_file, log_filename)
     #os.remove(tmp_log_file)
@@ -259,7 +276,7 @@ def remove_template(tasks, template_names):
 def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
     print("Extract tasks... ",os.getpid())
-    mod, params, input_shape, _ = get_network()
+    mod, params, input_shape, _ = get_network(network_name)
 
     if use_nchw:
         # Convert the layout to NCHW

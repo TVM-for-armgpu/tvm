@@ -64,6 +64,7 @@ import os
 
 import numpy as np
 
+import time
 import tvm
 from tvm import te
 from tvm import relay, autotvm
@@ -76,8 +77,8 @@ from tvm.topi.testing import conv2d_nchw_python
 
 import logging
 import sys
-logging.getLogger("autotvm").setLevel(logging.DEBUG)
-logging.getLogger("autotvm").addHandler(logging.StreamHandler(sys.stdout))
+#logging.getLogger("autotvm").setLevel(logging.DEBUG)
+#logging.getLogger("autotvm").addHandler(logging.StreamHandler(sys.stdout))
 #################################################################
 # Define network
 # --------------
@@ -97,7 +98,7 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     in_channel = CI
     out_channel = CO
     in_size=H
-    open_image = 0
+    open_image = 1
     ddtype = 'float32'
     if open_image:
         ddtype = 'climgfloatr32'
@@ -105,8 +106,8 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
                              name='data', dtype=ddtype)
     kernel_pl = te.placeholder((CI,K_P, 1, 1, 1, PACK4),
                                name='filter', dtype=ddtype)
-    conv_pl = topi.mali.conv2d_NCHWc_io(data_pl, kernel_pl, 1, 1,
-                                     0, 'NCHWc', 'NCHWc', ddtype.replace('r','w'))
+    conv_pl = topi.mali.conv2d_NCHWc_io(data_pl, kernel_pl, 1, 0,
+                                     1, 'NCHWc', 'NCHWc', ddtype.replace('r','w'))
     conv_pl.dtype = "climgfloatw32"
     s = topi.mali.schedule_conv2d_NCHWc_io(conv_pl)
     #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True))
@@ -131,7 +132,7 @@ arch = "arm64"
 target_host = "llvm -mtriple=%s-linux-android" % arch
 
 # Also replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 
 # Set this to True if you use android phone
 use_android = True
@@ -145,7 +146,7 @@ tuning_option = {
     "log_filename": log_file,
     "tuner": "xgb",
     "n_trial": 1000,
-    "use_transfer_learning":True,
+    "use_transfer_learning":False,
     "early_stopping": 850,
     "measure_option": autotvm.measure_option(
         builder=autotvm.LocalBuilder(build_func="ndk" if use_android else "default"),
@@ -188,13 +189,13 @@ def tune_tasks(
     log_filename="tuning.log",
     use_transfer_learning=True,
 ):
+    import threading
     use_transfer_learning=True
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
     #if os.path.exists(tmp_log_file):
     #    os.remove(tmp_log_file)
-
-    for i, tsk in enumerate(reversed(tasks)):
+    def run_one_task(i, tsk):
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # create tuner
@@ -226,6 +227,17 @@ def tune_tasks(
             ],
         )
 
+    thread_handle = []
+    thread_num = 6
+    for i, tsk in enumerate(reversed(tasks)):
+        thread_handle.append(threading.Thread(target=run_one_task, args=(i, tsk)))
+        thread_handle[-1].start()
+        while len(thread_handle) >= thread_num:
+            for handle in thread_handle:
+                if not handle.is_alive():
+                    handle.join()
+    for handle in thread_handle:
+        handle.join()
     # pick best records to a cache file
     autotvm.record.pick_best(tmp_log_file, log_filename)
     #os.remove(tmp_log_file)
@@ -233,6 +245,29 @@ def tune_tasks(
 
 ########################################################################
 # Finally, we launch tuning jobs and evaluate the end-to-end performance.
+convshape = [
+    #resnet
+    (1, 14, 14, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    (1, 19, 19, 512, 256, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
+    (1, 19, 19, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    (1, 38, 38, 256, 128, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
+    (1, 38, 38, 256, 128, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    (1, 75, 75, 128, 64, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
+    (1, 75, 75, 64, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 75, 75, 128, 64, 3, 3, (1, 1), (1, 1, 1, 1), (1, 1)),
+    (1, 299, 299, 64, 4, 7, 7, (2, 2), (3, 3, 3, 3), (1, 1)),
+    #mobilenet
+    (1, 4, 224, 224, 4, 32, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    (1, 32, 112, 112, 32, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 64, 56, 56, 64, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 128, 56, 56, 128, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 128, 28, 28, 128, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 256, 28, 28, 256, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 256, 14, 14, 256, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 512, 14, 14, 512, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 512, 7, 7, 512, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 1024, 7, 7, 1024, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+]
 
 
 def tune_and_evaluate(tuning_opt):
@@ -247,15 +282,16 @@ def tune_and_evaluate(tuning_opt):
     #    ops=(relay.op.get("nn.conv2d"),),
     #)
     # the last layer in resnet
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 10, 10, 2048, 1024, 1, 1, (
-        1, 1), (0, 0)
-    tasks = autotvm.task.create(
-        "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
-    )
+    for shape in convshape:
+        N, H, W, CO, CI, KH, KW, strides, padding,dialte = shape
+        tasks = autotvm.task.create(
+            "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
+        )
 
-    # run tuning tasks
-    print("Tuning...")
-    tune_tasks([tasks], **tuning_opt)
+        # run tuning tasks
+        print("Tuning...", shape,device_key)
+        tune_tasks([tasks], **tuning_opt)
+        time.sleep(60*5)
 
     # compile kernels with history best records
     with autotvm.apply_history_best(log_file) as dispatch_context:

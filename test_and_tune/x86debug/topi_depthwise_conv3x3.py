@@ -65,7 +65,7 @@ arch = "arm64"
 target_host = "llvm -mtriple=%s-linux-android" % arch
 target_host=None
 # Also replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 
 # Set this to True if you use android phone
 use_android = False

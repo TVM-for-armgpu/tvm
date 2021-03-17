@@ -56,9 +56,9 @@ CI=kernel_shape[0]
 NTILE = wino2H*wino2H
 
 data_pl = te.placeholder((1, CI//4, img_H, img_W, 4),
-                            name='data', dtype=ddtype)
+                            name='placeholder', dtype=ddtype)
 kernel_pl = te.placeholder((CI, CO//4, 3, 3,1,4),
-                            name='filter', dtype=ddtype)
+                            name='placeholder', dtype=ddtype)
 conv_pl = topi.mali.conv2d_nchw_winograd_NCHWc_io(data_pl, kernel_pl, 1, 1,
                                      1, "","",ddtype.replace('r','w'))
 
@@ -184,7 +184,7 @@ def s1(s, G, filter_n, U):
     s[U].bind(kpi, thread_x)
     s[U].bind(cpi, thread_y)
     s[U].reorder(cpo,cpi,kpi,Uhp,Uwp,Up4,kpo)
-    
+
     # Schedule BL local write
     s[UL].compute_at(s[U],kpo)
     _,_,hp, wp, _, p4  = s[UL].op.axis
@@ -195,7 +195,7 @@ def s1(s, G, filter_n, U):
     #s[UL].unroll(hp)
     #s[UL].unroll(k1)
     #s[UL].unroll(k2)
-    
+
     s[WL].compute_at(s[UL], hp)
     _,_,hp, wp,_, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
@@ -234,7 +234,7 @@ def s2(s,B,DataPad,V):
     s[V].bind(hpi, thread_y)
     s[V].bind(cpi, thread_z)
     s[V].reorder(cpo,cpi,hpo,hpi,wpi,wpo,Vp4,n)
-    
+
     # Schedule BL local write
     s[VL].compute_at(s[V],n)
     _,_, hp, wp, p4  = s[VL].op.axis
@@ -245,7 +245,7 @@ def s2(s,B,DataPad,V):
     #s[VL].unroll(hp)
     #s[VL].unroll(k1)
     #s[VL].unroll(k2)
-    
+
     s[WL].compute_at(s[VL], hp)
     _,_,hp, wp, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
@@ -281,11 +281,11 @@ def s3(s, U, V, M):
     s[M].bind(hpi, thread_z)
     s[M].bind(kpi, thread_y)
     s[M].reorder(kpo,hpo,hpi,wpi,wpo,Mwp,Mp4,kpi)
-    
+
     # Schedule BL local write
     s[ML].compute_at(s[M],kpi)
     s[M].reorder(kpi, Mwp, Mp4)
-    
+
     _,_, hp, wp, p4  = s[ML].op.axis
     rc, = s[ML].op.reduce_axis
     rco,rci = s[ML].split(rc,factor=4)
@@ -294,12 +294,12 @@ def s3(s, U, V, M):
     #s[ML].unroll(wp)
     #s[ML].unroll(hp)
     #s[ML].unroll(k1)
-    
-    
+
+
     #schedule UL VL local read
     s[UL].compute_at(s[ML], rco)
     s[VL].compute_at(s[ML], rco)
-    
+
     #split Ul VL workload
     a,b,hp, wp, _,p4 = s[UL].op.axis
     s[UL].vectorize(p4)  # vectorize memory load
@@ -309,7 +309,7 @@ def s3(s, U, V, M):
     s[VL].vectorize(p4)  # vectorize memory load
     #s[VL].unroll(wp)
     #s[VL].unroll(hp)
-    
+
     s[M].vectorize(Mp4)  # vectorize memory load
     #s[M].unroll(Mwp)  # vectorize memory load
     #s[M].unroll(Mhp)  # vectorize memory load
@@ -332,13 +332,13 @@ def s4(s, A, M, output):
     # Split the workloads
     n, cp, hp, wp, Op4  = s[O].op.axis
     cpo,cpi=s[O].split(cp,factor=4)
-    
+
     wp,Owp=s[O].split(wp,factor=4)
     wpo,wpi=s[O].split(wp,factor=4)
-    
+
     hp,Ohp=s[O].split(hp,factor=4)
     hpo,hpi=s[O].split(hp,factor=4)
-    
+
     s[O].bind(wpo, block_x)
     s[O].bind(hpo, block_y)
     s[O].bind(cpo, block_z)
@@ -346,7 +346,7 @@ def s4(s, A, M, output):
     s[O].bind(hpi, thread_y)
     s[O].bind(cpi, thread_z)
     s[O].reorder(cpo,cpi,hpo,hpi,wpi,wpo,Owp,Ohp,Op4,n)
-    
+
     # Schedule BL local write
     s[OL].compute_at(s[O],n)
     _,_, hp, wp, p4  = s[OL].op.axis
@@ -357,7 +357,7 @@ def s4(s, A, M, output):
     #s[OL].unroll(hp)
     #s[OL].unroll(k1)
     #s[OL].unroll(k2)
-    
+
     s[ML].compute_at(s[OL], hp)
     _,_,hp, wp, p4 = s[ML].op.axis
     s[ML].vectorize(p4)  # vectorize memory load
@@ -389,7 +389,7 @@ cfg.define_split("inv_wp", NTILE, num_outputs=3,
                     filter=lambda x: x.size[-1] == 4)
 cfg.define_split("inv_hp", winop2_tile_size, num_outputs=3,
                     filter=lambda x: x.size[-1] == 4)
-                    
+
 cfg.define_split("kernel_cp", CI, num_outputs=2, max_factor=32)
 cfg.define_split("kernel_kp", oc_chunk, num_outputs=2, max_factor=32)
 
@@ -414,17 +414,19 @@ target_host = tvm.target.Target("llvm -mtriple=%s-linux-android" % arch)
 target = tvm.target.Target("opencl -device=mali")
 
 # Also replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 use_android=True
 
 #===============anriod end==================
-func = tvm.build(s, [Data,filter_n,output], target=target)
+func = tvm.build(s, [Data, filter_n, output],
+                 target=target,
+                 target_host=target_host)
 #assert func
 #print(tvm.lower(s, [M,output], simple_mode=True))
 #print(tvm.lower(s, [filter_n,Data,output], simple_mode=True))
-#with open('dd.cl','w') as fp:
-#    print(func.imported_modules[0].get_source(), file=fp) if len(
-#        func.imported_modules) > 0 else print("source not imported", file=fp)
+with open('dd.cl','w') as fp:
+    print(func.imported_modules[0].get_source(), file=fp) if len(
+        func.imported_modules) > 0 else print("source not imported", file=fp)
 dsp = tuple(int(i) for i in Data.shape)
 fsp = tuple(int(i) for i in filter_n.shape)
 osp = tuple(int(i) for i in output.shape)
@@ -444,7 +446,7 @@ print("Upload...")
 remote = autotvm.measure.request_remote(device_key, '0.0.0.0', 9090,
                                         timeout=10000)
 remote.upload(tmp.relpath(filename))
-rlib = remote.load_module(filename)
+func = remote.load_module(filename)
 
 # upload parameters to device
 ctx = remote.context(str(target), 0)
