@@ -137,29 +137,6 @@ device_key = "Adreno640"
 # Set this to True if you use android phone
 use_android = True
 
-#### TUNING OPTION ####
-network = "topinhw4c1"
-log_file = "%s.%s.log" % (device_key, network)
-dtype = "float32"
-
-tuning_option = {
-    "log_filename": log_file,
-    "tuner": "xgb",
-    "n_trial": 1000,
-    "use_transfer_learning":True,
-    "early_stopping": 450,
-    "measure_option": autotvm.measure_option(
-        builder=autotvm.LocalBuilder(build_func="ndk" if use_android else "default"),
-        runner=autotvm.RPCRunner(
-            device_key,
-            host="0.0.0.0",
-            port=TRACKER_PORT,
-            number=10,
-            timeout=5,
-        ),
-    ),
-}
-
 ####################################################################
 #
 # .. note:: How to set tuning options
@@ -274,7 +251,7 @@ def in_check_point(shape:str) -> bool:
     with open(log_file) as fp:
         for sp_hist in fp:
             sp_hist_json = json.loads(sp_hist)
-            if sp_hist_json["input"][2] == sp:
+            if sp_hist_json["input"][2] == shape:
                 return True
     return False
 
@@ -292,7 +269,7 @@ def tune_and_evaluate(tuning_opt):
     #)
     # the last layer in resnet
     for shape in convshape:
-        if in_check_point():
+        if in_check_point(shape):
             continue
         if len(shape) == 10:
             N, H, W, CO, CI, KH, KW, strides, padding, dialte = shape
@@ -409,4 +386,34 @@ def tune_and_evaluate(tuning_opt):
 # We do not run the tuning in our webpage server since it takes too long.
 # Uncomment the following line to run it by yourself.
 
-tune_and_evaluate(tuning_option)
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("please give a device_key")
+        exit(0)
+
+    device_key = sys.argv[1]
+    assert device_key in ["Adreno640", "Adreno630"]
+
+    #### TUNING OPTION ####
+    network = "topinhw4c1"
+    log_file = "%s.%s.log" % (device_key, network)
+    tuning_option = {
+        "log_filename": log_file,
+        "tuner": "xgb",
+        "n_trial": 500,
+        "use_transfer_learning": False,
+        "early_stopping": 350,
+        "measure_option":
+        autotvm.measure_option(
+            builder=autotvm.LocalBuilder(
+                build_func="ndk" if use_android else "default"),
+            runner=autotvm.RPCRunner(
+                device_key,
+                host="0.0.0.0",
+                port=TRACKER_PORT,
+                number=10,
+                timeout=5,
+            ),
+        ),
+    }
+    tune_and_evaluate(tuning_option)

@@ -720,16 +720,26 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
         policy="verbose",
     )
     #for 3x3 or 5x5 or 7x7 convolution
-    cmp_at_candidate=[0]
-    if kernel_height>1:
-        cmp_at_candidate.append(1)
-    if kernel_height > 3:
-        cmp_at_candidate.pop(0)
-        cmp_at_candidate.append(2)
-    cfg.define_knob("cmpat_when_kernel", cmp_at_candidate)
-    if kernel_height>1: 
-        cfg.define_knob("auto_unroll_max_step", [0, 128, 256, 512])
-        cfg.define_knob("unroll_explicit", [0, 1])
+    cmp_at_candidate=[1,2,3]
+
+    def compute_at_axis_filter(y):
+        if kernel_height > 1:
+            # TODO make y.size[-1] could be [2, 3],
+            # but now feature for xgboost is not match(diffent feature len),dand training failed
+            return y.size[-1] in [3]
+        elif kernel_height > 1:
+            return y.size[-1] in [3]
+        else:
+            return y.size[-1] in [1]
+
+    # actual you should set len_size as 6, because 2*3==6,when set as 2,  kernel_height==2 or 3, y.size[-1]==2
+    cfg.define_split("cmpat_when_kernel",
+                     6,
+                     num_outputs=2,
+                     filter=compute_at_axis_filter)
+
+    cfg.define_knob("auto_unroll_max_step", [0, 128, 256, 512])
+    cfg.define_knob("unroll_explicit", [0, 1])
 
     #end define autotvm space
 

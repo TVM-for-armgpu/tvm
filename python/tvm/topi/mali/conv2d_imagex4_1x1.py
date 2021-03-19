@@ -13,6 +13,7 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     Apad = data_vec
     W = kernel_vec
     B = conv_out
+    kernel_height = kernel_vec.shape[2]
     #=========
     B = op.output(0)
     Apad, W = s[B].op.input_tensors
@@ -80,19 +81,22 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
 
     #s[BL].unroll(kh)
     #s[BL].unroll(kw)
-    if cfg["cmpat_when_kernel"].val > 0:
+    if kernel_height == 1:
+        cfg["unroll_explicit"].val = 1
+    else:
         s[BL].pragma(kw, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kw, "unroll_explicit", cfg["unroll_explicit"].val)
         s[BL].pragma(kh, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kh, "unroll_explicit", cfg["unroll_explicit"].val)
-    else:
-        s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
-        s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
+    s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+    s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
+
 
     at_axis = rco
-    if cfg["cmpat_when_kernel"].val == 1:
+    # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
+    if cfg["cmpat_when_kernel"].size[-1] == 2:
         at_axis = kh
-    elif cfg["cmpat_when_kernel"].val == 2:
+    elif cfg["cmpat_when_kernel"].size[-1]  == 3:
         at_axis = kw
     s[AL].compute_at(s[BL], at_axis)
     s[WL].compute_at(s[BL], at_axis)
@@ -104,8 +108,7 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
 
     # Schedule for W's shared memory load
     kp, _, kh, kw,_, p4 = s[WL].op.axis
-    cpi = p4
-    s[WL].vectorize(cpi)  # vectorize memory load
+    s[WL].vectorize(p4)  # vectorize memory load
     s[WL].unroll(kp)
     s[WL].unroll(kh)
     s[WL].unroll(kw)
