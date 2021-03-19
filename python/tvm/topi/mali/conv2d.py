@@ -703,21 +703,34 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
 
 
     # Define autotvm tuning space
+    #x.size[-1] == ic_bn must exist, don't change it
     cfg.define_split("tile_ic", in_channel, num_outputs=3,
                      filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
     cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
     cfg.define_split("tile_ow",
                      out_width,
                      num_outputs=3,
-                     filter=lambda y: y.size[-1] <= 12 ,
+                     filter=lambda y: y.size[-1] <= 8,
                      policy="verbose")
     cfg.define_split(
         "tile_oh",
         out_height,
         num_outputs=3,
-        filter=lambda y: y.size[-1] <= 12,
+        filter=lambda y: y.size[-1] <= 8,
         policy="verbose",
     )
+    #for 3x3 or 5x5 or 7x7 convolution
+    cmp_at_candidate=[0]
+    if kernel_height>1:
+        cmp_at_candidate.append(1)
+    if kernel_height > 3:
+        cmp_at_candidate.pop(0)
+        cmp_at_candidate.append(2)
+    cfg.define_knob("cmpat_when_kernel", cmp_at_candidate)
+    if kernel_height>1: 
+        cfg.define_knob("auto_unroll_max_step", [0, 128, 256, 512])
+        cfg.define_knob("unroll_explicit", [0, 1])
+
     #end define autotvm space
 
     ic = te.reduce_axis((0, in_channel), name="ic")

@@ -104,11 +104,11 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
         ddtype = 'climgfloatr32'
     data_pl = te.placeholder((1, C_P, H, W, PACK4),
                              name='data', dtype=ddtype)
-    kernel_pl = te.placeholder((CI,K_P, 1, 1, 1, PACK4),
+    kernel_pl = te.placeholder((CI,K_P, KH, KW, 1, PACK4),
                                name='filter', dtype=ddtype)
-    conv_pl = topi.mali.conv2d_NCHWc_io(data_pl, kernel_pl, 1, 0,
-                                     1, 'NCHWc', 'NCHWc', ddtype.replace('r','w'))
-    conv_pl.dtype = "climgfloatw32"
+    conv_pl = topi.mali.conv2d_NCHWc_io(data_pl, kernel_pl, stride, padding, 1,
+                                        'NCHWc', 'NCHWc',
+                                        ddtype.replace('r', 'w'))
     s = topi.mali.schedule_conv2d_NCHWc_io(conv_pl)
     #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True))
     #exit(0)
@@ -146,8 +146,8 @@ tuning_option = {
     "log_filename": log_file,
     "tuner": "xgb",
     "n_trial": 1000,
-    "use_transfer_learning":False,
-    "early_stopping": 850,
+    "use_transfer_learning":True,
+    "early_stopping": 450,
     "measure_option": autotvm.measure_option(
         builder=autotvm.LocalBuilder(build_func="ndk" if use_android else "default"),
         runner=autotvm.RPCRunner(
@@ -189,13 +189,13 @@ def tune_tasks(
     log_filename="tuning.log",
     use_transfer_learning=True,
 ):
-    import threading
-    use_transfer_learning=True
+    use_transfer_learning=False
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
     #if os.path.exists(tmp_log_file):
     #    os.remove(tmp_log_file)
-    def run_one_task(i, tsk):
+
+    for i, tsk in enumerate(reversed(tasks)):
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # create tuner
@@ -227,17 +227,6 @@ def tune_tasks(
             ],
         )
 
-    thread_handle = []
-    thread_num = 6
-    for i, tsk in enumerate(reversed(tasks)):
-        thread_handle.append(threading.Thread(target=run_one_task, args=(i, tsk)))
-        thread_handle[-1].start()
-        while len(thread_handle) >= thread_num:
-            for handle in thread_handle:
-                if not handle.is_alive():
-                    handle.join()
-    for handle in thread_handle:
-        handle.join()
     # pick best records to a cache file
     autotvm.record.pick_best(tmp_log_file, log_filename)
     #os.remove(tmp_log_file)
@@ -270,6 +259,26 @@ convshape = [
 ]
 
 
+def in_check_point(shape:str) -> bool:
+    import json
+    if isinstance(shape, tuple):
+        shape = list(shape)
+
+    if len(shape) == 11:
+        shape.pop(1)
+    for ind, sp in enumerate(shape):
+        if isinstance(sp, tuple):
+            shape[ind] = list(sp)
+    if not os.path.exists(log_file):
+        return False
+    with open(log_file) as fp:
+        for sp_hist in fp:
+            sp_hist_json = json.loads(sp_hist)
+            if sp_hist_json["input"][2] == sp:
+                return True
+    return False
+
+
 def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
     print("Extract tasks...")
@@ -283,13 +292,18 @@ def tune_and_evaluate(tuning_opt):
     #)
     # the last layer in resnet
     for shape in convshape:
-        N, H, W, CO, CI, KH, KW, strides, padding,dialte = shape
+        if in_check_point():
+            continue
+        if len(shape) == 10:
+            N, H, W, CO, CI, KH, KW, strides, padding, dialte = shape
+        else:
+            N, _, H, W, CO, CI, KH, KW, strides, padding, dialte = shape
         tasks = autotvm.task.create(
             "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
         )
 
         # run tuning tasks
-        print("Tuning...", shape,device_key)
+        print("Tuning...", shape, device_key)
         tune_tasks([tasks], **tuning_opt)
         time.sleep(60*5)
 
@@ -341,7 +355,7 @@ def tune_and_evaluate(tuning_opt):
         ao_np = np.arange(in_channel*in_size*in_size)
         a_np = ao_np
         a_np = a_np.reshape(C_P*PACK4, H_P*W_P)
-        wo_np = np.arange(in_channel*out_channel).reshape(out_channel,in_channel)
+        wo_np = np.arange(in_channel*out_channel*KH*KW).reshape(out_channel,in_channel,KH,KW)
         w_np = wo_np
         #==A-tvm data prepare
         a_np_tvm = a_np.T.reshape(C_P*H_P*W_P, 4)
@@ -350,7 +364,7 @@ def tune_and_evaluate(tuning_opt):
             B1 = np.vstack((B1, a_np_tvm[i+1::C_P, :]))
         a_np_tvm = B1.reshape(1, C_P, H_P, W_P, PACK4) * 1.0
         #==W-tvm data prepare
-        w_np_tvm = w_np.T.reshape(CI, K_P, 1, 1, 1, PACK4)*1.0
+        w_np_tvm = w_np.T.reshape(w_s)*1.0
         #============valide answer=========
         Anp = a_np.astype("float32")
         Wnp = w_np.astype("float32")
