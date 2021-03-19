@@ -82,9 +82,8 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     s[WL].compute_at(s[BL], rco)
 
     _, kp, hp, wp, p4 = s[AL].op.axis
-    wpo, wpi = wp, p4
-    s[AL].vectorize(wpi)  # vectorize memory load
-    s[AL].unroll(wpo)
+    s[AL].vectorize(p4)  # vectorize memory load
+    s[AL].unroll(wp)
     s[AL].unroll(hp)
 
     # Schedule for W's shared memory load
