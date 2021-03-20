@@ -350,7 +350,7 @@ std::shared_ptr<Ast> parse_expr(Tokenizer& tokenizer) {
 void print_impl(std::stringstream& ss, const std::shared_ptr<Ast>& ast) {
   if (ast->node_ty == L_AST_CONSTANT) {
     if (ast->dtype == L_AST_FLOAT) {
-      ss << ast->constant_f;
+      ss << ast->constant_f << "f";
     } else {
       ss << ast->constant;
     }

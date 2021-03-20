@@ -31,7 +31,7 @@
 
 // Memory pool entry.
 typedef struct TVMGraphRuntimePoolEntry {
-  size_t size;
+  uint64_t size;
   int device_type;
   int entry_id;
 } TVMGraphRuntimePoolEntry;

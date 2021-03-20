@@ -194,8 +194,9 @@ def select_implementation(op, attrs, inputs, out_type, target, use_autotvm=True)
     if PassContext.current().config.get("relay.backend.use_auto_scheduler", False):
         use_autotvm = False
 
+    #TODO otherwise will add all iplemenations to traning, it;s cost too much time
     # If not use autotvm, always return the implementation with the highest priority
-    if not use_autotvm:
+    if not use_autotvm or True:
         logger.info(
             "Using %s for %s based on highest priority (%d)",
             best_plevel_impl.name,

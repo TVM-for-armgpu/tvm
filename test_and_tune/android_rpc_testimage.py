@@ -18,7 +18,7 @@
 
 To use it, start an RPC tracker with "python -m tvm.exec.rpc_tracker".
 Use the tracker's address and port when configuring the RPC app.
-Use "android" as the key if you wish to avoid modifying this script.
+Use "Adreno640" as the key if you wish to avoid modifying this script.
 """
 
 import tvm
@@ -34,7 +34,7 @@ import extern_op
 # Set to be address of tvm proxy.
 tracker_host = '127.0.0.1'
 tracker_port = 9090
-key = "android"
+key = "Adreno640"
 
 # Change target configuration.
 # Run `adb shell cat /proc/cpuinfo` to find the arch.
@@ -291,7 +291,7 @@ def test_rpc_module():
     print("test opencl")
     # Compile the Graph for OpenCL target
     if test_opencl:
-        N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 512, 256, 1, 1, (1, 1), (0, 0)
+        N, H, W, CO, CI, KH, KW, strides, padding = 1, 64, 64, 512, 256, 1, 1, (1, 1), (0, 0)
         PACK4 = 4
         W_P = H
         H_P = H

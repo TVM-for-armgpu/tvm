@@ -438,7 +438,7 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
       };
 
       this->SwitchToState(kWaitForAsyncCallback);
-      if (dshape.ndim > 1) {
+      if (type_hint.code >= kDLCLImgFloatW) {
         std::shared_ptr<DataShape> dtensorsp(new DataShape, DataShapeDeleter);
         dtensorsp->shape = new int64_t[dshape.ndim];
         dtensorsp->ndim = dshape.ndim;
@@ -450,8 +450,6 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
         sess->AsyncCopyFromRemote(reinterpret_cast<void*>(handle), offset, data_ptr, 0, dtensorsp.get(),
                                 ctx, type_hint, on_copy_complete);
       } else {
-        ICHECK(type_hint.code < kDLCLImgFloatW)
-            << "opencl image type must have a shape equal or bigger than 2";
         sess->AsyncCopyFromRemote(reinterpret_cast<void*>(handle), offset, data_ptr, 0, num_bytes,
                                   ctx, type_hint, on_copy_complete);
       }
@@ -508,7 +506,7 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
       };
 
       this->SwitchToState(kWaitForAsyncCallback);
-      if (dshape.ndim > 1) {
+      if (type_hint.code >= kDLCLImgFloatW) {
         std::shared_ptr<DataShape> dtensorsp(new DataShape, DataShapeDeleter);
         dtensorsp->ndim = dshape.ndim; 
         dtensorsp->shape = new int64_t[dshape.ndim];
@@ -520,8 +518,6 @@ class RPCEndpoint::EventHandler : public dmlc::Stream {
         sess->AsyncCopyToRemote(temp_data, 0, reinterpret_cast<void*>(handle), offset, dtensorsp.get(),
                                 ctx, type_hint, on_copy_complete);
       } else {
-        ICHECK(type_hint.code < kDLCLImgFloatW)
-            << "opencl image type must have a shape equal or bigger than 2";
         sess->AsyncCopyToRemote(temp_data, 0, reinterpret_cast<void*>(handle), offset, num_bytes,
                                 ctx, type_hint, on_copy_complete);
       }

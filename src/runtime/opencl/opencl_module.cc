@@ -28,6 +28,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <numeric>
 
 #include "opencl_common.h"
 
@@ -71,22 +72,21 @@ class OpenCLWrappedFunc {
     for (cl_uint i = 0; i < work_dim; ++i) {
       wl.work_size[i] *= wl.work_size[i + 3];
     }
-    for (int i = 0; i < 6; ++i) {
-      std::cout << wl.work_size[i]<<",";
-    }
+    //for (int i = 0; i < 6; ++i) {
+    //  std::cout << wl.work_size[i]<<",";
+    //}
     // launch kernel
     // cl event for time statistic
-    cl_event event;
+    //cl_event event;
     OPENCL_CALL(clEnqueueNDRangeKernel(queue, kernel, work_dim, nullptr, wl.work_size,
-                                       wl.work_size + 3, 0, nullptr, &event));
-    clWaitForEvents(1, &event);
-    cl_ulong time_start, time_end;
-    double total_time;
-    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-    total_time = time_end - time_start;
-    //LOG(WARNING) << "\nExecution time in milliseconds = " << (total_time / 1000000.0) << "ms\n";
-    std::cout << (total_time / 1000000.0) << "ms.";
+                                       wl.work_size + 3, 0, nullptr, 0));
+                                       //wl.work_size + 3, 0, nullptr, &event));
+    //clWaitForEvents(1, &event);
+    //cl_ulong time_start, time_end;
+    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+    //m_->time_vec_.push_back((time_end - time_start)/ 1000000.0);
+    //LOG(WARNING) << " func_name_="<<func_name_<<" "<<m_->time_vec_.back();
   }
 
  private:
@@ -121,6 +121,8 @@ OpenCLModuleNode::~OpenCLModuleNode() {
   if (program_) {
     OPENCL_CALL(clReleaseProgram(program_));
   }
+  //double avg_time = std::accumulate(time_vec_.begin(), time_vec_.end(), 0.0)/time_vec_.size();
+  //LOG(WARNING) << "kernerl avg running time =======" << avg_time;
 }
 
 cl::OpenCLWorkspace* OpenCLModuleNode::GetGlobalWorkspace() {
@@ -231,7 +233,7 @@ cl_kernel OpenCLModuleNode::InstallKernel(cl::OpenCLWorkspace* w, cl::OpenCLThre
       clGetProgramBuildInfo(program_, dev, CL_PROGRAM_BUILD_LOG, 0, nullptr, &len);
       log.resize(len);
       clGetProgramBuildInfo(program_, dev, CL_PROGRAM_BUILD_LOG, len, &log[0], nullptr);
-      LOG(FATAL) << "OpenCL build error for device=" << dev << "err=" << err << log;
+      LOG(FATAL) << "OpenCL build error for device=" << dev << " func=" << func_name << " err=" << err << log;
     }
     device_built_flag_[device_id] = true;
   }

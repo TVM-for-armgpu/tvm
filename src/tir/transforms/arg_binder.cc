@@ -162,9 +162,12 @@ void ArgBinder::BindDLTensor(const Buffer& buffer, const PrimExpr& device_type,
   // type checks
   DataType dtype = buffer->dtype;
   std::ostringstream type_err_msg;
+  uint8_t code_ = dtype.code() == kDLCLImgFloat?kDLCLImgFloatW:(dtype.code()==kDLCLImgFloatW?kDLCLImgFloat:dtype.code());
   type_err_msg << arg_name << ".dtype is expected to be " << dtype;
-  PrimExpr cond = (TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeCode) ==
-                       IntImm(DataType::UInt(8), dtype.code()) &&
+  PrimExpr cond = ((TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeCode) ==
+                       IntImm(DataType::UInt(8), dtype.code()) ||
+                  (TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeCode)) == 
+                  IntImm(DataType::UInt(8), code_)) &&
                    TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeBits) ==
                        IntImm(DataType::UInt(8), dtype.bits()) &&
                    TVMArrayGet(DataType::UInt(16), handle, builtin::kArrTypeLanes) ==

@@ -130,7 +130,7 @@ target = tvm.target.Target("opencl")
 
 #### TUNING OPTION ####
 network = "writeimg"
-device_key="android"
+device_key="Adreno640"
 log_file = "%s.%s.log" % (device_key, network)
 dtype = "float32"
 

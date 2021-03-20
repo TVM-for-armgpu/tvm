@@ -9,7 +9,10 @@ from tvm.autotvm.tuner import XGBTuner, GATuner, RandomTuner, GridSearchTuner
 from tvm.contrib import utils, ndk
 from tvm.contrib.utils import tempdir
 import tvm.contrib.graph_runtime as runtime
-
+import logging
+import sys
+#logging.getLogger("autotvm").setLevel(logging.DEBUG)
+#logging.getLogger("autotvm").addHandler(logging.StreamHandler(sys.stdout))
 ######################################################################
 # Load a test image
 # -----------------
@@ -38,7 +41,7 @@ def load_image():
 # Load pretrained TFLite model
 # ----------------------------
 # Load mobilenet V1 TFLite model provided by Google
-def get_network():
+def get_network(network):
     input_dtype = dtype
     # auto-scheduler prefers NHWC layout
     layout = "NCHW"
@@ -46,18 +49,27 @@ def get_network():
     if layout == "NHWC":
         image_shape = (224, 224, 4)
     elif layout == "NCHW":
-        image_shape = (4, 224, 224)
+        if network == "resnet":
+            image_shape = (4,299,299)
+        else:
+            image_shape = (4, 224, 224)
     else:
         raise ValueError("Invalid layout: " + layout)
 
     input_shape = (batch_size,) + image_shape
     output_shape = (batch_size, 1000)
-
-    mod, params = tvm.relay.testing.mobilenet.get_workload(
-        batch_size=batch_size,
-        layout=layout,
-        dtype=dtype,
-        image_shape=image_shape)
+    if network == "resnet":
+        mod, params = tvm.relay.testing.resnet.get_workload(
+            batch_size=batch_size,
+            layout=layout,
+            dtype=dtype,
+            image_shape=image_shape)
+    else:
+        mod, params = tvm.relay.testing.mobilenet.get_workload(
+            batch_size=batch_size,
+            layout=layout,
+            dtype=dtype,
+            image_shape=image_shape)
     return mod, params, input_shape, input_dtype
     def extract(path):
         import tarfile
@@ -113,21 +125,24 @@ target_host = tvm.target.Target("llvm -mtriple=%s-linux-android" % arch)
 target = tvm.target.Target("opencl -device=mali")
 
 # Also replace this with the device key in your tracker
-device_key = "android"
+device_key = "Adreno640"
 
 
 #### TUNING OPTION ####
-network = 'mobilenet_v1_1.0_224'
-log_file = "%s.%s.log" % (device_key, network)
 dtype = 'float32'
-#dtype = 'climgfloatr32'
+dtype = 'climgfloatr32'
+
+network_name = 'resnet'
+network_name = 'mobilenet'
+log_file = "%s.%s.log" % (dtype, network_name)
+
 
 use_android=True
 tuning_option = {
     'log_filename': log_file,
     'tuner': 'xgb',
-    'n_trial': 128,
-    'early_stopping': 200,
+    'n_trial': 600,
+    'early_stopping': 450,
 
     'measure_option': autotvm.measure_option(
         builder=autotvm.LocalBuilder(
@@ -173,46 +188,52 @@ def tune_tasks(tasks,
                use_transfer_learning=True):
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
-    #if os.path.exists(tmp_log_file):
-    #    os.remove(tmp_log_file)
-    #use_transfer_learning=False
+    if os.path.exists(tmp_log_file):
+        os.remove(tmp_log_file)
+    use_transfer_learning=False
+    import threading
+    import time
 
     for i, tsk in enumerate(reversed(tasks)):
-        print("tuning ", tsk)
-        prefix = "[Task %2d/%2d] " % (i+1, len(tasks))
+        if 'wino' in tsk.name:
+            n_trial_=320
+        else:
+            n_trial_ = n_trial
 
+        print("tunning ", tsk)
+        prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
         # create tuner
-        if tuner == 'xgb' or tuner == 'xgb-rank':
-            tuner_obj = XGBTuner(tsk, loss_type='rank')
-        elif tuner == 'xgb_knob':
-            tuner_obj = XGBTuner(tsk, loss_type='rank', feature_type='knob')
-        elif tuner == 'ga':
+        if tuner == "xgb" or tuner == "xgb-rank":
+            tuner_obj = XGBTuner(tsk, loss_type="rank")
+        elif tuner == "ga":
             tuner_obj = GATuner(tsk, pop_size=50)
-        elif tuner == 'random':
+        elif tuner == "random":
             tuner_obj = RandomTuner(tsk)
-        elif tuner == 'gridsearch':
+        elif tuner == "gridsearch":
             tuner_obj = GridSearchTuner(tsk)
         else:
             raise ValueError("Invalid tuner: " + tuner)
 
         if use_transfer_learning:
             if os.path.isfile(tmp_log_file):
+                print("load previous results")
                 tuner_obj.load_history(autotvm.record.load_from_file(tmp_log_file))
 
         # do tuning
-        tsk_trial = min(n_trial, len(tsk.config_space))
-        tuner_obj.tune(n_trial=tsk_trial,
-                       early_stopping=early_stopping,
-                       measure_option=measure_option,
-                       callbacks=[
-                           autotvm.callback.progress_bar(tsk_trial, prefix=prefix),
-                           autotvm.callback.log_to_file(tmp_log_file)
-                       ])
-        
-
-    # pick best records to a cache file
-    autotvm.record.pick_best(tmp_log_file, log_filename)
-    #os.remove(tmp_log_file)
+        tsk_trial = min(n_trial_, len(tsk.config_space))
+        tuner_obj.tune(
+            n_trial=tsk_trial,
+            early_stopping=early_stopping,
+            measure_option=measure_option,
+            callbacks=[
+                autotvm.callback.progress_bar(tsk_trial, prefix=prefix),
+                autotvm.callback.log_to_file(tmp_log_file),
+            ],
+        )
+        time.sleep(60 * 5)
+        # pick best records to a cache file
+        autotvm.record.pick_best(tmp_log_file, log_filename)
+        #os.remove(tmp_log_file)
 
 # At commit baff99c83f9f691174434e7c78a4fee48b558547, ARM NHWC schedule is not high performance. So,
 # we first switch to NCHW. Further, Relay build calls AlterOpLayout to optimize the data layout to
@@ -253,7 +274,7 @@ def remove_template(tasks, template_names):
 def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
     print("Extract tasks... ",os.getpid())
-    mod, params, input_shape, _ = get_network()
+    mod, params, input_shape, _ = get_network(network_name)
 
     if use_nchw:
         # Convert the layout to NCHW
@@ -278,7 +299,7 @@ def tune_and_evaluate(tuning_opt):
 
     # compile kernels with history best records
     with autotvm.apply_history_best(log_file):
-    #if 1 ==1:
+        #if 1 ==1:
         print("Compile...")
         with relay.build_config(opt_level=3):
             graph, lib, params = relay.build_module.build(
@@ -304,13 +325,13 @@ def tune_and_evaluate(tuning_opt):
         # upload parameters to device
         ctx = remote.context(str(target), 0)
         module = runtime.create(graph, rlib, ctx)
-        data_tvm = tvm.nd.array((np.random.uniform(size=input_shape)).astype(dtype))
+        data_tvm = tvm.nd.array((np.random.uniform(size=input_shape)).astype('float32'),dtype=dtype)
         module.set_input('data', data_tvm)
         module.set_input(**params)
 
         # evaluate
         print("Evaluate inference time cost...")
-        ftimer = module.module.time_evaluator("run", ctx, number=1, repeat=10)
+        ftimer = module.module.time_evaluator("run", ctx, number=1, repeat=1)
         prof_res = np.array(ftimer().results) * 1000  # convert to millisecond
         print("Mean inference time (std dev): %.2f ms (%.2f ms)" %
               (np.mean(prof_res), np.std(prof_res)))

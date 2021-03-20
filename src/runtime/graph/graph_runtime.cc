@@ -37,6 +37,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <cstring>
 
 namespace tvm {
 namespace runtime {
@@ -292,7 +293,8 @@ void GraphRuntime::SetupStorage() {
   for (const std::string& s_type : attrs_.dltype) {
     vtype.push_back(tvm::runtime::String2DLDataType(s_type));
   }
-
+  auto vtype_is_climg = [&vtype](int i){return vtype[i].code == kDLCLImgFloatW || vtype[i].code == kDLCLImgFloat;};
+  std::vector<size_t>climg_elem_size(vtype.size(), 0);
   // Size and device type of each storage pool entry.
   std::vector<PoolEntry> pool_entry;
   // Find the maximum space size.
@@ -331,8 +333,15 @@ void GraphRuntime::SetupStorage() {
     if (lookup_rv.type_code() != kTVMNullptr) {
       pool_entry[sid].linked_param = lookup_rv;
     }
+    if (vtype_is_climg(i)) {
+      if (bytes > climg_elem_size[sid]) {
+        climg_elem_size[sid] = bytes;
+        pool_entry[sid].size = encode_shape_fold(attrs_.shape[i]);
+      }
+    } else {
+      pool_entry[sid].size = std::max(pool_entry[sid].size, bytes);
+    }
     pool_entry[sid].param_data_entry = i;
-    pool_entry[sid].size = std::max(pool_entry[sid].size, bytes);
     pool_entry[sid].device_type = device_type;
   }
 
@@ -348,8 +357,13 @@ void GraphRuntime::SetupStorage() {
       storage_pool_.push_back(pit.linked_param);
     } else {
       std::vector<int64_t> shape;
-      shape.push_back(static_cast<int64_t>(pit.size + 3) / 4);
-      storage_pool_.push_back(NDArray::Empty(shape, DLDataType{kDLFloat, 32, 1}, ctx));
+      if (vtype_is_climg(pit.param_data_entry)){
+        shape = decode_shape_fold<int64_t>(pit.size);
+        storage_pool_.push_back(NDArray::Empty(shape, DLDataType{kDLCLImgFloatW, 32, 1}, ctx));
+      }else {      
+        shape.push_back(static_cast<int64_t>(pit.size + 3) / 4);
+        storage_pool_.push_back(NDArray::Empty(shape, DLDataType{kDLFloat, 32, 1}, ctx));
+      }
     }
   }
 

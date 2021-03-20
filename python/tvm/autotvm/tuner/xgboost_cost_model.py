@@ -178,6 +178,11 @@ class XGBoostCostModel(CostModel):
         return 1.0 / (2 ** (self._sample_size / 64.0))
 
     def fit(self, xs, ys, plan_size):
+        import psutil
+        if psutil.cpu_percent() < 60.0:
+            time.sleep(2)
+        while psutil.cpu_percent() > 60.0:
+            time.sleep(10)
         tic = time.time()
         self._reset_pool(self.space, self.target, self.task)
 

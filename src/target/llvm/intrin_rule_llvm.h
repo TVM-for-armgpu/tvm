@@ -68,6 +68,37 @@ inline void DispatchLLVMIntrin(const TVMArgs& targs, TVMRetValue* rv) {
   *rv = tir::Call(call->dtype, tir::builtin::call_llvm_intrin(), cargs);
 }
 
+// Return the intrinsic name
+struct Direct {
+  std::string operator()(DataType t, std::string name) const { return name; }
+};
+
+// Call pure extern function.
+template <typename T>
+inline void DispatchPureExternLLVM(const TVMArgs& args, TVMRetValue* rv) {
+  using namespace tir;
+  PrimExpr e = args[0];
+  const CallNode* call = e.as<CallNode>();
+  ICHECK(call != nullptr);
+  // Use string based dispatch to extern for backward compact
+  // TODO(tvm-team) replace once the new dispatching system is inplace.
+  const OpNode* op = call->op.as<OpNode>();
+  ICHECK(op != nullptr);
+  std::string name = op->name;
+  ICHECK_EQ(name.substr(0, 4), "tir.");
+  name = T()(call->dtype, name.substr(4));
+
+  if (name.length() != 0) {
+    Array<PrimExpr> new_args = {StringImm(name)};
+    for (auto arg : call->args) {
+      new_args.push_back(arg);
+    }
+    *rv = Call(call->dtype, tir::builtin::call_pure_extern(), new_args);
+  } else {
+    *rv = e;
+  }
+}
+
 }  // namespace codegen
 }  // namespace tvm
 

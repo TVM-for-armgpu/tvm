@@ -174,7 +174,7 @@ def create_workload(net, initializer=None, seed=0):
     for k, v in shape_dict.items():
         if k == "data":
             continue
-        init_value = np.zeros(v.concrete_shape).astype(v.dtype)
+        init_value = np.zeros(v.concrete_shape).astype(relay.cl_type_erasure(v.dtype))
         initializer(k, init_value)
-        params[k] = tvm.nd.array(init_value, ctx=tvm.cpu(0))
+        params[k] = tvm.nd.array(init_value, ctx=tvm.cpu(0), dtype=v.dtype)
     return mod, params

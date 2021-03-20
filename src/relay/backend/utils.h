@@ -173,7 +173,11 @@ inline std::vector<int64_t> GetIntShape(const Array<IndexExpr>& shape) {
  */
 inline std::string DType2String(const tvm::DataType dtype) {
   std::ostringstream os;
-  if (dtype.is_float()) {
+  if (dtype.is_climgfloat()) {
+    os << "climgfloatr";
+  } else if (dtype.is_climgfloatw()) {
+    os << "climgfloatw";
+  }else if (dtype.is_float()) {
     os << "float";
   } else if (dtype.is_int()) {
     os << "int";

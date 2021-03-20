@@ -13,6 +13,7 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     Apad = data_vec
     W = kernel_vec
     B = conv_out
+    kernel_height = kernel_vec.shape[2]
     #=========
     B = op.output(0)
     Apad, W = s[B].op.input_tensors
@@ -37,7 +38,6 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
         n, kp, hp, wp, p4 = s[B].op.axis
     #==========
     #n, kp, hp, wp, p4 = s[B].op.axis
-    rc, _, _ = s[BL].op.reduce_axis
 
     n, f, y, x, b_p4 = n, kp, hp, wp, p4
 
@@ -67,32 +67,51 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
 
     _, kp, hp, wp, p4 = s[BL].op.axis
     whp = s[BL].fuse(wp, hp)
-    rc, _, _ = s[BL].op.reduce_axis
+    rc, kh, kw = s[BL].op.reduce_axis
 
     rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
     #rco, rci = s[BL].split(rc, factor=4)
     #rco, rcm = s[BL].split(rco, factor=1)
 
-    s[BL].reorder(rco, rcm, rci, whp, p4)
+    s[BL].reorder(rco, kh, kw, rcm, rci, whp, p4)
     s[BL].vectorize(p4)  # vectorize memory load
     s[BL].unroll(whp)
     s[BL].unroll(rci)
     s[BL].unroll(rcm)
 
-    s[AL].compute_at(s[BL], rco)
-    s[WL].compute_at(s[BL], rco)
+    #s[BL].unroll(kh)
+    #s[BL].unroll(kw)
+    if kernel_height == 1:
+        cfg["unroll_explicit"].val = 1
+    else:
+        s[BL].pragma(kw, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+        s[BL].pragma(kw, "unroll_explicit", cfg["unroll_explicit"].val)
+        s[BL].pragma(kh, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+        s[BL].pragma(kh, "unroll_explicit", cfg["unroll_explicit"].val)
+    s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+    s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
+
+
+    at_axis = rco
+    # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
+    if cfg["cmpat_when_kernel"].size[-1] == 2:
+        at_axis = kh
+    elif cfg["cmpat_when_kernel"].size[-1]  == 3:
+        at_axis = kw
+    s[AL].compute_at(s[BL], at_axis)
+    s[WL].compute_at(s[BL], at_axis)
 
     _, kp, hp, wp, p4 = s[AL].op.axis
-    wpo, wpi = wp, p4
-    s[AL].vectorize(wpi)  # vectorize memory load
-    s[AL].unroll(wpo)
+    s[AL].vectorize(p4)  # vectorize memory load
+    s[AL].unroll(wp)
     s[AL].unroll(hp)
 
     # Schedule for W's shared memory load
-    kp, _, _, _,_, p4 = s[WL].op.axis
-    cpi = p4
-    s[WL].vectorize(cpi)  # vectorize memory load
+    kp, _, kh, kw,_, p4 = s[WL].op.axis
+    s[WL].vectorize(p4)  # vectorize memory load
     s[WL].unroll(kp)
+    s[WL].unroll(kh)
+    s[WL].unroll(kw)
 
     wpio, wpii = wp4, b_p4
     s[B].vectorize(wpii)  # vectorize memory load

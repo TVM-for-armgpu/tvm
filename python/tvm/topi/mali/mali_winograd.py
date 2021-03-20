@@ -60,8 +60,8 @@ def kernel_transform_shedule(cfg, s, U):
     #cpo, cpi = s[U].split(cp, factor=4)
     #kpo, kpi = s[U].split(kp, factor=4)
 
-    s[U].bind(cpo, block_x)
-    s[U].bind(kpo, block_y)
+    s[U].bind(kpo, block_x)
+    s[U].bind(cpo, block_y)
     s[U].bind(kpi, thread_x)
     s[U].bind(cpi, thread_y)
     s[U].reorder(cpo, cpi, kpi, Uhp, Uwp, Up4, kpo)

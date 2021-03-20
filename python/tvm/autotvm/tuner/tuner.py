@@ -18,6 +18,7 @@
 """Base class of tuner"""
 import logging
 import tempfile
+import threading
 
 import numpy as np
 
@@ -27,6 +28,25 @@ from ..utils import format_si_prefix
 from ..env import GLOBAL_SCOPE
 
 logger = logging.getLogger("autotvm")
+
+
+class SharedLock:
+    '''
+    A counter object that can be shared by multiple threads.
+    '''
+    _instance_lock = threading.Lock()
+
+    def __init__(self):
+        pass
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(SharedLock, "_instance"):
+            with SharedLock._instance_lock:
+                if not hasattr(SharedLock, "_instance"):
+                    SharedLock._instance = super(SharedLock, cls).__new__(
+                        cls, *args, **kwargs)
+                cls.value_lock = threading.Lock()
+        return SharedLock._instance
 
 
 class Tuner(object):
@@ -54,6 +74,7 @@ class Tuner(object):
         self.ttl = None
         self.n_trial = None
         self.early_stopping = None
+        self.remote_lock = SharedLock()
 
     def has_next(self):
         """Whether has next untried config in the space
@@ -130,6 +151,7 @@ class Tuner(object):
             configs = self.next_batch(min(n_parallel, n_trial - i))
 
             inputs = [MeasureInput(self.task.target, self.task, config) for config in configs]
+            #with self.remote_lock.value_lock:
             results = measure_batch(inputs)
 
             # keep best config

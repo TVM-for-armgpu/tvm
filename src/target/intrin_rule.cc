@@ -88,7 +88,9 @@ TVM_REGISTER_GLOBAL("tvm.intrin.rule.default.rsqrt")
     });
 
 TVM_REGISTER_GLOBAL("tvm.intrin.rule.default.pow").set_body(DispatchPureExtern<FloatSuffix>);
+
 TVM_REGISTER_GLOBAL("tvm.intrin.rule.default.image_axis").set_body(DispatchPureExtern<Int32Suffix>);
+TVM_REGISTER_GLOBAL("tvm.intrin.rule.default.general_axis").set_body(DispatchPureExtern<Int32Suffix>);
 
 TVM_REGISTER_GLOBAL("tvm.intrin.rule.default.sigmoid")
     .set_body([](const TVMArgs& args, TVMRetValue* rv) {

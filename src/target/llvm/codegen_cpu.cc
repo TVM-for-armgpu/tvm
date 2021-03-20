@@ -319,6 +319,9 @@ llvm::Value* CodeGenCPU::CreateStructRefPtr(DataType t, llvm::Value* buf, llvm::
 
 llvm::Value* CodeGenCPU::CreateCallExtern(Type ret_type, String global_symbol,
                                           const Array<PrimExpr>& args, bool skip_first_arg) {
+  if (global_symbol == "general_axis"){
+    return MakeValue(args[3]);
+  }
   std::vector<llvm::Value*> arg_values;
   for (size_t i = static_cast<size_t>(skip_first_arg); i < args.size(); ++i) {
     arg_values.push_back(MakeValue(args[i]));

@@ -93,7 +93,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         wrap_topi_schedule(
                             topi.mali.schedule_conv2d_NCHWc_io),
                         name="conv2d_nchwc_io.mali",
-                        plevel=20,
+                        plevel=14,
                     )
                 if (
                     kh == 3
@@ -163,9 +163,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
             assert kernel_layout in ["OIHW1o4i", "IOHW1i4o"]
             _, _, kh, kw,_,_ = get_const_tuple(kernel.shape)
             if (
-                kh == 1
-                and kw == 1
-                and dilation_h == 1
+                dilation_h == 1
                 and dilation_w == 1
             ):
                 if kernel_layout == "IOHW1i4o":
@@ -173,7 +171,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         wrap_compute_conv2d(topi.mali.conv2d_NCHWc_io, True, True),
                         wrap_topi_schedule(topi.mali.schedule_conv2d_NCHWc_io),
                         name="conv2d_NCHWc_io.mali",
-                        plevel=20,
+                        plevel=14,
                     )
                 else:
                     strategy.add_implementation(
@@ -182,9 +180,9 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                         wrap_topi_schedule(
                             topi.mali.schedule_conv2d_NCHWc),
                         name="conv2d_NCHWc.mali",
-                        plevel=15,
+                        plevel=14,
                     )
-            elif (
+            if (
                 kh == 3
                 and kw == 3
                 and stride_h == 1
@@ -281,7 +279,7 @@ def conv2d_NCHWc_strategy_mali(attrs, inputs, out_type, target):
             wrap_topi_schedule(
                 topi.mali.schedule_conv2d_NCHWc),
             name="conv2d_NCHWc.mali",
-            plevel=20,
+            plevel=14,
         )
     else:
         strategy.add_implementation(
@@ -290,7 +288,7 @@ def conv2d_NCHWc_strategy_mali(attrs, inputs, out_type, target):
             wrap_topi_schedule(
                 topi.mali.schedule_conv2d_NCHWc_io),
             name="conv2d_NCHWc_io.mali",
-            plevel=20,
+            plevel=14,
         )
     return strategy
 
@@ -302,7 +300,7 @@ def depthwise_conv2d_NCHWc_strategy_mali(attrs, inputs, out_type, target):
         wrap_compute_conv2d(topi.mali.depthwise_conv2d_NCHWc_io, True, True),
         wrap_topi_schedule(topi.mali.schedule_depthwise_conv2d_NCHWc_io),
         name="depthwise_conv2d_NCHWc_io.mali",
-        plevel=15,
+        plevel=14,
     )
     return strategy
 
@@ -364,9 +362,9 @@ def dense_strategy_mali(attrs, inputs, out_type, target):
     strategy = _op.OpStrategy()
     if not is_auto_scheduler_enabled():
         strategy.add_implementation(
-            wrap_compute_dense(topi.mali.dense),
-            wrap_topi_schedule(topi.mali.schedule_dense),
-            name="dense.mali",
+            wrap_compute_dense(topi.mali.dense_NW4w),
+            wrap_topi_schedule(topi.mali.schedule_dense_NW4w),
+            name="dense_NW4w.mali",
         )
     else:
         strategy.add_implementation(
@@ -375,3 +373,21 @@ def dense_strategy_mali(attrs, inputs, out_type, target):
             name="dense.mali",
         )
     return strategy
+
+
+#@softmax_strategy.register(["mali1231"])
+#def softmax_strategy_mali(attrs, inputs, out_type, target):
+#    """softmax cuda strategy"""
+#    strategy = _op.OpStrategy()
+#    strategy.add_implementation(
+#        wrap_compute_softmax(topi.nn.softmax),
+#        wrap_topi_schedule(topi.mali.schedule_softmax),
+#        name="softmax.mali",
+#    )
+#    return strategy
+
+@schedule_adaptive_pool.register(["mali"])
+def schedule_adaptive_pool_mali(attrs, outs, target):
+    """schedule adaptive pooling ops for mali"""
+    with target:
+        return topi.mali.schedule_adaptive_pool(outs, attrs.layout)
