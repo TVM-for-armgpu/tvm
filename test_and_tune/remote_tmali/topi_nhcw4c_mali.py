@@ -102,201 +102,230 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     ddtype = 'float32'
     if open_image:
         ddtype = 'climgfloatr32'
-    cfg = autotvm.get_config()
-    cfg.define_knob("idtype", [0, 1])
-    cfg.define_knob("kdtype", [0, 1])
-    cfg.define_knob("wdtype", [0, 2])
-
-    typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
-
     data_pl = te.placeholder((1, C_P, H, W, PACK4),
-                             name='data',
-                             dtype=typedict[cfg["idtype"].val])
-    kernel_pl = te.placeholder((CI, K_P, 1, 1, 1, PACK4),
-                               name='filter',
-                               dtype=typedict[cfg["kdtype"].val])
-
-    #define compute================================
-    data = data_pl
-    kernel = kernel_pl
-    n, ic_chunk, ih, iw, ic_bn = topi.utils.get_const_tuple(data.shape)
-    ic_chunk_group, oc_chunk, kernel_height, kernel_width, _, oc_bn = topi.utils.get_const_tuple(
-        kernel.shape)
-    in_channel = ic_chunk * ic_bn
-    num_filter = oc_chunk * oc_bn
-    cfg.is_fallback = False
-
-    # layout and out_layout are not used here,
-    # we keep them for debug convenience when dumping autotvm workload
-    HSTR, WSTR = stride if isinstance(stride, (tuple, list)) else (stride, stride)
-    dilation=1
-    dilation_h, dilation_w = (
-        dilation if isinstance(dilation, (tuple, list)) else (dilation, dilation)
-    )
-
-    dilated_kernel_h = (kernel_height - 1) * dilation_h + 1
-    dilated_kernel_w = (kernel_width - 1) * dilation_w + 1
-    padding
-    pad_top, pad_left, pad_down, pad_right = padding if isinstance(
-        padding, (tuple, list)) else (padding, padding, padding, padding)
-    HPAD = pad_top + pad_down
-    WPAD = pad_left + pad_right
-
-    # output shape
-    out_height = (ih + HPAD - dilated_kernel_h) // HSTR + 1
-    out_width = (iw + WPAD - dilated_kernel_w) // WSTR + 1
-    pad_before = (0, 0, pad_top, pad_left, 0)
-    pad_after = (0, 0, pad_down, pad_right, 0)
-    # DOPAD
-    DOPAD = HPAD != 0 or WPAD != 0
-    if DOPAD and kernel_height > 1:
-        data_pad = topi.nn.pad(data, pad_before, pad_after, name="data_pad_3x3")
-    else:
-        data_pad = data
-    oshape = (n, oc_chunk, out_height, out_width, oc_bn)
-
-
-
-    ic = te.reduce_axis((0, in_channel), name="ic")
-    kh = te.reduce_axis((0, kernel_height), name="kh")
-    kw = te.reduce_axis((0, kernel_width), name="kw")
-
-    idxdiv = tvm.tir.indexdiv
-    idxmod = tvm.tir.indexmod
-
-    conv_out = te.compute(
-        oshape,
-        lambda n, oc_chunk, oh, ow, oc_block: topi.mali.op_mad.mad(
-            topi.mali.op_mad.mymul(
-                data_pad[n,
-                         idxdiv(ic, ic_bn), oh * HSTR + kh * dilation_h, ow *
-                         WSTR + kw * dilation_w,
-                         idxmod(ic, ic_bn), ].astype(data.dtype), kernel[
-                             ic, oc_chunk, kh, kw, 0, oc_block]),
-            axis=[ic, kh, kw],
-        ),
-        name="conv2d_NCHWc",
-        tag="conv2d_NCHWc",
-    )
-    conv_out.dtype = typedict[cfg["wdtype"].val]
-    cfg.add_flop(n * oc_chunk * out_height * out_width * oc_bn * kernel_height * kernel_width * ic_chunk * ic_bn * 2)
+                             name='data', dtype=ddtype)
+    kernel_pl = te.placeholder((CI,K_P, KH, KW, 1, PACK4),
+                               name='filter', dtype=ddtype)
+    conv_pl = topi.mali.conv2d_NCHWc_io(data_pl, kernel_pl, stride, padding, 1,
+                                        'NCHWc', 'NCHWc',
+                                        ddtype.replace('r', 'w'))
+    s = topi.mali.schedule_conv2d_NCHWc_io(conv_pl)
     #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True))
     #exit(0)
-    s = te.create_schedule(conv_out.op)
-    Apad = data_pl
-    W = kernel_pl
-    B = conv_out
-    #=========
-    op = conv_out.op
-    B = op.output(0)
-    Apad, W = s[B].op.input_tensors
-    #==========
-    if isinstance(s[Apad].op, tvm.te.ComputeOp) and "pad" in Apad.op.tag:
-        s[Apad].compute_inline()
-    AL = s.cache_read(Apad, "local", [B])
-    WL = s.cache_read(W, "local", [B])
-    BL = s.cache_write(B, "local")
-    if op not in s.outputs:
-        s[B].compute_inline()
-        B = s.outputs[0].output(0)
-    # Split the workloads
-    #==========
-    ax_all = s[B].op.axis
-    len_4_flag = False
-    if len(ax_all) == 4:
-        n, kp, hp, wp = s[B].op.axis
-        p4 = kp
-        len_4_flag = True
-    else:
-        n, kp, hp, wp, p4 = s[B].op.axis
-    #==========
-    #n, kp, hp, wp, p4 = s[B].op.axis
 
-    n, f, y, x, b_p4 = n, kp, hp, wp, p4
-    # Define autotvm tuning space
-    cfg.define_split("tile_ic",
-                     in_channel,
-                     num_outputs=3,
-                     filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
-    #cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
-    cfg.define_split("tile_ow",
-                     out_width,
-                     num_outputs=2,
-                     filter=lambda y: y.size[-1] <= 12,
-                     policy="verbose")
-    cfg.define_split(
-        "tile_oh",
-        out_height,
-        num_outputs=2,
-        filter=lambda y: y.size[-1] <= 12,
-        policy="verbose",
-    )
-    #end define autotvm space
+    return s, [data_pl, kernel_pl, conv_pl]
 
-    #bf, kpi = cfg["tile_oc"].apply(s, B, f)
-    by, hpii = cfg["tile_oh"].apply(s, B, y)
-    bx, wp4 = cfg["tile_ow"].apply(s, B, x)
-
-    if len_4_flag:
-        kpi,b_p4 = s[B].split(kpi, factor=4)
-    #bf, kpi = s[B].split(f, factor=64)
-    #yo, hpii = s[B].split(y, factor=2)
-    #by, vy = s[B].split(yo, factor=4)
-    #xo, wp4 = s[B].split(x, factor=2)
-    #bx, vx = s[B].split(xo, factor=2)
-
-    cfg.define_split("tile_bindthread",
-                     cfg["tile_oh"].size[0] * cfg["tile_ow"].size[0] *
-                     oc_chunk,
-                     num_outputs=6)
-    s[B].reorder(n, f, by, bx, hpii, wp4)
-    fuse_bind = s[B].fuse(f, by, bx)
-    bf, by, bx, kpi, vy, vx = cfg["tile_bindthread"].apply(s, B, fuse_bind)
-    s[B].bind(bf, te.thread_axis("blockIdx.z"))
-    s[B].bind(by, te.thread_axis("blockIdx.y"))
-    s[B].bind(bx, te.thread_axis("blockIdx.x"))
-    s[B].bind(kpi, te.thread_axis("threadIdx.z"))
-    s[B].bind(vy, te.thread_axis("threadIdx.y"))
-    s[B].bind(vx, te.thread_axis("threadIdx.x"))
-
-    s[B].reorder(bf, by, bx, vy, vx, hpii, kpi)
-    s[BL].compute_at(s[B], kpi)
-    s[B].reorder(kpi, hpii)
-
-    _, kp, hp, wp, p4 = s[BL].op.axis
-    whp = s[BL].fuse(wp, hp)
-    rc, kh, kw = s[BL].op.reduce_axis
-
-    rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
-    #rco, rci = s[BL].split(rc, factor=4)
-    #rco, rcm = s[BL].split(rco, factor=1)
-
-    s[BL].reorder(rco, rcm, rci, whp, p4, kh, kw)
-    s[BL].vectorize(p4)  # vectorize memory load
-    s[BL].unroll(whp)
-    s[BL].unroll(rci)
-    s[BL].unroll(rcm)
-
-    s[AL].compute_at(s[BL], rco)
-    s[WL].compute_at(s[BL], rco)
-
-    _, kp, hp, wp, p4 = s[AL].op.axis
-    wpo, wpi = wp, p4
-    s[AL].vectorize(wpi)  # vectorize memory load
-    s[AL].unroll(wpo)
-    s[AL].unroll(hp)
-
-    # Schedule for W's shared memory load
-    kp, _, _, _,_, p4 = s[WL].op.axis
-    cpi = p4
-    s[WL].vectorize(cpi)  # vectorize memory load
-    s[WL].unroll(kp)
-
-    wpio, wpii = wp4, b_p4
-    s[B].vectorize(wpii)  # vectorize memory load
-    s[B].unroll(wpio)  # vectorize memory load
-    s[B].unroll(hpii)  # vectorize memory load
-    return s, [data_pl, kernel_pl, conv_out]
+#TRACKER_PORT=9090
+#@autotvm.template("tutorial/conv2d_no_batching1")
+#def conv2d_no_batching1(N, H, W, CO, CI, KH, KW, stride, padding):
+#    assert N == 1, "Only consider batch_size = 1 in this template"
+#
+#    H_P, W_P = H, W
+#    PACK4=4
+#    K_P=CO//PACK4
+#    C_P=(CI+3)//PACK4
+#    in_channel = CI
+#    out_channel = CO
+#    in_size=H
+#    open_image = 1
+#    ddtype = 'float32'
+#    if open_image:
+#        ddtype = 'climgfloatr32'
+#    cfg = autotvm.get_config()
+#    cfg.define_knob("idtype", [0, 1])
+#    cfg.define_knob("kdtype", [0, 1])
+#    cfg.define_knob("wdtype", [0, 2])
+#
+#    typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
+#
+#    data_pl = te.placeholder((1, C_P, H, W, PACK4),
+#                             name='data',
+#                             dtype=typedict[cfg["idtype"].val])
+#    kernel_pl = te.placeholder((CI, K_P, 1, 1, 1, PACK4),
+#                               name='filter',
+#                               dtype=typedict[cfg["kdtype"].val])
+#
+#    #define compute================================
+#    data = data_pl
+#    kernel = kernel_pl
+#    n, ic_chunk, ih, iw, ic_bn = topi.utils.get_const_tuple(data.shape)
+#    ic_chunk_group, oc_chunk, kernel_height, kernel_width, _, oc_bn = topi.utils.get_const_tuple(
+#        kernel.shape)
+#    in_channel = ic_chunk * ic_bn
+#    num_filter = oc_chunk * oc_bn
+#    cfg.is_fallback = False
+#
+#    # layout and out_layout are not used here,
+#    # we keep them for debug convenience when dumping autotvm workload
+#    HSTR, WSTR = stride if isinstance(stride, (tuple, list)) else (stride, stride)
+#    dilation=1
+#    dilation_h, dilation_w = (
+#        dilation if isinstance(dilation, (tuple, list)) else (dilation, dilation)
+#    )
+#
+#    dilated_kernel_h = (kernel_height - 1) * dilation_h + 1
+#    dilated_kernel_w = (kernel_width - 1) * dilation_w + 1
+#
+#    pad_top, pad_left, pad_down, pad_right = padding if isinstance(
+#        padding, (tuple, list)) else (padding, padding, padding, padding)
+#    HPAD = pad_top + pad_down
+#    WPAD = pad_left + pad_right
+#
+#    # output shape
+#    out_height = (ih + HPAD - dilated_kernel_h) // HSTR + 1
+#    out_width = (iw + WPAD - dilated_kernel_w) // WSTR + 1
+#    pad_before = (0, 0, pad_top, pad_left, 0)
+#    pad_after = (0, 0, pad_down, pad_right, 0)
+#    # DOPAD
+#    DOPAD = HPAD != 0 or WPAD != 0
+#    if DOPAD and kernel_height > 1:
+#        data_pad = topi.nn.pad(data, pad_before, pad_after, name="data_pad_3x3")
+#    else:
+#        data_pad = data
+#    oshape = (n, oc_chunk, out_height, out_width, oc_bn)
+#
+#
+#
+#    ic = te.reduce_axis((0, in_channel), name="ic")
+#    kh = te.reduce_axis((0, kernel_height), name="kh")
+#    kw = te.reduce_axis((0, kernel_width), name="kw")
+#
+#    idxdiv = tvm.tir.indexdiv
+#    idxmod = tvm.tir.indexmod
+#
+#    conv_out = te.compute(
+#        oshape,
+#        lambda n, oc_chunk, oh, ow, oc_block: topi.mali.op_mad.mad(
+#            topi.mali.op_mad.mymul(
+#                data_pad[n,
+#                         idxdiv(ic, ic_bn), oh * HSTR + kh * dilation_h, ow *
+#                         WSTR + kw * dilation_w,
+#                         idxmod(ic, ic_bn), ].astype(data.dtype), kernel[
+#                             ic, oc_chunk, kh, kw, 0, oc_block]),
+#            axis=[ic, kh, kw],
+#        ),
+#        name="conv2d_NCHWc",
+#        tag="conv2d_NCHWc",
+#    )
+#    conv_out.dtype = typedict[cfg["wdtype"].val]
+#    cfg.add_flop(n * oc_chunk * out_height * out_width * oc_bn * kernel_height * kernel_width * ic_chunk * ic_bn * 2)
+#    #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True))
+#    #exit(0)
+#    s = te.create_schedule(conv_out.op)
+#    Apad = data_pl
+#    W = kernel_pl
+#    B = conv_out
+#    #=========
+#    op = conv_out.op
+#    B = op.output(0)
+#    Apad, W = s[B].op.input_tensors
+#    #==========
+#    if isinstance(s[Apad].op, tvm.te.ComputeOp) and "pad" in Apad.op.tag:
+#        s[Apad].compute_inline()
+#    AL = s.cache_read(Apad, "local", [B])
+#    WL = s.cache_read(W, "local", [B])
+#    BL = s.cache_write(B, "local")
+#    if op not in s.outputs:
+#        s[B].compute_inline()
+#        B = s.outputs[0].output(0)
+#    # Split the workloads
+#    #==========
+#    ax_all = s[B].op.axis
+#    len_4_flag = False
+#    if len(ax_all) == 4:
+#        n, kp, hp, wp = s[B].op.axis
+#        p4 = kp
+#        len_4_flag = True
+#    else:
+#        n, kp, hp, wp, p4 = s[B].op.axis
+#    #==========
+#    #n, kp, hp, wp, p4 = s[B].op.axis
+#
+#    n, f, y, x, b_p4 = n, kp, hp, wp, p4
+#    # Define autotvm tuning space
+#    cfg.define_split("tile_ic",
+#                     in_channel,
+#                     num_outputs=3,
+#                     filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
+#    #cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
+#    cfg.define_split("tile_ow",
+#                     out_width,
+#                     num_outputs=2,
+#                     filter=lambda y: y.size[-1] <= 12,
+#                     policy="verbose")
+#    cfg.define_split(
+#        "tile_oh",
+#        out_height,
+#        num_outputs=2,
+#        filter=lambda y: y.size[-1] <= 12,
+#        policy="verbose",
+#    )
+#    #end define autotvm space
+#
+#    #bf, kpi = cfg["tile_oc"].apply(s, B, f)
+#    by, hpii = cfg["tile_oh"].apply(s, B, y)
+#    bx, wp4 = cfg["tile_ow"].apply(s, B, x)
+#
+#    if len_4_flag:
+#        kpi,b_p4 = s[B].split(kpi, factor=4)
+#    #bf, kpi = s[B].split(f, factor=64)
+#    #yo, hpii = s[B].split(y, factor=2)
+#    #by, vy = s[B].split(yo, factor=4)
+#    #xo, wp4 = s[B].split(x, factor=2)
+#    #bx, vx = s[B].split(xo, factor=2)
+#
+#    cfg.define_split("tile_bindthread",
+#                     cfg["tile_oh"].size[0] * cfg["tile_ow"].size[0] *
+#                     oc_chunk,
+#                     num_outputs=6)
+#    s[B].reorder(n, f, by, bx, hpii, wp4)
+#    fuse_bind = s[B].fuse(f, by, bx)
+#    bf, by, bx, kpi, vy, vx = cfg["tile_bindthread"].apply(s, B, fuse_bind)
+#    s[B].bind(bf, te.thread_axis("blockIdx.z"))
+#    s[B].bind(by, te.thread_axis("blockIdx.y"))
+#    s[B].bind(bx, te.thread_axis("blockIdx.x"))
+#    s[B].bind(kpi, te.thread_axis("threadIdx.z"))
+#    s[B].bind(vy, te.thread_axis("threadIdx.y"))
+#    s[B].bind(vx, te.thread_axis("threadIdx.x"))
+#
+#    s[B].reorder(bf, by, bx, vy, vx, hpii, kpi)
+#    s[BL].compute_at(s[B], kpi)
+#    s[B].reorder(kpi, hpii)
+#
+#    _, kp, hp, wp, p4 = s[BL].op.axis
+#    whp = s[BL].fuse(wp, hp)
+#    rc, kh, kw = s[BL].op.reduce_axis
+#
+#    rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
+#    #rco, rci = s[BL].split(rc, factor=4)
+#    #rco, rcm = s[BL].split(rco, factor=1)
+#
+#    s[BL].reorder(rco, rcm, rci, whp, p4, kh, kw)
+#    s[BL].vectorize(p4)  # vectorize memory load
+#    s[BL].unroll(whp)
+#    s[BL].unroll(rci)
+#    s[BL].unroll(rcm)
+#
+#    s[AL].compute_at(s[BL], rco)
+#    s[WL].compute_at(s[BL], rco)
+#
+#    _, kp, hp, wp, p4 = s[AL].op.axis
+#    wpo, wpi = wp, p4
+#    s[AL].vectorize(wpi)  # vectorize memory load
+#    s[AL].unroll(wpo)
+#    s[AL].unroll(hp)
+#
+#    # Schedule for W's shared memory load
+#    kp, _, _, _,_, p4 = s[WL].op.axis
+#    cpi = p4
+#    s[WL].vectorize(cpi)  # vectorize memory load
+#    s[WL].unroll(kp)
+#
+#    wpio, wpii = wp4, b_p4
+#    s[B].vectorize(wpii)  # vectorize memory load
+#    s[B].unroll(wpio)  # vectorize memory load
+#    s[B].unroll(hpii)  # vectorize memory load
+#    return s, [data_pl, kernel_pl, conv_out]
 
 # ------------------
 # Before tuning, we should apply some configurations. Here I use an RK3399 board
@@ -345,7 +374,7 @@ def tune_tasks(
     log_filename="tuning.log",
     use_transfer_learning=True,
 ):
-    use_transfer_learning=True
+    use_transfer_learning=False
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
     #if os.path.exists(tmp_log_file):
@@ -412,6 +441,25 @@ convshape = [
     (1, 1024, 7, 7, 1024, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
 ]
 
+def in_check_point(shape:str) -> bool:
+    import json
+    if isinstance(shape, tuple):
+        shape = list(shape)
+
+    if len(shape) == 11:
+        shape.pop(1)
+    for ind, sp in enumerate(shape):
+        if isinstance(sp, tuple):
+            shape[ind] = list(sp)
+    if not os.path.exists(log_file):
+        return False
+    with open(log_file) as fp:
+        for sp_hist in fp:
+            sp_hist_json = json.loads(sp_hist)
+            if sp_hist_json["input"][2] == sp:
+                return True
+    return False
+
 
 def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
@@ -426,13 +474,18 @@ def tune_and_evaluate(tuning_opt):
     #)
     # the last layer in resnet
     for shape in convshape:
-        N, H, W, CO, CI, KH, KW, strides, padding,dialte = shape
+        if in_check_point(shape):
+            continue
+        if len(shape) == 10:
+            N, H, W, CO, CI, KH, KW, strides, padding, dialte = shape
+        else:
+            N, _, H, W, CO, CI, KH, KW, strides, padding, dialte = shape
         tasks = autotvm.task.create(
             "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
         )
 
         # run tuning tasks
-        print("Tuning...", shape, device_key)
+        print(f"Tuning...{ith}th task", shape, device_key)
         tune_tasks([tasks], **tuning_opt)
         time.sleep(60*5)
 
@@ -552,9 +605,9 @@ if __name__ == '__main__':
     tuning_option = {
         "log_filename": log_file,
         "tuner": "xgb",
-        "n_trial": 10000,
+        "n_trial": 1000,
         "use_transfer_learning": False,
-        "early_stopping": 8850,
+        "early_stopping": 450,
         "measure_option":
         autotvm.measure_option(
             builder=autotvm.LocalBuilder(

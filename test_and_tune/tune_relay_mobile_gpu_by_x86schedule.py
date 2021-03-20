@@ -141,8 +141,8 @@ use_android=True
 tuning_option = {
     'log_filename': log_file,
     'tuner': 'xgb',
-    'n_trial': 1200,
-    'early_stopping': 1800,
+    'n_trial': 600,
+    'early_stopping': 450,
 
     'measure_option': autotvm.measure_option(
         builder=autotvm.LocalBuilder(
@@ -195,8 +195,6 @@ def tune_tasks(tasks,
     import time
 
     for i, tsk in enumerate(reversed(tasks)):
-        print(tsk)
-        continue
         if 'wino' in tsk.name:
             n_trial_=320
         else:
@@ -204,7 +202,6 @@ def tune_tasks(tasks,
 
         print("tunning ", tsk)
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
-        return
         # create tuner
         if tuner == "xgb" or tuner == "xgb-rank":
             tuner_obj = XGBTuner(tsk, loss_type="rank")
@@ -233,9 +230,10 @@ def tune_tasks(tasks,
                 autotvm.callback.log_to_file(tmp_log_file),
             ],
         )
-    # pick best records to a cache file
-    autotvm.record.pick_best(tmp_log_file, log_filename)
-    #os.remove(tmp_log_file)
+        time.sleep(60 * 5)
+        # pick best records to a cache file
+        autotvm.record.pick_best(tmp_log_file, log_filename)
+        #os.remove(tmp_log_file)
 
 # At commit baff99c83f9f691174434e7c78a4fee48b558547, ARM NHWC schedule is not high performance. So,
 # we first switch to NCHW. Further, Relay build calls AlterOpLayout to optimize the data layout to

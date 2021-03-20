@@ -232,8 +232,8 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   GetAttr(ctx, kCL_DEVICE_IMAGE2D_MAX_WIDTH, &imgw);
   int iw = imgw.operator int();
   int ih = imgh.operator int();
-  CHECK_LE(width, iw) << "image width is wider than the image object limit";
-  CHECK_LE(height, ih) << "image height is higher than the image object limit";
+  CHECK_LE(width, iw) << "image width is wider than the image object limit " << os.str();
+  CHECK_LE(height, ih) << "image height is higher than the image object limit " << os.str();
   cl_image_desc desc = {CL_MEM_OBJECT_IMAGE2D,
                         width,
                         height,
@@ -246,7 +246,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
                         0};
 
   cl_mem mptr = clCreateImage(this->context, mf, &fmt, &desc, NULL, &err_code);
-  LOG(WARNING) << "image sie x=" << width << " y=" << height << " shape " << os.str() << " " << mptr;
+  //LOG(WARNING) << "image sie x=" << width << " y=" << height << " shape " << os.str() << " " << mptr;
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }

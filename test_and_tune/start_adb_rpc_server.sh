@@ -66,6 +66,6 @@ while true; do
 	wait_port_released
     log "start rpc_server"
     adb -s 9A221FFBA005D8  shell su -c "chmod +x /data/local/tmp/arm_runtime_jicheng/run.sh"
-    adb -s 9A221FFBA005D8  shell su -c "/data/local/tmp/arm_runtime_jicheng/run.sh" >> log.txt
+    adb -s 9A221FFBA005D8  shell su -c "/data/local/tmp/arm_runtime_jicheng/run.sh"
     sleep 2
 done

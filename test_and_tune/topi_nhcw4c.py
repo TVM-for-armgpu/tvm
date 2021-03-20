@@ -166,7 +166,7 @@ def tune_tasks(
     log_filename="tuning.log",
     use_transfer_learning=True,
 ):
-    use_transfer_learning=False
+    use_transfer_learning=True
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
     #if os.path.exists(tmp_log_file):
@@ -268,7 +268,7 @@ def tune_and_evaluate(tuning_opt):
     #    ops=(relay.op.get("nn.conv2d"),),
     #)
     # the last layer in resnet
-    for shape in convshape:
+    for ith, shape in enumerate(convshape):
         if in_check_point(shape):
             continue
         if len(shape) == 10:
@@ -280,7 +280,7 @@ def tune_and_evaluate(tuning_opt):
         )
 
         # run tuning tasks
-        print("Tuning...", shape, device_key)
+        print(f"Tuning...{ith}th task", shape, device_key)
         tune_tasks([tasks], **tuning_opt)
         time.sleep(60*5)
 
