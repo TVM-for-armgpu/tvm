@@ -289,7 +289,7 @@ def _pick_tile_size(data, kernel, layout="NCHW"):
 
 def _pack_data(data, kernel):
     n, _, ih, iw = get_const_tuple(data.shape)
-    oc, ic, kh, kw = get_const_tuple(kernel.shape)
+    ic, oc, kh, kw = get_const_tuple(kernel.shape)
     ic_bn, oc_bn = 4, 4
 
     ic_chunk = (ic+ic_bn-1) // ic_bn
@@ -517,6 +517,24 @@ def conv2d_NCHWc(cfg, data, kernel, strides, padding, dilation, layout, out_layo
         )
     else:
         cfg.define_knob("unroll_kw", [True, False])
+    #for 3x3 or 5x5 or 7x7 convolution
+    def compute_at_axis_filter(y):
+        if kernel_height > 1:
+            # TODO make y.size[-1] could be [2, 3],
+            # but now feature for xgboost is not match(diffent feature len),dand training failed
+            return y.size[-1] in [3]
+        elif kernel_height > 1:
+            return y.size[-1] in [3]
+        else:
+            return y.size[-1] in [1]
+
+    cfg.define_split("cmpat_when_kernel",
+                     6,
+                     num_outputs=2,
+                     filter=compute_at_axis_filter)
+
+    cfg.define_knob("auto_unroll_max_step", [0, 128, 256, 512])
+    cfg.define_knob("unroll_explicit", [0, 1])
     # Pack data if raw 4-D data is provided.
     # This can only happen when autotuning.
     if len(data.shape) == 4:
@@ -980,25 +998,23 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         CO = oc_chunk * oc_bn
     else:
         N, CI, IH, IW = get_const_tuple(data.shape)
-        CO, _, KH, KW = get_const_tuple(kernel.shape)
-        ic_chunk = CI
-        oc_chunk = CO
-        oc_bn = 1
-        ic_bn = 1
+        CI, CO, KH, KW = get_const_tuple(kernel.shape)
+        oc_bn = 4
+        ic_bn = 4
+        ic_chunk = CI // ic_bn
+        oc_chunk = CO//oc_bn
+
     # Pack data if raw 4-D data is provided.
     # This can only happen when autotuning.
     pre_computed = False
     if len(data.shape) == 4:
-        ic_bn = 4
-        oc_bn = 4
-        oc_chunk = oc_chunk // oc_bn
         if autotvm.GLOBAL_SCOPE.in_tuning:
             # Directly use modified data layout placeholder.
             dshape = (N, ic_chunk, IH, IW, ic_bn)
             data = tvm.te.placeholder(dshape, data.dtype, name="placeholder")
             kshape = (
                 CI,
-                CO // 4,
+                oc_chunk,
                 KH,
                 KW,
                 1,
@@ -1010,7 +1026,6 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         else:
             data, kernel = _pack_data(data, kernel)
     else:
-        oc_chunk = CO // oc_bn
         if KH == 4 or KH == 6:
             pre_computed = True
     wino = tile_size
@@ -1022,8 +1037,6 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     wino2W = W_DIV_WINO
     winop2_tile_size = winop2 * winop2
     NTILE = H_DIV_WINO * W_DIV_WINO
-    # 'same' for convolution
-    out_shape = (N, oc_chunk, IH, IW, oc_bn)
 
     if isinstance(dilation, int):
         dilation_h = dilation_w = dilation
@@ -1058,6 +1071,8 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     nH, nW = (H + m - 1) // m, (W + m - 1) // m
     P = N * nH * nW
 
+    # 'same' for convolution
+    out_shape = (N, oc_chunk, H, W, oc_bn)
     ##### space definition begin #####
     cfg.define_split("inv_cp", oc_chunk, num_outputs=2, max_factor=8)
     cfg.define_split("inv_wp", NTILE, num_outputs=3)
@@ -1084,7 +1099,11 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         U = kernel
     else:
         U = mali_winograd.kernel_transform(kernel, wino_size, G=G, out_dtype=out_dtype)
-    V = mali_winograd.data_transform(data, wino_size, B=B, out_dtype=out_dtype)
+    V = mali_winograd.data_transform(data,
+                                     wino_size,
+                                     (pt, pl, pb, pr),
+                                     B=B,
+                                     out_dtype=out_dtype)
     M = mali_winograd.batch_gemm(U, V, out_dtype=out_dtype)
     output = mali_winograd.inverse_transform(
         out_shape, A=A, M=M, out_dtype=out_dtype)
@@ -1537,8 +1556,9 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
         #TODO results is not correct yet
         weight_expr = relay.reshape(weight_expr,
                                     newshape=(
+                                        CI,
                                         idxd(CO, VC),
-                                        CI, KH + tile_size - 1,
+                                        KH + tile_size - 1,
                                         KW + tile_size - 1,
                                         1,
                                         VC,
@@ -1558,7 +1578,7 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
         new_attrs["kernel_layout"] = "IOHW1i%do" % VC
 
         new_data = te.placeholder((N, idxd(CI, VC), H, W, VC), data.dtype)
-        new_kernel = te.placeholder((idxd(CO, VC), CI, KH + tile_size - 1,
+        new_kernel = te.placeholder((CI, idxd(CO, VC), KH + tile_size - 1,
                                     KW + tile_size - 1, 1, VC), kernel.dtype)
         new_workload = autotvm.task.args_to_workload(
             [new_data, new_kernel, strides, padding, dilation, out_dtype],

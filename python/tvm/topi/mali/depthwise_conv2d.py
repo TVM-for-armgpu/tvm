@@ -301,7 +301,7 @@ def depthwise_conv2d_NCHWc_io(
         tag="depthwise_conv2d_NCHWc",
     )
     shape = [batch, oc_chunk, out_height, out_width, oc_bn,filter_height,filter_width]
-    cfg.add_flop(np.prod(shape))
+    cfg.add_flop(2*np.prod(shape))
     return Output
 
 
@@ -373,7 +373,8 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     #    s[kernel].compute_inline()
     output = conv
     #cache
-    pad_dataL = s.cache_read(pad_data, "local", [conv])
+    #pad_dataL = s.cache_read(pad_data, "local", [conv])
+    pad_dataL = pad_data
     kernelL = s.cache_read(kernel, "local", [conv])
     OL = s.cache_write(conv, "local")
 
@@ -407,31 +408,31 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     s[OL].compute_at(s[output], n)
 
     k1, k2 = s[OL].op.reduce_axis
-    _, _, hp, wp, p4 = s[OL].op.axis
-    s[OL].reorder(hp, wp, p4)
+    _, _p, hp, wp, p4 = s[OL].op.axis
+    s[OL].reorder(_p, k1, k2, hp, wp, p4)
     s[OL].vectorize(p4)
-    #s[OL].unroll(wp)
-    #s[OL].unroll(hp)
-    #s[OL].unroll(k1)
-    #s[OL].unroll(k2)
+    s[OL].unroll(wp)
+    s[OL].unroll(hp)
+    s[OL].unroll(k1)
+    s[OL].unroll(k2)
 
     #schedule UL VL local read
-    s[pad_dataL].compute_at(s[OL], hp)
-    s[kernelL].compute_at(s[OL], hp)
+    #s[pad_dataL].compute_at(s[OL], _p)
+    s[kernelL].compute_at(s[OL], _p)
 
     #split Ul VL workload
     a, b, hp, wp, _, p4 = s[kernelL].op.axis
     s[kernelL].vectorize(p4)  # vectorize memory load
-    #s[kernelL].unroll(wp)
-    #s[kernelL].unroll(hp)
+    s[kernelL].unroll(wp)
+    s[kernelL].unroll(hp)
     _, _, hp, wp, p4 = s[pad_dataL].op.axis
     s[pad_dataL].vectorize(p4)  # vectorize memory load
-    #s[pad_dataL].unroll(wp)
-    #s[pad_dataL].unroll(hp)
+    s[pad_dataL].unroll(wp)
+    s[pad_dataL].unroll(hp)
 
     s[output].vectorize(Op4)  # vectorize memory load
-    #s[output].unroll(Owp)  # vectorize memory load
-    #s[output].unroll(Ohp)  # vectorize memory load
+    s[output].unroll(Owp)  # vectorize memory load
+    s[output].unroll(Ohp)  # vectorize memory load
 
     #n, ci, yi, xi = s[OL].op.axis
 

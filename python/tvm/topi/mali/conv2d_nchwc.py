@@ -60,24 +60,25 @@ def conv2d_NCHWc_mali_io(cfg, data, kernel, stride, padding, dilation, layout, o
     # Define autotvm tuning space
     #x.size[-1] == ic_bn must exist, don't change it
     cfg.define_split("tile_ic", in_channel, num_outputs=3,
-                     filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
-    #cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
+                     filter=lambda x: x.size[1] <= 12 and x.size[-1] in [ic_bn,ic_bn*2])
+    cfg.define_split("tile_oc", oc_chunk, num_outputs=3,
+                    filter=lambda y: y.size[-1] <= 4)
     cfg.define_split("tile_ow",
                      out_width,
-                     num_outputs=2,
-                     filter=lambda y: y.size[-1]>=2 and y.size[-1] <= 16,
+                     num_outputs=3,
+                     filter=lambda y: y.size[-1] <= 8,
                      policy="verbose")
     cfg.define_split(
         "tile_oh",
         out_height,
-        num_outputs=2,
-        filter=lambda y: y.size[-1] >= 2 and y.size[-1] <= 16,
+        num_outputs=3,
+        filter=lambda y: y.size[-1] <= 8,
         policy="verbose",
     )
     cfg.is_fallback = False
     #for 3x3 or 5x5 or 7x7 convolution
     def compute_at_axis_filter(y):
-        if kernel_height > 1:
+        if kernel_height > 3:
             # TODO make y.size[-1] could be [2, 3],
             # but now feature for xgboost is not match(diffent feature len),dand training failed
             return y.size[-1] in [2]
@@ -148,9 +149,9 @@ def schedule_conv2d_NCHWc_mali_io(cfg, outs):
 
             n, f, y, x, b_p4 = n, kp, hp, wp, p4
 
-            #bf, kpi = cfg["tile_oc"].apply(s, B, f)
-            by_vy, hpii = cfg["tile_oh"].apply(s, B, y)
-            bx_vx, wp4 = cfg["tile_ow"].apply(s, B, x)
+            bf, kpi,kp_mi = cfg["tile_oc"].apply(s, B, f)
+            by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
+            bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
 
             if len_4_flag:
                 kpi,b_p4 = s[B].split(kpi, factor=4)
@@ -160,13 +161,18 @@ def schedule_conv2d_NCHWc_mali_io(cfg, outs):
             #xo, wp4 = s[B].split(x, factor=2)
             #bx, vx = s[B].split(xo, factor=2)
 
-            cfg.define_split("tile_bindthread",
-                             OH*OW//(cfg["tile_oh"].size[-1] * cfg["tile_ow"].size[-1]) *
-                             oc_chunk,
-                             num_outputs=6)
-            s[B].reorder(n, f, by_vy, bx_vx, hpii, wp4)
-            fuse_bind = s[B].fuse(n, f, by_vy, bx_vx)
-            bf, by, bx, kpi, vy, vx = cfg["tile_bindthread"].apply(s, B, fuse_bind)
+            #cfg.define_split("tile_bindthread",
+            #                 OH*OW//(cfg["tile_oh"].size[-1] * cfg["tile_ow"].size[-1]) *
+            #                 oc_chunk,
+            #                 num_outputs=6,
+            #                 filter=lambda x:  1<x.size[-1]<64 and 
+            #                            1<x.size[-2]<64 and 
+            #                            1<x.size[-3]<64 and 
+            #                            1<=x.size[2]<256 and 
+            #                            1<=x.size[1]<256)
+            #s[B].reorder(n, f, by_vy, bx_vx, hpii, wp4)
+            #fuse_bind = s[B].fuse(n, f, by_vy, bx_vx)
+            #bf, by, bx, kpi, vy, vx = cfg["tile_bindthread"].apply(s, B, fuse_bind)
 
             s[B].bind(bf, te.thread_axis("blockIdx.z"))
             s[B].bind(by, te.thread_axis("blockIdx.y"))
@@ -217,10 +223,10 @@ def schedule_conv2d_NCHWc_mali_io(cfg, outs):
 
             _, kp, hp, wp, p4 = s[AL].op.axis
             s[AL].vectorize(p4)  # vectorize memory load
-            #s[AL].unroll(wp)
-            #s[AL].unroll(hp)
-            s[AL].bind(wp, te.thread_axis("blockIdx.x"))
-            s[AL].bind(hp, te.thread_axis("threadIdx.x"))
+            s[AL].unroll(wp)
+            s[AL].unroll(hp)
+            #s[AL].bind(wp, te.thread_axis("blockIdx.x"))
+            #s[AL].bind(hp, te.thread_axis("threadIdx.x"))
 
             # Schedule for W's shared memory load
             kp, _, kh, kw,_, p4 = s[WL].op.axis
@@ -231,10 +237,10 @@ def schedule_conv2d_NCHWc_mali_io(cfg, outs):
 
             wpio, wpii = wp4, b_p4
             s[B].vectorize(wpii)  # vectorize memory load
-            #s[B].unroll(wpio)  # vectorize memory load
-            #s[B].unroll(hpii)  # vectorize memory load
-            s[B].bind(wpio, te.thread_axis("blockIdx.z"))
-            s[B].bind(hpii, te.thread_axis("threadIdx.z"))
+            s[B].unroll(wpio)  # vectorize memory load
+            s[B].unroll(hpii)  # vectorize memory load
+            #s[B].bind(wpio, te.thread_axis("blockIdx.z"))
+            #s[B].bind(hpii, te.thread_axis("threadIdx.z"))
             return s
 
     ret_s = None
