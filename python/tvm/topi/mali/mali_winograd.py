@@ -140,14 +140,16 @@ def data_transform(data, wino_size, padding, B=None, out_dtype='float32'):
     def _transform_V(ic, oc, x, y, bo):
         tx = y // wino2W * wino_size + x // wino_size
         ty = (y % wino2W) * wino_size + x % wino_size
-        ox = tx // wino_size * tile_size + k2 - 1
-        oy = ty // wino_size * tile_size + k1 - 1
+        #ox = tx // wino_size * tile_size + tx % wino_size
+        #oy = ty // wino_size * tile_size + ty % wino_size
+        ox = tx // wino_size * tile_size + k2
+        oy = ty // wino_size * tile_size + k1
         return te.sum(B[k2, tx % wino_size]*Data_pad[ic, oc, ox, oy, bo]*B[k1, ty % wino_size],
                       axis=[k2, k1],
                       )
     V = te.compute((N, ic_chunck, wino_size*wino_size, wino2H * wino2W, ic_bn),
                    _transform_V,
-                   name="mali_conv2d_nchw_winograd_V",
+                   name="dmali_conv2d_nchw_winograd_V",
                    attrs={"data_type": storage_attr},
                    )
     return V
@@ -236,12 +238,13 @@ def batch_gemm(U=None, V=None, out_dtype='float32'):
     assert V.shape[1] * V.shape[-1] == U.shape[
         0], f'CIn channel must the same {V.shape} vs {U.shape}'
     rc = te.reduce_axis((0, IC), "r_c")
-    M = te.compute((N, oc_chunk, wino_all_size, NTILE, oc_bn), lambda n, oc, h, w, bo:
-                   te.sum(U[rc, oc, h//wino_size, h % wino_size, 0, bo]*V[n, rc//oc_bn, h, w, rc % oc_bn],
-                          axis=[rc]),
-                   name="mali_conv2d_nchw_winograd_M",
-                   attrs={"data_type": storage_attr},
-                   )
+    M = te.compute((N, oc_chunk, wino_all_size, NTILE, oc_bn),
+                    lambda n, oc, h, w, bo:
+                    te.sum(U[rc, oc, h//wino_size, h % wino_size, 0, bo]*V[n, rc // oc_bn, h, w, rc % oc_bn],
+                            axis=[rc]),
+                    name="mali_conv2d_nchw_winograd_M",
+                    attrs={"data_type": storage_attr},
+                    )
     return M
 #s = te.create_schedule(M.op)
 
@@ -302,6 +305,7 @@ def batch_gemm_shedule(cfg, s, M):
     s[UL].vectorize(p4)  # vectorize memory load
     #s[UL].unroll(wp)
     #s[UL].unroll(hp)
+    #s[UL].unroll(a)
     _, _, hp, wp, p4 = s[VL].op.axis
     s[VL].vectorize(p4)  # vectorize memory load
     #s[VL].unroll(wp)
@@ -309,7 +313,6 @@ def batch_gemm_shedule(cfg, s, M):
 
     s[M].vectorize(Mp4)  # vectorize memory load
     #s[M].unroll(Mwp)  # vectorize memory load
-    #s[M].unroll(Mhp)  # vectorize memory load
 #========shedule end=================================
 
 #func = tvm.build(s, [U,V,M], target=target)
