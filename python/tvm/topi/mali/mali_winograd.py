@@ -67,7 +67,8 @@ def kernel_transform_shedule(cfg, s, U):
 
     # Schedule BL local write
     s[UL].compute_at(s[U], kpo)
-    _, _, hp, wp, _, p4 = s[UL].op.axis
+    s[U].reorder(kpo, Uhp, Uwp, Up4)
+    cp, _, hp, wp, _, p4 = s[UL].op.axis
     s[UL].reorder(hp, wp, p4)
     s[UL].vectorize(p4)
     k1, k2 = s[UL].op.reduce_axis
@@ -76,7 +77,7 @@ def kernel_transform_shedule(cfg, s, U):
     #s[UL].unroll(k1)
     #s[UL].unroll(k2)
 
-    s[WL].compute_at(s[UL], hp)
+    s[WL].compute_at(s[UL], cp)
     _, _, hp, wp, _, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
     #s[WL].unroll(wp)
