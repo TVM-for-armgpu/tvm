@@ -149,7 +149,7 @@ def data_transform(data, wino_size, padding, B=None, out_dtype='float32'):
                       )
     V = te.compute((N, ic_chunck, wino_size*wino_size, wino2H * wino2W, ic_bn),
                    _transform_V,
-                   name="dmali_conv2d_nchw_winograd_V",
+                   name="mali_conv2d_nchw_winograd_V",
                    attrs={"data_type": storage_attr},
                    )
     return V
@@ -290,7 +290,7 @@ def batch_gemm_shedule(cfg, s, M):
     _, _, hp, wp, p4 = s[ML].op.axis
     rc, = s[ML].op.reduce_axis
     rco, rci = s[ML].split(rc, factor=4)
-    s[ML].reorder(rco, wp, rci, p4)
+    s[ML].reorder(rco, rci, wp, p4)
     s[ML].vectorize(p4)
     #s[ML].unroll(wp)
     #s[ML].unroll(hp)
@@ -339,7 +339,7 @@ def inverse_transform(out_shape, A=None, M=None, out_dtype='float32'):
     wino2W = (img_W + tile_size - 1) // tile_size
     wino_size = tile_size + 2
 
-    assert wino_size * wino_size == wino_all_size
+    assert wino_size * wino_size == wino_all_size, f'{wino_size * wino_size} vs{wino_all_size}'
     assert wino2H * wino2W == NTILE
     assert out_shape[1] == oc_chunk
     k1 = te.reduce_axis((0, wino_size), "r_a")
@@ -348,9 +348,8 @@ def inverse_transform(out_shape, A=None, M=None, out_dtype='float32'):
     def _transform_inverse(n, oc, h, w, bo):
         th = h // tile_size * wino_size + k2
         tw = w // tile_size * wino_size + k1
-        oh = (th % wino_size + tw // wino_size) * \
-            wino_size + tw % wino_size
-        ow = tw // wino_size + (th // wino_size) * wino2W
+        oh = th % wino_size*wino_size + tw % wino_size
+        ow = (th // wino_size) * wino2W + tw // wino_size
         #AT(th % tile_size, k2) * M[ox][oy] * A(k1, tw % 2)
         return te.sum(A[k2, th % tile_size]*M[n, oc, oh, ow, bo]*A[k1, tw % tile_size],
                       axis=[k1, k2])
@@ -404,9 +403,9 @@ def inverse_transform_shedule(cfg, s, op):
     hpo, hpi, Ohp=cfg["inv_hp"].apply(s, O, hp)
 
     #cpo, cpi = s[O].split(cp, factor=4)
-    #wp, Owp = s[O].split(wp, factor=4)
+    #wp, Owp = s[O].split(wp, factor=2)
     #wpo, wpi = s[O].split(wp, factor=4)
-    #hp, Ohp = s[O].split(hp, factor=4)
+    #hp, Ohp = s[O].split(hp, factor=2)
     #hpo, hpi = s[O].split(hp, factor=4)
 
     if len_4_flag:
@@ -422,7 +421,8 @@ def inverse_transform_shedule(cfg, s, op):
 
     # Schedule BL local write
     s[OL].compute_at(s[O], n)
-    _, _, hp, wp, p4 = s[OL].op.axis
+    s[O].reorder(n,Owp, Ohp, Op4)
+    _, cp, hp, wp, p4 = s[OL].op.axis
     s[OL].reorder(hp, wp, p4)
     s[OL].vectorize(p4)
     k1, k2 = s[OL].op.reduce_axis
@@ -431,7 +431,7 @@ def inverse_transform_shedule(cfg, s, op):
     #s[OL].unroll(k1)
     #s[OL].unroll(k2)
 
-    s[ML].compute_at(s[OL], hp)
+    s[ML].compute_at(s[OL], cp)
     _, _, hp, wp, p4 = s[ML].op.axis
     s[ML].vectorize(p4)  # vectorize memory load
     #s[ML].unroll(wp)
