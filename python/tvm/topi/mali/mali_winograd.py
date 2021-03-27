@@ -237,6 +237,7 @@ def batch_gemm(U=None, V=None, out_dtype='float32'):
     N, _, wino_all_size, NTILE, _ = V.shape
     assert V.shape[1] * V.shape[-1] == U.shape[
         0], f'CIn channel must the same {V.shape} vs {U.shape}'
+    assert wino_all_size == wino_size*wino_size
     rc = te.reduce_axis((0, IC), "r_c")
     M = te.compute((N, oc_chunk, wino_all_size, NTILE, oc_bn),
                     lambda n, oc, h, w, bo:
@@ -348,10 +349,10 @@ def inverse_transform(out_shape, A=None, M=None, out_dtype='float32'):
     def _transform_inverse(n, oc, h, w, bo):
         th = h // tile_size * wino_size + k2
         tw = w // tile_size * wino_size + k1
-        oh = th % wino_size*wino_size + tw % wino_size
+        oh = (th % wino_size)*wino_size + tw % wino_size
         ow = (th // wino_size) * wino2W + tw // wino_size
         #AT(th % tile_size, k2) * M[ox][oy] * A(k1, tw % 2)
-        return te.sum(A[k2, th % tile_size]*M[n, oc, oh, ow, bo]*A[k1, tw % tile_size],
+        return te.sum(A[k2, h % tile_size]*M[n, oc, oh, ow, bo]*A[k1, w % tile_size],
                       axis=[k1, k2])
 
     #int th = int(h / tile_size) * wino_size + k2;

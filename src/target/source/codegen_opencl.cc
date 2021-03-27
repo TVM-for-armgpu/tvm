@@ -71,7 +71,7 @@ void CodeGenOpenCL::PreFunctionBody(const PrimFunc& f) {
 }
 void CodeGenOpenCL::PrintGlobalSamplerDeclare() {
   stream << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
-            "CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;\n";
+            "CLK_ADDRESS_CLAMP| CLK_FILTER_NEAREST;\n";
 }
 
 std::string CodeGenOpenCL::Finish() {
@@ -527,9 +527,10 @@ void CodeGenOpenCL::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // 
       }
   } while (0);
   os << "((";
+  //arm gpu could auto broadcast by hardware, which is faster
   PrintType(op->dtype, os);
   os << ")(";
-  for (int i = 0; i < op->lanes; ++i) {
+  for (int i = 0; i < std::min(1, op->lanes); ++i) {
     if (i != 0) os << ", ";
     os << v;
   }
