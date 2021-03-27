@@ -257,7 +257,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
           }
 #if USE_CL_RGBA
         int DONT_USE_SPLIT = 0;
-        FILE* fp = fopen("./dont_use_split", "r");
+        FILE* fp = NULL;// fopen("./dont_use_split", "r");
         if (fp != NULL) {
           LOG(WARNING) << "transfer to div and mod split mode";
           DONT_USE_SPLIT = 1;

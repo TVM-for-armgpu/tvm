@@ -1693,7 +1693,7 @@ bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
 
 std::string CodeGenC::Simplify_with_const_var(const std::string& base) {
   std::string new_base_index = base;
-  //Find_longst_common_str_or_add_key(base, new_base_index);
+  Find_longst_common_str_or_add_key(base, new_base_index);
   return new_base_index;
 }
 

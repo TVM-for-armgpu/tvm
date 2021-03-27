@@ -320,7 +320,7 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
       //===
       std::string img_x_axes, img_y_axes;
       int DONT_USE_SPLIT = 0;
-      FILE* fp = fopen("./dont_use_split", "r");
+      FILE* fp = 0;// fopen("./dont_use_split", "r");
       if (fp != NULL) {
         DONT_USE_SPLIT = 1;
         fclose(fp);
