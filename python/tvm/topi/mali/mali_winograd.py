@@ -179,8 +179,16 @@ def data_transform_shedule(cfg,  s, V):
     n, cp, hp, wp, Vp4 = s[V].op.axis
 
     cpo, cpi = cfg["data_cp"].apply(s, V, cp)
-    wpo, wpi, Vwp = cfg["data_wp"].apply(s, V, wp)
-    hpo, hpi, Vhp = cfg["data_hp"].apply(s, V, hp)
+    #wpo, wpi, Vwp = cfg["data_wp"].apply(s, V, wp)
+    #hpo, hpi, Vhp = cfg["data_hp"].apply(s, V, hp)
+    # for rdong's code schedule
+    wp, Vwp = s[V].split(wp, factor=4)
+    wpo, wpi = s[V].split(wp, factor=cfg["data_wp"].size[1])
+    wpo,wpoif= s[V].split(wpo, factor=4)
+    s[V].reorder(wpo, wpi,wpoif,hp)
+    hp=s[V].fuse(wpoif,hp)
+    hp, Vhp = s[V].split(hp, factor=4)
+    hpo, hpi = s[V].split(hp, factor=cfg["data_hp"].size[1])
 
     #cpo, cpi = s[V].split(cp, factor=4)
 

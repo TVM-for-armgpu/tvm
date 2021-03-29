@@ -50,7 +50,7 @@ def conv2d_NCHWc_mali_io(cfg, data, kernel, stride, padding, dilation, layout, o
 
     conv_out, flops = conv2d_NCHWc_io_op_common(data, kernel, stride, padding,
                                                 dilation, layout, out_layout,
-                                                out_dtype)
+                                                False, out_dtype)
 
     N, oc_chunk, out_height, out_width, ic_bn = get_const_tuple(conv_out.shape)
     if len(kernel.shape) == 6:
