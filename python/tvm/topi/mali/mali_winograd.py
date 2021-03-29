@@ -183,7 +183,7 @@ def data_transform_shedule(cfg,  s, V):
     #hpo, hpi, Vhp = cfg["data_hp"].apply(s, V, hp)
     # for rdong's code schedule
     wp, Vwp = s[V].split(wp, factor=4)
-    wpo, wpi = s[V].split(wp, factor=cfg["data_wp"].size[1])
+    wpo, wpi = s[V].split(wp, factor=cfg["data_wp"].size[-1])
     wpo,wpoif= s[V].split(wpo, factor=4)
     s[V].reorder(wpo, wpi,wpoif,hp)
     hp=s[V].fuse(wpoif,hp)
