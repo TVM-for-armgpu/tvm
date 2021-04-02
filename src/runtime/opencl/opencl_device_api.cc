@@ -214,7 +214,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
 #if USE_CL_RGBA
-  cl_image_format fmt = {CL_RGBA, CL_FLOAT};
+  cl_image_format fmt = {CL_RGBA, CL_HALF_FLOAT};
  #else
   cl_image_format fmt = {CL_R, CL_FLOAT};
 #endif
@@ -341,7 +341,8 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
 
 void OpenCLWorkspace::GetTc(TVMContext ctx_from, void* data_shape) {
   ICHECK(data_shape != nullptr) << "time array is null";
-  *(double*)data_shape = tc_duration_ms_;
+  *(double*)data_shape = tc_duration_s_;
+  tc_duration_s_=0;
 }
 
 void OpenCLWorkspace::StreamSync(TVMContext ctx, TVMStreamHandle stream) {

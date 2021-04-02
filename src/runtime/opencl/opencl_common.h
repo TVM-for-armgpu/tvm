@@ -207,7 +207,7 @@ class OpenCLWorkspace : public DeviceAPI {
   std::vector<size_t> free_kernel_ids;
   // the mutex for initialization
   std::mutex mu;
-  double tc_duration_ms_;
+  double tc_duration_s_;
   // destructor
   ~OpenCLWorkspace() {
     if (context != nullptr) {

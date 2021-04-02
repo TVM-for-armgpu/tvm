@@ -88,7 +88,7 @@ class OpenCLWrappedFunc {
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
     //m_->time_vec_.push_back((time_end - time_start)/ 1000000.0);
     //LOG(WARNING) << " func_name_="<<func_name_<<" "<<m_->time_vec_.back();
-    w_->tc_duration_ms_ = (time_end - time_start) / 1000000.0;
+    w_->tc_duration_s_ = (time_end - time_start) / 1000000000.0;
   }
 
  private:
