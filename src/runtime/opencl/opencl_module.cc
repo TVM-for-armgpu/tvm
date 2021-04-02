@@ -72,21 +72,23 @@ class OpenCLWrappedFunc {
     for (cl_uint i = 0; i < work_dim; ++i) {
       wl.work_size[i] *= wl.work_size[i + 3];
     }
-    //for (int i = 0; i < 6; ++i) {
-    //  std::cout << wl.work_size[i]<<",";
-    //}
+    for (int i = 0; i < 6; ++i) {
+      std::cout << wl.work_size[i]<<",";
+    }
+    std::cout << "size end\n";
     // launch kernel
     // cl event for time statistic
-    //cl_event event;
+    cl_event event;
     OPENCL_CALL(clEnqueueNDRangeKernel(queue, kernel, work_dim, nullptr, wl.work_size,
-                                       wl.work_size + 3, 0, nullptr, 0));
-                                       //wl.work_size + 3, 0, nullptr, &event));
-    //clWaitForEvents(1, &event);
-    //cl_ulong time_start, time_end;
-    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+                                       //wl.work_size + 3, 0, nullptr, 0));
+                                       wl.work_size + 3, 0, nullptr, &event));
+    clWaitForEvents(1, &event);
+    cl_ulong time_start, time_end;
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
     //m_->time_vec_.push_back((time_end - time_start)/ 1000000.0);
     //LOG(WARNING) << " func_name_="<<func_name_<<" "<<m_->time_vec_.back();
+    w_->tc_duration_ms_ = (time_end - time_start) / 1000000.0;
   }
 
  private:
