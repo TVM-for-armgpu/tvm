@@ -56,7 +56,7 @@ class LocalSession : public RPCSession {
                       TVMContext ctx_from, DLDataType type_hint) override;
   void CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset, DataShape* nbytes,
                       TVMContext ctx_from, DLDataType type_hint) override;
-
+  void GetTc(TVMContext ctx, void* tcarr) override;
   void FreeHandle(void* handle, int type_code) override;
 
   DeviceAPI* GetDeviceAPI(TVMContext ctx, bool allow_missing = false) override;

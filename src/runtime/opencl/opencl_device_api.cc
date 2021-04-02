@@ -333,6 +333,11 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
   }
 }
 
+void OpenCLWorkspace::GetTc(TVMContext ctx_from, void* data_shape) {
+  ICHECK(data_shape != nullptr) << "time array is null";
+  *(double*)data_shape = 1.231;
+}
+
 void OpenCLWorkspace::StreamSync(TVMContext ctx, TVMStreamHandle stream) {
   ICHECK(stream == nullptr);
   OPENCL_CALL(clFinish(this->GetQueue(ctx)));
