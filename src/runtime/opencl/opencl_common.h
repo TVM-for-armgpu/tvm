@@ -322,6 +322,7 @@ class OpenCLModuleNode : public ModuleNode {
 
  public:
   std::vector<double> time_vec_;
+  std::ostringstream  local_global_;
  private:
   // The workspace, need to keep reference to use it in destructor.
   // In case of static destruction order problem.

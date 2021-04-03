@@ -162,7 +162,9 @@ void OpenCLWorkspace::get_image_t_size(TVMContext ctx, DataShape* dsize, size_t&
     height = dsize->shape[0];
   } else if (dsize->ndim == 5) {
     //for nhcw4 mace  --> h==w and w!= c/4 then c/4*w*4 as width, n*c as heith
-    if (dsize->shape[3] == dsize->shape[1] && dsize->shape[3] != dsize->shape[2]){
+    if ((dsize->shape[3] == dsize->shape[1] && dsize->shape[3] != dsize->shape[2])
+    || (dsize->shape[2]*dsize->shape[3] * dsize->shape[4] / lans < 12345)
+    ){
       width = dsize->shape[2]*dsize->shape[3] * dsize->shape[4] / lans;
       height = dsize->shape[1] * dsize->shape[0];
     } else {

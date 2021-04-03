@@ -8,12 +8,20 @@ from tvm.autotvm.task.space import get_factors
 from ..utils import traverse_inline, get_const_int, get_const_tuple
 from .. import nn
 
-
+def compute_at_axis_filter(kernel_max):
+    if kernel_max > 3:
+        return 3
+    elif kernel_max > 1:
+        return 3
+    else:
+        return 1
 def _schedule_conv_NCHWc_rf(s, cfg, data_vec, kernel_vec, conv_out, op):
     Apad = data_vec
     W = kernel_vec
     B = conv_out
-    kernel_height = kernel_vec.shape[2]
+    kernel_height, kernel_width = kernel_vec.shape[2:4]
+    kernel_max = max(kernel_height,kernel_width)
+    cmpat_when_kernel=compute_at_axis_filter(kernel_max)
     #=========
     if 'conv2d_NCHWc_rf' not in op.tag:
         assert 0, 'failed with schedule, rf is used'
@@ -63,7 +71,19 @@ def _schedule_conv_NCHWc_rf(s, cfg, data_vec, kernel_vec, conv_out, op):
     #=====scheule rf end
 
     B = conv_out_rf.op.input_tensors[0]
-    #s[B].compute_at(s[RFL],n_fn)
+    _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, B.op, True)
+    return s
+
+
+def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op, from_rf=False):
+    Apad = data_vec
+    W = kernel_vec
+    B = conv_out
+    kernel_height, kernel_width = kernel_vec.shape[2:4]
+    kernel_max = max(kernel_height,kernel_width)
+    cmpat_when_kernel=compute_at_axis_filter(kernel_max)
+    #=========
+    B = op.output(0)
     Apad, W = s[B].op.input_tensors
     #==========
     if isinstance(s[Apad].op, tvm.te.ComputeOp) and "pad" in Apad.op.tag:
@@ -71,6 +91,9 @@ def _schedule_conv_NCHWc_rf(s, cfg, data_vec, kernel_vec, conv_out, op):
     AL = s.cache_read(Apad, "local", [B])
     WL = s.cache_read(W, "local", [B])
     BL = s.cache_write(B, "local")
+    if op not in s.outputs and not from_rf:
+        s[B].compute_inline()
+        B = s.outputs[0].output(0)
     # Split the workloads
     #==========
     ax_all = s[B].op.axis
@@ -86,10 +109,12 @@ def _schedule_conv_NCHWc_rf(s, cfg, data_vec, kernel_vec, conv_out, op):
 
     n, f, y, x, b_p4 = n, kp, hp, wp, p4
 
-    f = s[B].fuse(n,f)
+    f=s[B].fuse(n,f)
     bf, kpi = cfg["tile_oc"].apply(s, B, f)
     by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
     bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
+    #s[B].reorder(hpii, by, vy)
+    #s[B].reorder(wp4, bx, vx)
 
     if len_4_flag:
         kpi,b_p4 = s[B].split(kpi, factor=4)
@@ -103,6 +128,8 @@ def _schedule_conv_NCHWc_rf(s, cfg, data_vec, kernel_vec, conv_out, op):
     s[B].bind(bf, te.thread_axis("blockIdx.z"))
     s[B].bind(by, te.thread_axis("blockIdx.y"))
     s[B].bind(bx, te.thread_axis("blockIdx.x"))
+    #s[B].bind(hpii, te.thread_axis("vthread", name="vx"))
+    #s[B].bind(wp4, te.thread_axis("vthread", name="vy"))
     s[B].bind(kpi, te.thread_axis("threadIdx.z"))
     s[B].bind(vy, te.thread_axis("threadIdx.y"))
     s[B].bind(vx, te.thread_axis("threadIdx.x"))
@@ -127,22 +154,20 @@ def _schedule_conv_NCHWc_rf(s, cfg, data_vec, kernel_vec, conv_out, op):
 
     #s[BL].unroll(kh)
     #s[BL].unroll(kw)
-    if kernel_height == 1:
-        cfg["unroll_explicit"].val = 1
-    else:
+    if kernel_max > 1:
         s[BL].pragma(kw, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kw, "unroll_explicit", cfg["unroll_explicit"].val)
         s[BL].pragma(kh, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kh, "unroll_explicit", cfg["unroll_explicit"].val)
-    s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
-    s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
+        s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+        s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
 
 
     at_axis = rco
     # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
-    if cfg["cmpat_when_kernel"].size[-1] == 2:
+    if cmpat_when_kernel == 2:
         at_axis = kh
-    elif cfg["cmpat_when_kernel"].size[-1]  == 3:
+    elif cmpat_when_kernel == 3:
         at_axis = kw
     s[AL].compute_at(s[BL], at_axis)
     s[WL].compute_at(s[BL], at_axis)
@@ -166,7 +191,7 @@ def _schedule_conv_NCHWc_rf(s, cfg, data_vec, kernel_vec, conv_out, op):
     return s
 
 
-def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
+def _schedule_conv_NHCWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     Apad = data_vec
     W = kernel_vec
     B = conv_out
@@ -188,42 +213,46 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     ax_all = s[B].op.axis
     len_4_flag = False
     if len(ax_all) == 4:
-        n, kp, hp, wp = s[B].op.axis
+        n, hp, kp, wp = s[B].op.axis
         p4 = kp
         len_4_flag = True
     else:
-        n, kp, hp, wp, p4 = s[B].op.axis
+        n, hp, kp, wp, p4 = s[B].op.axis
     #==========
     #n, kp, hp, wp, p4 = s[B].op.axis
 
     n, f, y, x, b_p4 = n, kp, hp, wp, p4
 
-    f=s[B].fuse(n,f)
+    s[B].reorder(n, f, y, x, b_p4)
+    f = s[B].fuse(n, f)
     bf, kpi = cfg["tile_oc"].apply(s, B, f)
-    by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
-    bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
+    by, vy = cfg["tile_oh"].apply(s, B, y)
+    bx, vx, hpii, wp4 = cfg["tile_ow"].apply(s, B, x)
+    s[B].reorder(hpii, wp4, bx, vx)
 
     if len_4_flag:
-        kpi,b_p4 = s[B].split(kpi, factor=4)
+        kpi, b_p4 = s[B].split(kpi, factor=4)
     #bf, kpi = s[B].split(f, factor=64)
     #yo, hpii = s[B].split(y, factor=2)
     #by, vy = s[B].split(yo, factor=4)
     #xo, wp4 = s[B].split(x, factor=2)
     #bx, vx = s[B].split(xo, factor=2)
 
-
-    s[B].bind(bf, te.thread_axis("blockIdx.z"))
-    s[B].bind(by, te.thread_axis("blockIdx.y"))
-    s[B].bind(bx, te.thread_axis("blockIdx.x"))
-    s[B].bind(kpi, te.thread_axis("threadIdx.z"))
-    s[B].bind(vy, te.thread_axis("threadIdx.y"))
-    s[B].bind(vx, te.thread_axis("threadIdx.x"))
+    s[B].bind(bf, te.thread_axis("blockIdx.x"))
+    s[B].bind(by, te.thread_axis("blockIdx.z"))
+    s[B].bind(bx, te.thread_axis("blockIdx.y"))
+    s[B].bind(hpii, te.thread_axis("vthread", name="vx"))
+    s[B].bind(wp4, te.thread_axis("vthread", name="vy"))
+    s[B].bind(kpi, te.thread_axis("threadIdx.x"))
+    s[B].bind(vy, te.thread_axis("threadIdx.z"))
+    s[B].bind(vx, te.thread_axis("threadIdx.y"))
 
     s[B].reorder(bf, by, bx, vy, vx, hpii, kpi)
     s[BL].compute_at(s[B], kpi)
     s[B].reorder(kpi, hpii)
 
-    _, kp, hp, wp, p4 = s[BL].op.axis
+    _, hp, kp, wp, p4 = s[BL].op.axis
+    s[BL].reorder(_, kp, hp, wp, p4)
     whp = s[BL].fuse(wp, hp)
     rc, kh, kw = s[BL].op.reduce_axis
 
@@ -242,30 +271,31 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op):
     if kernel_height == 1:
         cfg["unroll_explicit"].val = 1
     else:
-        s[BL].pragma(kw, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+        s[BL].pragma(kw, "auto_unroll_max_step",
+                     cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kw, "unroll_explicit", cfg["unroll_explicit"].val)
-        s[BL].pragma(kh, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+        s[BL].pragma(kh, "auto_unroll_max_step",
+                     cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kh, "unroll_explicit", cfg["unroll_explicit"].val)
     s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
     s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
-
 
     at_axis = rco
     # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
     if cfg["cmpat_when_kernel"].size[-1] == 2:
         at_axis = kh
-    elif cfg["cmpat_when_kernel"].size[-1]  == 3:
+    elif cfg["cmpat_when_kernel"].size[-1] == 3:
         at_axis = kw
     s[AL].compute_at(s[BL], at_axis)
     s[WL].compute_at(s[BL], at_axis)
 
-    _, kp, hp, wp, p4 = s[AL].op.axis
+    _, hp, kp, wp, p4 = s[AL].op.axis
     s[AL].vectorize(p4)  # vectorize memory load
     s[AL].unroll(wp)
     s[AL].unroll(hp)
 
     # Schedule for W's shared memory load
-    kp, _, kh, kw,_, p4 = s[WL].op.axis
+    _, kp, kh, kw, _, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
     s[WL].unroll(kp)
     s[WL].unroll(kh)

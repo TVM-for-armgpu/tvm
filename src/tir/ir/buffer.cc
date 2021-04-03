@@ -272,8 +272,13 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
             }
             case 5: {
                   //for nhcw4 mace  --> h==w and w!= c/4 then c/4*w*4 as width, n*c as heith
-              if ((n->shape[3].as<IntImmNode>()->value == n->shape[1].as<IntImmNode>()->value) &&
-               (n->shape[3].as<IntImmNode>()->value != n->shape[2].as<IntImmNode>()->value)){
+              std::vector<int> shape={n->shape[0].as<IntImmNode>()->value,
+                            n->shape[1].as<IntImmNode>()->value,
+                            n->shape[2].as<IntImmNode>()->value,
+                            n->shape[3].as<IntImmNode>()->value,
+                            n->shape[4].as<IntImmNode>()->value};
+              if (((shape[3] == shape[1]) && (shape[3] != shape[2]))
+              ||(shape[2]*shape[3]*shape[4]/4 < 12345)){
                 how_much_item_is_for_x_axes = 3;
               } else {
                 how_much_item_is_for_x_axes = 2;

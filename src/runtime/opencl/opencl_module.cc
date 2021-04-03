@@ -72,10 +72,12 @@ class OpenCLWrappedFunc {
     for (cl_uint i = 0; i < work_dim; ++i) {
       wl.work_size[i] *= wl.work_size[i + 3];
     }
-    for (int i = 0; i < 6; ++i) {
-      std::cout << wl.work_size[i]<<",";
+    if (m_->local_global_.str().empty()) {
+      for (int i = 0; i < 6; ++i) {
+        m_->local_global_ << wl.work_size[i]<<",";
+      }
+      m_->local_global_ << "size end\n";
     }
-    std::cout << "size end\n";
     // launch kernel
     // cl event for time statistic
     cl_event event;
@@ -125,6 +127,7 @@ OpenCLModuleNode::~OpenCLModuleNode() {
   }
   //double avg_time = std::accumulate(time_vec_.begin(), time_vec_.end(), 0.0)/time_vec_.size();
   //LOG(WARNING) << "kernerl avg running time =======" << avg_time;
+  LOG(WARNING) << "kernerl thread " << local_global_.str();
 }
 
 cl::OpenCLWorkspace* OpenCLModuleNode::GetGlobalWorkspace() {
