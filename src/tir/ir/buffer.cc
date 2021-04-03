@@ -294,7 +294,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
               break;
             }
             case 2: {
-              how_much_item_is_for_x_axes = 2;
+              how_much_item_is_for_x_axes = 1;
               break;
             }
             default : {
