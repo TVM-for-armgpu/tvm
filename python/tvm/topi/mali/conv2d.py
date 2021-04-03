@@ -1087,7 +1087,7 @@ def conv2d_NCHWc_io_op_common(data, kernel, stride, padding, dilation, layout, o
 @autotvm.register_topi_compute("conv2d_NCHWc_io.mali")
 def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype):
     conv_out, flops = conv2d_NCHWc_io_op_common(data, kernel, stride, padding,
-                                         dilation, layout, out_layout, True,
+                                         dilation, layout, out_layout, False,
                                          out_dtype)
 
     N, oc_chunk, out_height, out_width, ic_bn = get_const_tuple(conv_out.shape)
