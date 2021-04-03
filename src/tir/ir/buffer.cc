@@ -272,7 +272,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
             }
             case 5: {
                   //for nhcw4 mace  --> h==w and w!= c/4 then c/4*w*4 as width, n*c as heith
-              std::vector<int> shape={n->shape[0].as<IntImmNode>()->value,
+              std::vector<long long> shape={n->shape[0].as<IntImmNode>()->value,
                             n->shape[1].as<IntImmNode>()->value,
                             n->shape[2].as<IntImmNode>()->value,
                             n->shape[3].as<IntImmNode>()->value,
