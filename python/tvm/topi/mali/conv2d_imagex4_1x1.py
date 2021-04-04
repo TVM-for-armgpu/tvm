@@ -165,9 +165,9 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op, from_rf=Fal
 
     at_axis = rco
     # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
-    if cmpat_when_kernel == 2:
+    if cfg['cmpat_when_kernel'].val == 2:
         at_axis = kh
-    elif cmpat_when_kernel == 3:
+    elif cfg['cmpat_when_kernel'].val == 3:
         at_axis = kw
     s[AL].compute_at(s[BL], at_axis)
     s[WL].compute_at(s[BL], at_axis)

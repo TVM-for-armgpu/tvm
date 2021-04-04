@@ -41,69 +41,88 @@ logger = logging.getLogger("topi")
 
 @autotvm.register_topi_compute("conv2d_NCHWc_mali_io.mali")
 def conv2d_NCHWc_mali_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype):
-    #cfg.define_knob("idtype", [0, 1])
-    cfg.define_knob("kdtype", [0, 1])
-    #cfg.define_knob("odtype", [0, 2])
-    typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
-    #data.dtype = typedict[cfg["idtype"].val]
-    kernel.dtype = typedict[cfg["kdtype"].val]
-
     conv_out, flops = conv2d_NCHWc_io_op_common(data, kernel, stride, padding,
-                                                dilation, layout, out_layout,
-                                                False, out_dtype)
+                                         dilation, layout, out_layout, False,
+                                         out_dtype)
 
     N, oc_chunk, out_height, out_width, ic_bn = get_const_tuple(conv_out.shape)
     if len(kernel.shape) == 6:
-        in_channel, _, kernel_height, _, _, _ = get_const_tuple(kernel.shape)
+        in_channel, _, kernel_height, kernel_width, _, _ = get_const_tuple(kernel.shape)
     else:
-        in_channel, _, kernel_height, _, _, _ = get_const_tuple(kernel.shape)
+        in_channel, _, kernel_height, kernel_width, = get_const_tuple(kernel.shape)
+    cfg.is_fallback = False
+
     # Define autotvm tuning space
     #x.size[-1] == ic_bn must exist, don't change it
     cfg.define_split("tile_ic", in_channel, num_outputs=3,
-                     filter=lambda x: x.size[1] <= 12 and x.size[-1] in [ic_bn,ic_bn*2])
-    cfg.define_split("tile_oc", oc_chunk, num_outputs=3,
-                    filter=lambda y: y.size[-1] <= 4)
+                     filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
+    cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
+    if kernel_height == 1 and kernel_width == 1:
+        ow_lambda = lambda y: y.size[-1] % 2 ==0 and y.size[-1] <= 8
+        ow_policy='factors'
+    else:
+        ow_lambda = lambda y: y.size[-1] <= 8
+        ow_policy='verbose'
     cfg.define_split("tile_ow",
-                     out_width,
+                     (1+out_width)//2*2,
                      num_outputs=3,
-                     filter=lambda y: y.size[-1] <= 8,
-                     policy="verbose")
+                     filter=ow_lambda,
+                     policy=ow_policy)
+    if kernel_height == 1 and kernel_width == 1:
+        oh_lambda = lambda y: y.size[-1] % 2 == 0 and y.size[-1] <= 8
+        oh_policy='factors'
+    else:
+        oh_lambda = lambda y: y.size[-1] <= 8
+        oh_policy='verbose'
     cfg.define_split(
         "tile_oh",
-        out_height,
+        (1+out_height)//2*2,
         num_outputs=3,
-        filter=lambda y: y.size[-1] <= 8,
-        policy="verbose",
+        filter=oh_lambda,
+        policy=oh_policy,
     )
-    cfg.is_fallback = False
+    device_key="Mali"
     #for 3x3 or 5x5 or 7x7 convolution
-    def compute_at_axis_filter(y):
-        if kernel_height > 3:
-            # TODO make y.size[-1] could be [2, 3],
-            # but now feature for xgboost is not match(diffent feature len),dand training failed
-            return y.size[-1] in [2]
-        elif kernel_height > 1:
-            return y.size[-1] in [2]
+    kernel_max = max(kernel_height,kernel_width)
+    def compute_at_axis_filter():
+        #rco, kh, kw--->>>1 2 3
+        #    if kernel_max > 3:
+        #        return [3]
+        #    elif kernel_max > 1:
+        #        return [2]
+        #    else:
+        #        return [1]
+        if kernel_max > 3:
+            if 'MaliG721' in device_key:
+                return [2]
+            else:
+                return [3]
+        elif kernel_max > 1:
+            if 'MaliG721' in device_key:
+                return [1]
+            else:
+                return [3]
         else:
-            return y.size[-1] in [1]
+            return [1]
 
-    # actual you should set len_size as 6, because 2*3==6,when set as 2,  kernel_height==2 or 3, y.size[-1]==2
-    cfg.define_split("cmpat_when_kernel",
-                     6,
-                     num_outputs=2,
-                     filter=compute_at_axis_filter)
-
-    cfg.define_knob("auto_unroll_max_step", [0, 128, 256, 512])
+    cfg.define_knob("cmpat_when_kernel",compute_at_axis_filter())
+    if kernel_max > 1:
+        cfg.define_knob("auto_unroll_max_step", [256])
+        cfg.define_knob("unroll_explicit", [0, 1])
     # for mali======================
-    cfg.define_knob("unroll_explicit", [0, 1])
 
+    if 'Mali' in device_key:
+        cfg.define_knob("idtype", [0, 1])
+        cfg.define_knob("kdtype", [0, 1])
+        #cfg.define_knob("odtype", [0, 2])
+        typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
+        data.dtype = typedict[cfg["idtype"].val]
+        kernel.dtype = typedict[cfg["kdtype"].val]
     #end define autotvm space
     cfg.add_flop(flops)
-    conv_out.dtype = out_dtype
     #for mali=============
     #conv_out.dtype = typedict[cfg["odtype"].val]
     return conv_out
-
 
 @autotvm.register_topi_schedule("conv2d_NCHWc_mali_io.mali")
 def schedule_conv2d_NCHWc_mali_io(cfg, outs):
@@ -113,136 +132,33 @@ def schedule_conv2d_NCHWc_mali_io(cfg, outs):
     def _callback(tensor):
         #op = tensor.op
         op=tensor
-        if "conv2d_NCHWc" in op.tag:
-            conv_out = op.output(0)
-            _,oc_chunk,OH,OW,_ = get_const_tuple(conv_out.shape)
+        if 'conv2d_NCHWc_rf' in op.tag:
+            conv_out_rf = op.output(0)
+            conv_out = conv_out_rf.op.input_tensors[0]
             kernel_vec = conv_out.op.input_tensors[1]
             data_vec = conv_out.op.input_tensors[0]
-            Apad = data_vec
-            W = kernel_vec
-            B = conv_out
-            kernel_height = kernel_vec.shape[2]
-            #=========
-            B = op.output(0)
-            Apad, W = s[B].op.input_tensors
-            #==========
-            if isinstance(s[Apad].op, tvm.te.ComputeOp) and "pad" in Apad.op.tag:
-                s[Apad].compute_inline()
-            AL = s.cache_read(Apad, "local", [B])
-            WL = s.cache_read(W, "local", [B])
-            BL = s.cache_write(B, "local")
-            if op not in s.outputs:
-                s[B].compute_inline()
-                B = s.outputs[0].output(0)
-            # Split the workloads
-            #==========
-            ax_all = s[B].op.axis
-            len_4_flag = False
-            if len(ax_all) == 4:
-                n, kp, hp, wp = s[B].op.axis
-                p4 = kp
-                len_4_flag = True
-            else:
-                n, kp, hp, wp, p4 = s[B].op.axis
-            #==========
-            #n, kp, hp, wp, p4 = s[B].op.axis
+            args = [s, cfg, data_vec, kernel_vec, conv_out, op]
+            return conv2d_imagex4_1x1._schedule_conv_NCHWc_rf(*args)
+        elif "conv2d_NCHWc" in op.tag:
+            conv_out = op.output(0)
+            kernel_vec = conv_out.op.input_tensors[1]
+            data_vec = conv_out.op.input_tensors[0]
+            #packed_data, packed_kernel = kernel_vec, data_vec
+            #if isinstance(packed_kernel.op, tvm.te.ComputeOp) and "packed_kernel" in packed_kernel.name:
+            #    # data and kernel are not pre-computed, schedule layout transform here
+            #    schedule_injective_from_existing(s, packed_data)
+            #    schedule_injective_from_existing(s, packed_kernel)
 
-            n, f, y, x, b_p4 = n, kp, hp, wp, p4
-
-            bf, kpi,kp_mi = cfg["tile_oc"].apply(s, B, f)
-            by, vy, hpii = cfg["tile_oh"].apply(s, B, y)
-            bx, vx, wp4 = cfg["tile_ow"].apply(s, B, x)
-
-            if len_4_flag:
-                kpi,b_p4 = s[B].split(kpi, factor=4)
-            #bf, kpi = s[B].split(f, factor=64)
-            #yo, hpii = s[B].split(y, factor=2)
-            #by, vy = s[B].split(yo, factor=4)
-            #xo, wp4 = s[B].split(x, factor=2)
-            #bx, vx = s[B].split(xo, factor=2)
-
-            #cfg.define_split("tile_bindthread",
-            #                 OH*OW//(cfg["tile_oh"].size[-1] * cfg["tile_ow"].size[-1]) *
-            #                 oc_chunk,
-            #                 num_outputs=6,
-            #                 filter=lambda x:  1<x.size[-1]<64 and 
-            #                            1<x.size[-2]<64 and 
-            #                            1<x.size[-3]<64 and 
-            #                            1<=x.size[2]<256 and 
-            #                            1<=x.size[1]<256)
-            #s[B].reorder(n, f, by_vy, bx_vx, hpii, wp4)
-            #fuse_bind = s[B].fuse(n, f, by_vy, bx_vx)
-            #bf, by, bx, kpi, vy, vx = cfg["tile_bindthread"].apply(s, B, fuse_bind)
-
-            s[B].bind(bf, te.thread_axis("blockIdx.z"))
-            s[B].bind(by, te.thread_axis("blockIdx.y"))
-            s[B].bind(bx, te.thread_axis("blockIdx.x"))
-            s[B].bind(kpi, te.thread_axis("threadIdx.z"))
-            s[B].bind(vy, te.thread_axis("threadIdx.y"))
-            s[B].bind(vx, te.thread_axis("threadIdx.x"))
-
-            s[B].reorder(bf, by, bx, vy, vx, hpii, kpi)
-            s[BL].compute_at(s[B], kpi)
-            s[B].reorder(kpi, hpii)
-
-            _, kp, hp, wp, p4 = s[BL].op.axis
-            whp = s[BL].fuse(wp, hp)
-            rc, kh, kw = s[BL].op.reduce_axis
-
-            rco, rcm, rci = cfg["tile_ic"].apply(s, BL, rc)
-            #rco, rci = s[BL].split(rc, factor=4)
-            #rco, rcm = s[BL].split(rco, factor=1)
-
-            s[BL].reorder(rco, kh, kw, rcm, rci, whp, p4)
-            s[BL].vectorize(p4)  # vectorize memory load
-            s[BL].unroll(whp)
-            s[BL].unroll(rci)
-            s[BL].unroll(rcm)
-
-            #s[BL].unroll(kh)
-            #s[BL].unroll(kw)
-            if kernel_height == 1:
-                cfg["unroll_explicit"].val = 1
-            else:
-                s[BL].pragma(kw, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
-                s[BL].pragma(kw, "unroll_explicit", cfg["unroll_explicit"].val)
-                s[BL].pragma(kh, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
-                s[BL].pragma(kh, "unroll_explicit", cfg["unroll_explicit"].val)
-            s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
-            s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
-
-
-            at_axis = rco
-            # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
-            if cfg["cmpat_when_kernel"].size[-1] == 2:
-                at_axis = kh
-            elif cfg["cmpat_when_kernel"].size[-1]  == 3:
-                at_axis = kw
-            s[AL].compute_at(s[BL], at_axis)
-            s[WL].compute_at(s[BL], at_axis)
-
-            _, kp, hp, wp, p4 = s[AL].op.axis
-            s[AL].vectorize(p4)  # vectorize memory load
-            s[AL].unroll(wp)
-            s[AL].unroll(hp)
-            #s[AL].bind(wp, te.thread_axis("blockIdx.x"))
-            #s[AL].bind(hp, te.thread_axis("threadIdx.x"))
-
-            # Schedule for W's shared memory load
-            kp, _, kh, kw,_, p4 = s[WL].op.axis
-            s[WL].vectorize(p4)  # vectorize memory load
-            s[WL].unroll(kp)
-            s[WL].unroll(kh)
-            s[WL].unroll(kw)
-
-            wpio, wpii = wp4, b_p4
-            s[B].vectorize(wpii)  # vectorize memory load
-            s[B].unroll(wpio)  # vectorize memory load
-            s[B].unroll(hpii)  # vectorize memory load
-            #s[B].bind(wpio, te.thread_axis("blockIdx.z"))
-            #s[B].bind(hpii, te.thread_axis("threadIdx.z"))
-            return s
-
+            args = [s, cfg, data_vec, kernel_vec, conv_out, op]
+            (
+                _,
+                _,
+                kh,
+                kw,
+                _,
+                _,
+            ) = get_const_tuple(kernel_vec.shape)
+            return conv2d_imagex4_1x1._schedule_conv_NCHWc(*args)
     ret_s = None
     scheduled_ops = []
     def traverse(out_tensor) -> bool:

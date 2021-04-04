@@ -993,6 +993,10 @@ def conv2d_NCHWc_io_op_common(data, kernel, stride, padding, dilation, layout, o
         data_pad = nn.pad(data, pad_before, pad_after, name="data_pad_3x3")
     else:
         data_pad = data
+    #pack2=======
+    #out_height=(out_height+1)//2*2
+    #out_width=(out_width+1)//2*2
+    #=======for==speed end
     oshape = (n, oc_chunk, out_height, out_width, oc_bn)
     idxdiv = tvm.tir.indexdiv
     idxmod = tvm.tir.indexmod
@@ -1128,35 +1132,34 @@ def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_la
     )
     #for 3x3 or 5x5 or 7x7 convolution
     kernel_max = max(kernel_height,kernel_width)
-    def compute_at_axis_filter(y):
+    def compute_at_axis_filter():
+        #rco, kh, kw--->>>1 2 3
         #    if kernel_max > 3:
-        #        return y.size[-1] in [3]
+        #        return [3]
         #    elif kernel_max > 1:
-        #        return y.size[-1] in [2]
+        #        return [2]
         #    else:
-        #        return y.size[-1] in [1]
-        if kernel_height > 3:
-            return y.size[-1] in [3]
-        elif kernel_height > 1:
-            return y.size[-1] in [3]
+        #        return [1]
+        if kernel_max > 3:
+            return [3]
+        elif kernel_max > 1:
+            return [3]
         else:
-            return y.size[-1] in [1]
+            return [1]
 
-    #cfg.define_split("cmpat_when_kernel",
-    #                 6,
-    #                 num_outputs=2,
-    #                 filter=compute_at_axis_filter)
+    cfg.define_knob("cmpat_when_kernel",compute_at_axis_filter())
     if kernel_max > 1:
-        cfg.define_knob("auto_unroll_max_step", [0, 128, 256, 512])
+        cfg.define_knob("auto_unroll_max_step", [256])
         cfg.define_knob("unroll_explicit", [0, 1])
     # for mali======================
-    
-    #cfg.define_knob("idtype", [0, 1])
-    #cfg.define_knob("kdtype", [0, 1])
-    #cfg.define_knob("odtype", [0, 2])
-    typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
-    #data.dtype = typedict[cfg["idtype"].val]
-    #kernel.dtype = typedict[cfg["kdtype"].val]
+    device_key=''
+    if 'Mali' in device_key:
+        cfg.define_knob("idtype", [0, 1])
+        cfg.define_knob("kdtype", [0, 1])
+        #cfg.define_knob("odtype", [0, 2])
+        typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
+        data.dtype = typedict[cfg["idtype"].val]
+        kernel.dtype = typedict[cfg["kdtype"].val]
     #end define autotvm space
     cfg.add_flop(flops)
     #for mali=============
