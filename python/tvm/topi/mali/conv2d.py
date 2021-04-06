@@ -723,7 +723,7 @@ def conv2d_NHCWc_oi4o(cfg, data, kernel, stride, padding, dilation, layout, out_
         "tile_ow",
         out_width,
         num_outputs=4,
-        filter=lambda y: y.size[-1] in [1, 2, 4] and y.size[-2][
+        filter=lambda y: y.size[-1] in [1, 2, 4] and y.size[-2] in [
             1, 2, 4],  # for vthread
         policy="verbose")
     cfg.define_split(
@@ -734,7 +734,7 @@ def conv2d_NHCWc_oi4o(cfg, data, kernel, stride, padding, dilation, layout, out_
     )
 
     #for 3x3 or 5x5 or 7x7 convolution
-    def compute_at_axis_filter(y):
+    def compute_at_axis_filter():
         if kernel_height > 1:
             # TODO make y.size[-1] could be [2, 3],
             # but now feature for xgboost is not match(diffent feature len),dand training failed
