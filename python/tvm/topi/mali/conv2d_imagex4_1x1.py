@@ -268,23 +268,21 @@ def _schedule_conv_NHCWc(s, cfg, data_vec, kernel_vec, conv_out, op):
 
     #s[BL].unroll(kh)
     #s[BL].unroll(kw)
-    if kernel_height == 1:
-        cfg["unroll_explicit"].val = 1
-    else:
+    if kernel_height > 1:
         s[BL].pragma(kw, "auto_unroll_max_step",
                      cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kw, "unroll_explicit", cfg["unroll_explicit"].val)
         s[BL].pragma(kh, "auto_unroll_max_step",
                      cfg["auto_unroll_max_step"].val)
         s[BL].pragma(kh, "unroll_explicit", cfg["unroll_explicit"].val)
-    s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
-    s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
+        s[BL].pragma(rco, "auto_unroll_max_step", cfg["auto_unroll_max_step"].val)
+        s[BL].pragma(rco, "unroll_explicit", cfg["unroll_explicit"].val)
 
     at_axis = rco
     # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
-    if cfg["cmpat_when_kernel"].size[-1] == 2:
+    if cfg["cmpat_when_kernel"].val == 2:
         at_axis = kh
-    elif cfg["cmpat_when_kernel"].size[-1] == 3:
+    elif cfg["cmpat_when_kernel"].val == 3:
         at_axis = kw
     s[AL].compute_at(s[BL], at_axis)
     s[WL].compute_at(s[BL], at_axis)

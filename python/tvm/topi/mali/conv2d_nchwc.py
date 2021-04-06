@@ -35,94 +35,22 @@ from . import op_mad
 from . import mali_winograd
 from .conv2d import _pack_data
 from .conv2d import conv2d_NCHWc_io_op_common
+from .conv2d import nn_conv2d_NCHWc_io
 from tvm.topi.cuda.injective import schedule_injective_from_existing
 logger = logging.getLogger("topi")
 
+def mali_cfg_with_buffer_image(cfg, data, kernel):
+    cfg.define_knob("idtype", [0, 1])
+    cfg.define_knob("kdtype", [0, 1])
+    #cfg.define_knob("odtype", [0, 2])
+    typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
+    data.dtype = typedict[cfg["idtype"].val]
+    kernel.dtype = typedict[cfg["kdtype"].val]
 
 @autotvm.register_topi_compute("conv2d_NCHWc_mali_io.mali")
 def conv2d_NCHWc_mali_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype):
-    conv_out, flops = conv2d_NCHWc_io_op_common(data, kernel, stride, padding,
-                                         dilation, layout, out_layout, False,
-                                         out_dtype)
-
-    N, oc_chunk, out_height, out_width, ic_bn = get_const_tuple(conv_out.shape)
-    if len(kernel.shape) == 6:
-        in_channel, _, kernel_height, kernel_width, _, _ = get_const_tuple(kernel.shape)
-    else:
-        in_channel, _, kernel_height, kernel_width, = get_const_tuple(kernel.shape)
-    cfg.is_fallback = False
-
-    # Define autotvm tuning space
-    #x.size[-1] == ic_bn must exist, don't change it
-    cfg.define_split("tile_ic", in_channel, num_outputs=3,
-                     filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
-    cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
-    if kernel_height == 1 and kernel_width == 1:
-        ow_lambda = lambda y: y.size[-1] % 2 ==0 and y.size[-1] <= 8
-        ow_policy='factors'
-    else:
-        ow_lambda = lambda y: y.size[-1] <= 8
-        ow_policy='verbose'
-    cfg.define_split("tile_ow",
-                     (1+out_width)//2*2,
-                     num_outputs=3,
-                     filter=ow_lambda,
-                     policy=ow_policy)
-    if kernel_height == 1 and kernel_width == 1:
-        oh_lambda = lambda y: y.size[-1] % 2 == 0 and y.size[-1] <= 8
-        oh_policy='factors'
-    else:
-        oh_lambda = lambda y: y.size[-1] <= 8
-        oh_policy='verbose'
-    cfg.define_split(
-        "tile_oh",
-        (1+out_height)//2*2,
-        num_outputs=3,
-        filter=oh_lambda,
-        policy=oh_policy,
-    )
-    device_key="Mali"
-    #for 3x3 or 5x5 or 7x7 convolution
-    kernel_max = max(kernel_height,kernel_width)
-    def compute_at_axis_filter():
-        #rco, kh, kw--->>>1 2 3
-        #    if kernel_max > 3:
-        #        return [3]
-        #    elif kernel_max > 1:
-        #        return [2]
-        #    else:
-        #        return [1]
-        if kernel_max > 3:
-            if 'MaliG721' in device_key:
-                return [2]
-            else:
-                return [3]
-        elif kernel_max > 1:
-            if 'MaliG721' in device_key:
-                return [1]
-            else:
-                return [3]
-        else:
-            return [1]
-
-    cfg.define_knob("cmpat_when_kernel",compute_at_axis_filter())
-    if kernel_max > 1:
-        cfg.define_knob("auto_unroll_max_step", [256])
-        cfg.define_knob("unroll_explicit", [0, 1])
-    # for mali======================
-
-    if 'Mali' in device_key:
-        cfg.define_knob("idtype", [0, 1])
-        cfg.define_knob("kdtype", [0, 1])
-        #cfg.define_knob("odtype", [0, 2])
-        typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
-        data.dtype = typedict[cfg["idtype"].val]
-        kernel.dtype = typedict[cfg["kdtype"].val]
-    #end define autotvm space
-    cfg.add_flop(flops)
-    #for mali=============
-    #conv_out.dtype = typedict[cfg["odtype"].val]
-    return conv_out
+    mali_cfg_with_buffer_image(cfg, data, kernel)
+    return nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype)
 
 @autotvm.register_topi_schedule("conv2d_NCHWc_mali_io.mali")
 def schedule_conv2d_NCHWc_mali_io(cfg, outs):

@@ -719,11 +719,13 @@ def conv2d_NHCWc_oi4o(cfg, data, kernel, stride, padding, dilation, layout, out_
                      num_outputs=3,
                      filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
     cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
-    cfg.define_split("tile_ow",
-                     out_width,
-                     num_outputs=4,
-                     filter=lambda y: y.size[-1] <= 4 and y.size[-2] <= 4,# for vthread
-                     policy="verbose")
+    cfg.define_split(
+        "tile_ow",
+        out_width,
+        num_outputs=4,
+        filter=lambda y: y.size[-1] in [1, 2, 4] and y.size[-2][
+            1, 2, 4],  # for vthread
+        policy="verbose")
     cfg.define_split(
         "tile_oh",
         out_height,
@@ -736,18 +738,15 @@ def conv2d_NHCWc_oi4o(cfg, data, kernel, stride, padding, dilation, layout, out_
         if kernel_height > 1:
             # TODO make y.size[-1] could be [2, 3],
             # but now feature for xgboost is not match(diffent feature len),dand training failed
-            return y.size[-1] in [3]
+            return [3]
         elif kernel_height > 1:
-            return y.size[-1] in [3]
+            return [3]
         else:
-            return y.size[-1] in [1]
+            return [1]
 
-    cfg.define_split("cmpat_when_kernel",
-                     6,
-                     num_outputs=2,
-                     filter=compute_at_axis_filter)
+    cfg.define_knob("cmpat_when_kernel", compute_at_axis_filter())
 
-    cfg.define_knob("auto_unroll_max_step", [0, 128, 256, 512])
+    cfg.define_knob("auto_unroll_max_step", [128])
     # for mali======================
     cfg.define_knob("unroll_explicit", [0, 1])
     cfg.define_knob("idtype", [0, 1])
@@ -1090,6 +1089,10 @@ def conv2d_NCHWc_io_op_common(data, kernel, stride, padding, dilation, layout, o
 
 @autotvm.register_topi_compute("conv2d_NCHWc_io.mali")
 def conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype):
+    return nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype)
+
+
+def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out_layout, out_dtype):
     conv_out, flops = conv2d_NCHWc_io_op_common(data, kernel, stride, padding,
                                          dilation, layout, out_layout, False,
                                          out_dtype)

@@ -28,6 +28,7 @@ from ..nn.conv2d import unpack_NCHWc_to_nchw
 from ..utils import get_const_tuple
 from ..nn.utils import get_pad_tuple
 from ..nn.depthwise_conv2d import _get_workload, depthwise_conv2d_infer_layout
+from .conv2d_nchwc import mali_cfg_with_buffer_image
 
 # register original implementation of depthwise_conv2d_nchw since we don't need to change this part
 @autotvm.register_topi_compute("depthwise_conv2d_nchw_io.mali")
@@ -183,9 +184,21 @@ def schedule_depthwise_conv2d_nchwc_io_wrap(outs):
     """Create schedule for depthwise_conv2d_nchw."""
     return schedule_depthwise_conv2d_NCHWc_io(outs)
 
+@autotvm.register_topi_compute("depthwise_conv2d_NCHWc_mali_io.mali")
+def depthwise_conv2d_NCHWc_mali_io(
+    cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype=None
+):
+    mali_cfg_with_buffer_image(cfg, data, kernel)
+    return nn_depthwise_conv2d_NCHWc_io(cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype)
+
 
 @autotvm.register_topi_compute("depthwise_conv2d_NCHWc_io.mali")
 def depthwise_conv2d_NCHWc_io(
+    cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype=None
+):
+    return nn_depthwise_conv2d_NCHWc_io(cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype)
+
+def nn_depthwise_conv2d_NCHWc_io(
     cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype=None
 ):
     """Compute depthwise conv2d with NCHWc layout"""
@@ -346,8 +359,8 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     bc, tc = cfg.define_split("tile_cp", c, num_outputs=2)
     by, ty, yi = cfg.define_split("tile_hp", y, num_outputs=3, filter=lambda y: y.size[-1] <=8)
     bx, tx, xi = cfg.define_split("tile_wp", x, num_outputs=3, filter=lambda y: y.size[-1] <=8)
-    cfg.define_annotate(
-        "ann_spatial", [yi, xi], policy="try_unroll_vec")
+    #cfg.define_annotate(
+    #    "ann_spatial", [yi, xi], policy="try_unroll_vec")
 
     # fallback support
     if cfg.is_fallback:
