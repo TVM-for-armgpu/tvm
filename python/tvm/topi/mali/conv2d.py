@@ -703,8 +703,8 @@ def conv2d_NHCWc_oi4o(cfg, data, kernel, stride, padding, dilation, layout, out_
     # output shape
     out_height = (ih + HPAD - dilated_kernel_h) // HSTR + 1
     out_width = (iw + WPAD - dilated_kernel_w) // WSTR + 1
-    pad_before = (0, 0, pad_top, pad_left, 0)
-    pad_after = (0, 0, pad_down, pad_right, 0)
+    pad_before = (0, pad_left, 0, pad_top, 0)
+    pad_after = (0, pad_right, 0, pad_down, 0)
     # DOPAD
     DOPAD = HPAD != 0 or WPAD != 0
     if DOPAD and kernel_height > 1:
