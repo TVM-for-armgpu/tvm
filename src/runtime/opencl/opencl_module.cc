@@ -72,11 +72,13 @@ class OpenCLWrappedFunc {
     for (cl_uint i = 0; i < work_dim; ++i) {
       wl.work_size[i] *= wl.work_size[i + 3];
     }
-    if (m_->local_global_.str().empty()) {
+    if (!m_->global_local_size_map_.count(func_name_)) {
+      std::ostringstream  local_global_;
       for (int i = 0; i < 6; ++i) {
-        m_->local_global_ << wl.work_size[i]<<",";
+        local_global_ << wl.work_size[i] << ",";
       }
-      m_->local_global_ << "size end\n";
+      local_global_ << "=========";
+      m_->global_local_size_map_[func_name_]=local_global_.str();
     }
     // launch kernel
     // cl event for time statistic
@@ -89,8 +91,8 @@ class OpenCLWrappedFunc {
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
     //m_->time_vec_.push_back((time_end - time_start)/ 1000000.0);
-    //LOG(WARNING) << " func_name_="<<func_name_<<" "<<m_->time_vec_.back();
-    w_->tc_duration_s_ = (time_end - time_start) / 1000000000.0;
+    //LOG(WARNING) << " func_name_="<<func_name_<<" " << (time_end - time_start)/ 1000000.0;
+    w_->tc_duration_s_ += (time_end - time_start) / 1000000000.0;
   }
 
  private:
@@ -127,7 +129,9 @@ OpenCLModuleNode::~OpenCLModuleNode() {
   }
   //double avg_time = std::accumulate(time_vec_.begin(), time_vec_.end(), 0.0)/time_vec_.size();
   //LOG(WARNING) << "kernerl avg running time =======" << avg_time;
-  LOG(WARNING) << "kernerl thread " << local_global_.str();
+  for (auto kv : global_local_size_map_) {
+    LOG(WARNING) << "kernerl thread " << kv.first << "===>" << kv.second;
+  }
 }
 
 cl::OpenCLWorkspace* OpenCLModuleNode::GetGlobalWorkspace() {

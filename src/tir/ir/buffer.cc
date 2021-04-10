@@ -256,13 +256,6 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
             offset_general = MergeMulMod(&ana, offset_general * n->shape[i] + index[i]);
           }
 #if USE_CL_RGBA
-        int DONT_USE_SPLIT = 0;
-        FILE* fp = NULL;// fopen("./dont_use_split", "r");
-        if (fp != NULL) {
-          LOG(WARNING) << "transfer to div and mod split mode";
-          DONT_USE_SPLIT = 1;
-          fclose(fp);
-        }
         if (n->dtype.is_climgfloatrw()) {
           int how_much_item_is_for_x_axes = 1;
           switch (index.size()) {
@@ -317,7 +310,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
             for (size_t i = i_last + 1; i < index.size(); ++i) {
               offset_x = MergeMulMod(&ana, offset_x * n->shape[i] + index[i]);
             }
-            //base = base + indexmod(tvm::tir::Mul(offset, 21139), 21193) + offset_x;
+            //base = base + indexmod(tvm::tir::Mul(offset, 19447), 21193) + offset_x;
             base = general_axis(base + offset_x, offset, offset_general+base);
           }
         } else {

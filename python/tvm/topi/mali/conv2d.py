@@ -1154,15 +1154,6 @@ def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out
     if kernel_max > 1:
         cfg.define_knob("auto_unroll_max_step", [256])
         cfg.define_knob("unroll_explicit", [0, 1])
-    # for mali======================
-    device_key=''
-    if 'Mali' in device_key:
-        cfg.define_knob("idtype", [0, 1])
-        cfg.define_knob("kdtype", [0, 1])
-        #cfg.define_knob("odtype", [0, 2])
-        typedict = {0: "float32", 1: "climgfloatr32", 2: "climgfloatw32"}
-        data.dtype = typedict[cfg["idtype"].val]
-        kernel.dtype = typedict[cfg["kdtype"].val]
     #end define autotvm space
     cfg.add_flop(flops)
     #for mali=============
@@ -1322,6 +1313,8 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
 
     #tile_size = _pick_tile_size(data, kernel)
     tile_size = 2
+    wino = tile_size
+    winop2 = tile_size + 2
     if len(data.shape) == 5:
         N, ic_chunk, IH, IW, ic_bn = get_const_tuple(data.shape)
         CI = ic_chunk * ic_bn
@@ -1334,33 +1327,27 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         ic_bn = 4
         ic_chunk = CI // ic_bn
         oc_chunk = CO//oc_bn
-
+    rKH, rKW = 3, 3
     # Pack data if raw 4-D data is provided.
     # This can only happen when autotuning.
     pre_computed = False
     if len(data.shape) == 4:
         if autotvm.GLOBAL_SCOPE.in_tuning:
+            pre_computed=True
             # Directly use modified data layout placeholder.
             dshape = (N, ic_chunk, IH, IW, ic_bn)
             data = tvm.te.placeholder(dshape, data.dtype, name="placeholder")
-            kshape = (
-                CI,
-                oc_chunk,
-                KH,
-                KW,
-                1,
-                oc_bn,
-            )
-            kernel = tvm.te.placeholder(kshape,
-                                        kernel.dtype,
-                                        name="placeholder")
         else:
             data, kernel = _pack_data(data, kernel)
-    else:
-        if KH == 4 or KH == 6:
-            pre_computed = True
-    wino = tile_size
-    winop2 = tile_size + 2
+    if KH == 4 or KH == 6:
+        pre_computed = True
+    elif autotvm.GLOBAL_SCOPE.in_tuning:
+        pre_computed = True
+        kshape = (CI,oc_chunk,winop2,winop2,1,oc_bn)
+        kernel = tvm.te.placeholder(kshape,
+                                    kernel.dtype,
+                                    name="mali_conv2d_nchw_winograd_U")
+
     wino_size = winop2
     H_DIV_WINO = (IH + wino - 1) // wino
     W_DIV_WINO = (IW + wino - 1) // wino
@@ -1391,7 +1378,12 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         strides, (tuple, list)) else (strides, strides)
     pt, pl, pb, pr = nn.get_pad_tuple(padding, (KH, KW))
 
-    assert KH == 3 and KW == 3 and HSTR == 1 and WSTR == 1
+    assert (KH == 3 or KH == 4
+            or KH == 6) and (KW == 3 or KW == 4
+                             or KW == 6) and HSTR == 1 and WSTR == 1
+
+    def pack_n(n_e, n_p):
+        return (n_e + n_p - 1) // n_p * n_p
 
     r = KW
     m = tile_size
@@ -1401,29 +1393,51 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     W = (IW + pl + pr - 3) // WSTR + 1
     nH, nW = (H + m - 1) // m, (W + m - 1) // m
     P = N * nH * nW
-
+    NTILE = pack_n(NTILE, 4)
+    H = pack_n(H, 2)
+    W = pack_n(W, 2)
     # 'same' for convolution
     out_shape = (N, oc_chunk, H, W, oc_bn)
     ##### space definition begin #####
-    cfg.define_split("inv_cp", oc_chunk, num_outputs=2, max_factor=8)
-    cfg.define_split("inv_wp", NTILE, num_outputs=3)
-    #, filter=lambda x: x.size[-1] == 4)
-    cfg.define_split("inv_hp", winop2_tile_size, num_outputs=3,
-                     filter=lambda x: x.size[-1] == 4)
+    cfg.define_split("inv_cp",
+                     oc_chunk,
+                     num_outputs=2,
+                     filter=lambda x: x.size[-1] >= tile_size)
+    cfg.define_split("inv_wp",
+                     W,
+                     num_outputs=3,
+                     filter=lambda x: x.size[-2] >= winop2 and x.size[-1] == 2)
+    cfg.define_split("inv_hp",
+                     H,
+                     num_outputs=3,
+                     filter=lambda x: x.size[-2] >= winop2 and x.size[-1] == 2)
 
     cfg.define_split("kernel_cp", CI, num_outputs=2, max_factor=32)
     cfg.define_split("kernel_kp", oc_chunk, num_outputs=2, max_factor=32)
 
-    cfg.define_split("data_cp", oc_chunk, num_outputs=2, max_factor=32)
-    cfg.define_split("data_wp", oc_chunk, num_outputs=3,
-                     filter=lambda x: x.size[-1] == 4)
-    cfg.define_split("data_hp", oc_chunk, num_outputs=3,
-                     filter=lambda x: x.size[-1] == 4)
+    cfg.define_split("data_cp", ic_chunk, num_outputs=2, max_factor=32)
+    cfg.define_split("data_wp",
+                     W_DIV_WINO,
+                     #NTILE,
+                     num_outputs=3,
+                     policy="verbose",
+                     filter=lambda x: x.size[-1] == 1)
+    cfg.define_split("data_hp",
+                     H_DIV_WINO,
+                     #winop2_tile_size,
+                     num_outputs=3,
+                     filter=lambda x: x.size[-1] == 1)
 
     cfg.define_split("bgemm_kp", oc_chunk, num_outputs=2, max_factor=32)
-    cfg.define_split("bgemm_wp", oc_chunk, num_outputs=3,
-                     filter=lambda x: x.size[-1] % 4 == 0)
-    cfg.define_split("bgemm_hp", oc_chunk, num_outputs=2)
+    cfg.define_split("bgemm_wp",
+                     NTILE,
+                     num_outputs=3,
+                     policy="verbose",
+                     filter=lambda x: x.size[-1] == 4,
+                     )
+    cfg.define_split("bgemm_hp", winop2_tile_size, num_outputs=2,
+                    filter=lambda x: x.size[-1] == 1,
+                    )
     ##### space definition end #####
 
     if pre_computed:
@@ -1443,7 +1457,7 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     output.dtype = out_dtype
     #====================useless temperary===========begin
     # we have to manually assign effective GFLOP for winograd
-    cfg.add_flop(2 * N * CO * H * W * KH * KW * CI)
+    cfg.add_flop(2 * N * CO * H * W * rKH * rKW * CI)
     return output
 
 

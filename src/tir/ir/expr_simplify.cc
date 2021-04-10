@@ -29,7 +29,7 @@ inline bool is_valid_punctuation(const std::string& c) {
          c == "|" || c == "<<" || c == ">>" || c == "!" || c == "-";
 }
 
-constexpr bool is_expon_by_2(int32_t number) { return (number & number - 1) == 0; }
+constexpr bool is_expon_by_2(int32_t number) { return (number & (number - 1)) == 0; }
 
 constexpr uint32_t lowbit(int32_t x) { return x & -x; }
 
@@ -64,14 +64,14 @@ std::vector<Token> lex(const char* expr) {
   TokenType last_ty = L_TOKEN_PUNCTUATION;
   const char* beg = expr;
   const char* pos = expr;
-  int32_t expr_len = strlen(expr);
-  auto next_token = [pos]() { return *(pos + 1); };
+  //int32_t expr_len = strlen(expr);
+  //auto next_token = [pos]() { return *(pos + 1); };
   for (;;) {
     const char c = *pos;
 
     bool is_digit = c >= '0' && c <= '9';
     bool is_alphabet = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
-    bool is_whitespace = c == ' ' || c == '\t';
+    //bool is_whitespace = c == ' ' || c == '\t';
     bool is_shift = c == '<' || c == '>';
 
     TokenType ty;
@@ -357,8 +357,8 @@ void print_impl(std::stringstream& ss, const std::shared_ptr<Ast>& ast) {
   } else if (ast->node_ty == L_AST_SYMBOL) {
     ss << ast->symbol;
   } else if (ast->node_ty == L_AST_SUBNODE) {
-    bool need_paren =
-        ast->op != "*" && ast->op != "/" && ast->op != "%" && ast->op != "<<" && ast->op != ">>";
+    //bool need_paren =
+    //    ast->op != "*" && ast->op != "/" && ast->op != "%" && ast->op != "<<" && ast->op != ">>";
     if (ast->dtype == L_AST_FLOAT || ast->left->dtype == L_AST_FLOAT ||
         ast->right->dtype == L_AST_FLOAT) {
       ss << "(int)";
@@ -479,6 +479,13 @@ int simplify_get_coefficient_gcd(std::shared_ptr<Ast>& ast) {
   return out;
 }
 
+int32_t pow(int32_t a,int32_t b){
+  int32_t ans = a;
+  while (--b > 0){
+    ans=ans*b;
+  }
+  return ans;
+}
 // Get the upper bound of the values in this sub-expression. Retuens 0 if one
 // term has never been hinted.
 int simplify_upper_bound_of(const std::shared_ptr<Ast>& ast) {
@@ -505,6 +512,10 @@ int simplify_upper_bound_of(const std::shared_ptr<Ast>& ast) {
   }
   if (ast->is_node("-")) {
     return simplify_upper_bound_of(ast->left) - simplify_upper_bound_of(ast->right);
+  }
+  if (ast->is_node(">>")) {
+    auto divisor = simplify_upper_bound_of(ast->right);
+    return (simplify_upper_bound_of(ast->left) + divisor - 1) / pow(2,divisor);
   }
   throw std::logic_error("not implemented yet");
 }
@@ -663,6 +674,10 @@ void simplify_remove_nop(std::shared_ptr<Ast>& ast) {
         ast = std::move(ast->right);
         return;
       }  // calculate all constant
+      else if (ast->left ->is_constant() && ast->left->constant == 1) {
+          ast = std::move(ast->right);
+          return;
+      }
       else if (ast->right->is_constant() && ast->left->is_constant()) {
         ast = Ast::make_constant(ast->left->constant * ast->right->constant);
         return;
@@ -828,21 +843,24 @@ void simplify_mod_and_div_with_bitop(std::shared_ptr<Ast>& ast) {
       }
     }
     if (ast->is_node("%")) {
-      if (ast->right->is_constant() && is_expon_by_2(ast->right->constant)) {
-        ast = Ast::make_node("&", std::move(ast->left),
-                             Ast::make_constant(ast->right->constant-1));
-        return;
-      } else {
-        // float type
-        // shared_ptr can't have another copy, so we can't simplify a%b to 
-        // a%b => a-int(a/b)*b => a-int(a*(1/b))*b, notice b is constant
-        float new_bediv = (1.0 / ast->right->constant);
-        auto r = ast->right;
-        ast->right = Ast::make_node("*", (ast->left), Ast::make_constant_float(new_bediv));
-        ast->right = Ast::make_node("*", (ast->right), r);
-        ast = Ast::make_node("-", (ast->left), ast->right);
-        return;
-      }
+        if (ast->right->is_constant()) {
+            if (is_expon_by_2(ast->right->constant)) {
+                ast = Ast::make_node("&", std::move(ast->left),
+                    Ast::make_constant(ast->right->constant - 1));
+                return;
+            }
+            else {
+                // float type
+                // shared_ptr can't have another copy, so we can't simplify a%b to 
+                // a%b => a-int(a/b)*b => a-int(a*(1/b))*b, notice b is constant
+                float new_bediv = (1.0 / ast->right->constant);
+                auto r = ast->right;
+                ast->right = Ast::make_node("*", (ast->left), Ast::make_constant_float(new_bediv));
+                ast->right = Ast::make_node("*", (ast->right), r);
+                ast = Ast::make_node("-", (ast->left), ast->right);
+                return;
+            }
+        }
     }
   }
 }
@@ -1013,6 +1031,8 @@ void test_all() {
 }
 
 std::string preprocess_expr_replace_ilegal_expr(std::string expr_lit) {
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_image_dim\\((.*)\\)\\.x"), "get_image_dim_$1_x");
+
   expr_lit = std::regex_replace(expr_lit, std::regex("\\(int\\)"), "_int_");
   expr_lit = std::regex_replace(expr_lit, std::regex("\\."), "_dot_");
 
@@ -1027,6 +1047,8 @@ std::string preprocess_expr_replace_ilegal_expr(std::string expr_lit) {
 }
 
 std::string post_process_replace_back_ilegal_expr(std::string expr_lit) {
+  expr_lit = std::regex_replace(expr_lit, std::regex("get_image_dim_(.*)_x"), "get_image_dim($1).x");
+
   expr_lit = std::regex_replace(expr_lit, std::regex("_int_"), "(int)");
   expr_lit = std::regex_replace(expr_lit, std::regex("_dot_"), ".");
 
@@ -1041,6 +1063,7 @@ std::string post_process_replace_back_ilegal_expr(std::string expr_lit) {
 }
 
 std::string DoSimplify(const std::string& expr_lit_c) {
+  //return expr_lit_c;
   try {
     std::string expr_lit = preprocess_expr_replace_ilegal_expr(expr_lit_c.substr());
     Tokenizer tokenizer(expr_lit);

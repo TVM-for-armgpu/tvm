@@ -1,6 +1,7 @@
 import tvm
 from tvm import te, topi
 from tvm.topi import nn
+from tvm import autotvm
 
 # Algorithm
 # kernel transform
@@ -72,19 +73,19 @@ def kernel_transform_shedule(cfg, s, U):
     s[UL].reorder(hp, wp, p4)
     s[UL].vectorize(p4)
     k1, k2 = s[UL].op.reduce_axis
-    #s[UL].unroll(wp)
-    #s[UL].unroll(hp)
-    #s[UL].unroll(k1)
-    #s[UL].unroll(k2)
+    s[UL].unroll(wp)
+    s[UL].unroll(hp)
+    s[UL].unroll(k1)
+    s[UL].unroll(k2)
 
     s[WL].compute_at(s[UL], cp)
     _, _, hp, wp, _, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
-    #s[WL].unroll(wp)
-    #s[WL].unroll(hp)
+    s[WL].unroll(wp)
+    s[WL].unroll(hp)
     s[U].vectorize(Up4)  # vectorize memory load
-    #s[U].unroll(Uwp)  # vectorize memory load
-    #s[U].unroll(Uhp)  # vectorize memory load
+    s[U].unroll(Uwp)  # vectorize memory load
+    s[U].unroll(Uhp)  # vectorize memory load
 #========shedule end=================================
 #func = tvm.build(s, [filter_n,U], target=target)
 #assert func
@@ -183,7 +184,7 @@ def data_transform_shedule(cfg,  s, V):
     #hpo, hpi, Vhp = cfg["data_hp"].apply(s, V, hp)
     # for rdong's code schedule
     wp, Vwp = s[V].split(wp, factor=4)
-    wpo, wpi = s[V].split(wp, factor=cfg["data_wp"].size[-1])
+    wpo, wpi = s[V].split(wp, factor=cfg["data_wp"].size[1])
     wpo,wpoif= s[V].split(wpo, factor=4)
     s[V].reorder(wpo, wpi,wpoif,hp)
     hp=s[V].fuse(wpoif,hp)
@@ -220,11 +221,11 @@ def data_transform_shedule(cfg,  s, V):
     s[WL].compute_at(s[VL], hp)
     _, _, hp, wp, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
-    #s[WL].unroll(wp)
-    #s[WL].unroll(hp)
+    s[WL].unroll(wp)
+    s[WL].unroll(hp)
     s[V].vectorize(Vp4)  # vectorize memory load
-    #s[V].unroll(Vwp)  # vectorize memory load
-    #s[V].unroll(Vhp)  # vectorize memory load
+    s[V].unroll(Vwp)  # vectorize memory load
+    s[V].unroll(Vhp)  # vectorize memory load
 #========shedule end=================================
 #func = tvm.build(s, [Data,V], target=target)
 #assert func
@@ -301,9 +302,9 @@ def batch_gemm_shedule(cfg, s, M):
     rco, rci = s[ML].split(rc, factor=4)
     s[ML].reorder(rco, rci, wp, p4)
     s[ML].vectorize(p4)
-    #s[ML].unroll(wp)
-    #s[ML].unroll(hp)
-    #s[ML].unroll(k1)
+    s[ML].unroll(wp)
+    s[ML].unroll(hp)
+    s[ML].unroll(rci)
 
     #schedule UL VL local read
     s[UL].compute_at(s[ML], rco)
@@ -312,16 +313,16 @@ def batch_gemm_shedule(cfg, s, M):
     #split Ul VL workload
     a, b, hp, wp, _, p4 = s[UL].op.axis
     s[UL].vectorize(p4)  # vectorize memory load
-    #s[UL].unroll(wp)
-    #s[UL].unroll(hp)
-    #s[UL].unroll(a)
+    s[UL].unroll(wp)
+    s[UL].unroll(hp)
+    s[UL].unroll(a)
     _, _, hp, wp, p4 = s[VL].op.axis
     s[VL].vectorize(p4)  # vectorize memory load
-    #s[VL].unroll(wp)
-    #s[VL].unroll(hp)
+    s[VL].unroll(wp)
+    s[VL].unroll(hp)
 
     s[M].vectorize(Mp4)  # vectorize memory load
-    #s[M].unroll(Mwp)  # vectorize memory load
+    s[M].unroll(Mwp)  # vectorize memory load
 #========shedule end=================================
 
 #func = tvm.build(s, [U,V,M], target=target)
@@ -408,8 +409,8 @@ def inverse_transform_shedule(cfg, s, op):
         n, cp, hp, wp, Op4 = s[O].op.axis
 
     cpo, cpi = cfg["inv_cp"].apply(s, O, cp)
-    wpo, wpi, Owp=cfg["inv_wp"].apply(s, O, wp)
-    hpo, hpi, Ohp=cfg["inv_hp"].apply(s, O, hp)
+    wpo, wpi, Owp = cfg["inv_wp"].apply(s, O, wp)
+    hpo, hpi, Ohp = cfg["inv_hp"].apply(s, O, hp)
 
     #cpo, cpi = s[O].split(cp, factor=4)
     #wp, Owp = s[O].split(wp, factor=2)
@@ -435,20 +436,20 @@ def inverse_transform_shedule(cfg, s, op):
     s[OL].reorder(hp, wp, p4)
     s[OL].vectorize(p4)
     k1, k2 = s[OL].op.reduce_axis
-    #s[OL].unroll(wp)
-    #s[OL].unroll(hp)
-    #s[OL].unroll(k1)
-    #s[OL].unroll(k2)
+    s[OL].unroll(wp)
+    s[OL].unroll(hp)
+    s[OL].unroll(k1)
+    s[OL].unroll(k2)
 
     s[ML].compute_at(s[OL], cp)
     _, _, hp, wp, p4 = s[ML].op.axis
     s[ML].vectorize(p4)  # vectorize memory load
-    #s[ML].unroll(wp)
-    #s[ML].unroll(hp)
+    s[ML].unroll(wp)
+    s[ML].unroll(hp)
     s[O].vectorize(Op4)  # vectorize memory load
 
-    #s[O].unroll(Owp)  # vectorize memory load
-    #s[O].unroll(Ohp)  # vectorize memory load
+    s[O].unroll(Owp)  # vectorize memory load
+    s[O].unroll(Ohp)  # vectorize memory load
 #========shedule end=================================
 
 
@@ -456,14 +457,20 @@ def _schedule_winograd_nchwc_io(cfg, s, op):
     output = op.output(0)
     A, M = s[output].op.input_tensors
     U, V = s[M].op.input_tensors
-    G, filter_n = s[U].op.input_tensors
+    #in_tunning or pass by user
+    if not autotvm.GLOBAL_SCOPE.in_tuning and isinstance(
+            s[U].op, tvm.te.tensor.ComputeOp):
+        G, filter_n = s[U].op.input_tensors
     B, DataPad = s[V].op.input_tensors
     Data, = s[DataPad].op.input_tensors
     #==============
     inverse_transform_shedule(cfg, s, op)
     U, V = s[M].op.input_tensors
     batch_gemm_shedule(cfg, s, M)
-    kernel_transform_shedule(cfg, s, U)
+    #in_tunning or pass by user
+    if not autotvm.GLOBAL_SCOPE.in_tuning and isinstance(
+            s[U].op, tvm.te.tensor.ComputeOp):
+        kernel_transform_shedule(cfg, s, U)
     data_transform_shedule(cfg, s, V)
 #========shedule end=================================
 

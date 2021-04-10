@@ -207,7 +207,7 @@ class OpenCLWorkspace : public DeviceAPI {
   std::vector<size_t> free_kernel_ids;
   // the mutex for initialization
   std::mutex mu;
-  double tc_duration_s_;
+  double tc_duration_s_{0};
   // destructor
   ~OpenCLWorkspace() {
     if (context != nullptr) {
@@ -322,7 +322,7 @@ class OpenCLModuleNode : public ModuleNode {
 
  public:
   std::vector<double> time_vec_;
-  std::ostringstream  local_global_;
+  std::unordered_map<std::string, std::string> global_local_size_map_;
  private:
   // The workspace, need to keep reference to use it in destructor.
   // In case of static destruction order problem.

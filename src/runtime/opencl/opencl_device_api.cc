@@ -144,7 +144,6 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
     LOG(WARNING) << "attention:size == 0, may cause the wrong ans";
   }
   mptr = clCreateBuffer(this->context, CL_MEM_READ_WRITE, size, nullptr, &err_code);
-  LOG(WARNING) << "buffersize="<<size << " type_hint="<<type_hint << " " << mptr;
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }
