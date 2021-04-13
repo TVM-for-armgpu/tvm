@@ -192,7 +192,7 @@ class Tuner(object):
             for callback in callbacks:
                 callback(self, inputs, results)
 
-            if i >= self.best_iter + early_stopping:
+            if i >= self.best_iter + early_stopping and self.best_flops > 1:
                 logger.debug("Early stopped. Best iter: %d.", self.best_iter)
                 break
 
