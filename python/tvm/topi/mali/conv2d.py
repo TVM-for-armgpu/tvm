@@ -1104,12 +1104,13 @@ def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out
         in_channel, _, kernel_height, kernel_width, = get_const_tuple(kernel.shape)
     cfg.is_fallback = False
 
+    HSTR, WSTR = stride if isinstance(stride, (tuple, list)) else (stride, stride)
     # Define autotvm tuning space
     #x.size[-1] == ic_bn must exist, don't change it
     cfg.define_split("tile_ic", in_channel, num_outputs=3,
                      filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn)
     cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
-    if kernel_height == 1 and kernel_width == 1:
+    if kernel_height == 1 and kernel_width == 1 and HSTR == 1 and WSTR == 1:
         ow_lambda = lambda y: y.size[-1] % 2 ==0 and y.size[-1] <= 8
         ow_policy='factors'
     else:
