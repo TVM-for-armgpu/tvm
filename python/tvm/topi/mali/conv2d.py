@@ -1389,33 +1389,35 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     m = tile_size
     alpha = m + r - 1
     A, B, G = winograd_transform_matrices(m, r, out_dtype.replace("climg","").replace("w",""))
-    H = (IH + pt + pb - 3) // HSTR + 1
-    W = (IW + pl + pr - 3) // WSTR + 1
-    nH, nW = (H + m - 1) // m, (W + m - 1) // m
+    OH = (IH + pt + pb - 3) // HSTR + 1
+    OW = (IW + pl + pr - 3) // WSTR + 1
+    nH, nW = (OH + m - 1) // m, (OW + m - 1) // m
     P = N * nH * nW
     NTILE = pack_n(NTILE, 4)
-    H = pack_n(H, 2)
-    W = pack_n(W, 2)
+    PH = pack_n(OH, 2)
+    PW = pack_n(OW, 2)
     # 'same' for convolution
-    out_shape = (N, oc_chunk, H, W, oc_bn)
+    out_shape = (N, oc_chunk, OH, OW, oc_bn)
     ##### space definition begin #####
     cfg.define_split("inv_cp",
                      oc_chunk,
                      num_outputs=2,
+                     policy="verbose",
                      filter=lambda x: x.size[-1] >= tile_size)
     cfg.define_split("inv_wp",
-                     W,
+                     PW,
                      num_outputs=3,
+                     policy="verbose",
                      filter=lambda x: x.size[-2] >= winop2 and x.size[-1] == 2)
     cfg.define_split("inv_hp",
-                     H,
+                     PH,
                      num_outputs=3,
+                     policy="verbose",
                      filter=lambda x: x.size[-2] >= winop2 and x.size[-1] == 2)
+    cfg.define_split("kernel_cp", CI, num_outputs=2, max_factor=32,policy="verbose",)
+    cfg.define_split("kernel_kp", oc_chunk, num_outputs=2, max_factor=32,policy="verbose",)
 
-    cfg.define_split("kernel_cp", CI, num_outputs=2, max_factor=32)
-    cfg.define_split("kernel_kp", oc_chunk, num_outputs=2, max_factor=32)
-
-    cfg.define_split("data_cp", ic_chunk, num_outputs=2, max_factor=32)
+    cfg.define_split("data_cp", ic_chunk, num_outputs=2, max_factor=32,policy="verbose",)
     cfg.define_split("data_wp",
                      W_DIV_WINO,
                      #NTILE,
@@ -1426,18 +1428,23 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
                      H_DIV_WINO,
                      #winop2_tile_size,
                      num_outputs=3,
+                     policy="verbose",
                      filter=lambda x: x.size[-1] == 1)
 
-    cfg.define_split("bgemm_kp", oc_chunk, num_outputs=2, max_factor=32)
+    cfg.define_split("bgemm_kp", oc_chunk, num_outputs=2, max_factor=32,policy="verbose",)
     cfg.define_split("bgemm_wp",
                      NTILE,
                      num_outputs=3,
                      policy="verbose",
                      filter=lambda x: x.size[-1] == 4,
                      )
-    cfg.define_split("bgemm_hp", winop2_tile_size, num_outputs=2,
-                    filter=lambda x: x.size[-1] == 1,
-                    )
+    cfg.define_split(
+        "bgemm_hp",
+        winop2_tile_size,
+        num_outputs=2,
+        policy="verbose",
+        filter=lambda x: x.size[-1] == 1,
+    )
     ##### space definition end #####
 
     if pre_computed:
@@ -1457,7 +1464,7 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
     output.dtype = out_dtype
     #====================useless temperary===========begin
     # we have to manually assign effective GFLOP for winograd
-    cfg.add_flop(2 * N * CO * H * W * rKH * rKW * CI)
+    cfg.add_flop(2 * N * CO * OH * OW * rKH * rKW * CI)
     return output
 
 

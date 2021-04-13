@@ -53,6 +53,19 @@ class OpenCLWrappedFunc {
   void operator()(TVMArgs args, TVMRetValue* rv, void** void_args) const {
     ICHECK(w_->context != nullptr) << "No OpenCL device";
     cl::OpenCLThreadEntry* t = w_->GetThreadEntry();
+    ThreadWorkLoad wl = thread_axis_cfg_.Extract(args);
+    cl_uint work_dim = static_cast<cl_uint>(thread_axis_cfg_.work_dim());
+    for (cl_uint i = 0; i < work_dim; ++i) {
+      wl.work_size[i] *= wl.work_size[i + 3];
+    }
+    if (!m_->global_local_size_map_.count(func_name_)) {
+      std::ostringstream  local_global_;
+      for (int i = 0; i < 6; ++i) {
+        local_global_ << wl.work_size[i] << ",";
+      }
+      local_global_ << "=========";
+      m_->global_local_size_map_[func_name_]=local_global_.str();
+    }
     // get the kernel from thread local kernel table.
     if (entry_.kernel_id >= t->kernel_table.size()) {
       t->kernel_table.resize(entry_.kernel_id + 1);
@@ -67,19 +80,7 @@ class OpenCLWrappedFunc {
       OPENCL_CALL(clSetKernelArg(kernel, i, arg_size_[i], void_args[i]));
     }
     cl_command_queue queue = w_->GetQueue(t->context);
-    ThreadWorkLoad wl = thread_axis_cfg_.Extract(args);
-    cl_uint work_dim = static_cast<cl_uint>(thread_axis_cfg_.work_dim());
-    for (cl_uint i = 0; i < work_dim; ++i) {
-      wl.work_size[i] *= wl.work_size[i + 3];
-    }
-    if (!m_->global_local_size_map_.count(func_name_)) {
-      std::ostringstream  local_global_;
-      for (int i = 0; i < 6; ++i) {
-        local_global_ << wl.work_size[i] << ",";
-      }
-      local_global_ << "=========";
-      m_->global_local_size_map_[func_name_]=local_global_.str();
-    }
+    
     // launch kernel
     // cl event for time statistic
     cl_event event;
