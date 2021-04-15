@@ -49,12 +49,15 @@ function wait_port_released() {
 	done
 	log "port 9000 is available now"
 }
-
+device_id=9A221FFBA005D8
+device_port=9000
 while true; do
     log "start to connect to device 9A221FFBA005D8......................"
     wait_device
 
-    adb -s 9A221FFBA005D8  shell su -c "svc usb setFunctions rndis"
+    #adb -s 9A221FFBA005D8  shell su -c "svc usb setFunctions rndis"
+    adb -s ${device_id} forward tcp:${device_port} tcp:9000
+    adb -s ${device_id} reverse tcp:9090  tcp:9090
 
 	#wait_network
 	#ret=$?

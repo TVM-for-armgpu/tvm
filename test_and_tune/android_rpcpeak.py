@@ -33,7 +33,7 @@ from tvm.topi.testing import conv2d_nchw_python
 # Set to be address of tvm proxy.
 tracker_host = '127.0.0.1'
 tracker_port = 9090
-key = "Adreno640"
+key = "MaliG76"
 
 # Change target configuration.
 # Run `adb shell cat /proc/cpuinfo` to find the arch.

@@ -17,7 +17,7 @@ elif [ x"$1" == x"640" ]; then
     device_id="9A221FFBA005D8"
     device_port=9000
 else
-    echo "please give a device keyi[ G72i G76 630 640]"
+    echo "please give a device keyi[ G72 G76 630 640]"
     exit 0
 fi
 echo "====================using $1 $device_id $device_port============="
@@ -80,14 +80,20 @@ while true; do
 
     #wait_network
                                             
-    if [ x"${device_id}" != x"9A221FFBA005D8" ];then
+    #if [ x"${device_id}" != x"9A221FFBA005D8" ];then
         adb -s ${device_id} forward tcp:${device_port} tcp:9000
-    fi
+    #fi
     adb -s ${device_id} reverse tcp:9090  tcp:9090
     #sudo ifconfig enp0s29u1u6 192.168.42.2
     wait_port_released
     echo "start rpc_server"
-    adb -s ${device_id}  shell  "chmod +x /data/local/tmp/arm_runtime_jicheng/run.sh"
-    adb -s ${device_id}  shell  "/data/local/tmp/arm_runtime_jicheng/run.sh"
+    if [ x"${device_id}" != x"9A221FFBA005D8" ];then
+        adb -s ${device_id}  shell  "chmod +x /data/local/tmp/arm_runtime_jicheng/run.sh"
+        adb -s ${device_id}  shell  "/data/local/tmp/arm_runtime_jicheng/run.sh"
+    else
+        adb -s ${device_id}  shell su -c  "chmod +x /data/local/tmp/arm_runtime_jicheng/run.sh"
+        adb -s ${device_id}  shell su -c  "/data/local/tmp/arm_runtime_jicheng/run.sh"
+    fi
+        
     sleep 2
 done

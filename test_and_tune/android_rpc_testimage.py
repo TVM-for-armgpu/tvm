@@ -35,6 +35,7 @@ import extern_op
 tracker_host = '127.0.0.1'
 tracker_port = 9090
 key = "Adreno640"
+#key = "MaliG72"
 
 # Change target configuration.
 # Run `adb shell cat /proc/cpuinfo` to find the arch.

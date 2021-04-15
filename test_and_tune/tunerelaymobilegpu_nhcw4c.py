@@ -434,7 +434,7 @@ def tune_and_evaluate(tuning_opt):
     #    ops=(relay.op.get("nn.conv2d"),),
     #)
     # the last layer in resnet
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 40, 40, 512, 256, 1, 1, (1, 1), (0, 0)
+    N, H, W, CO, CI, KH, KW, strides, padding = 1, 74, 74, 80, 64, 1, 1, (1, 1), (0, 0)
     tasks = autotvm.task.create(
         "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
     )
