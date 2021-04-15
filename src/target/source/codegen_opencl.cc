@@ -544,7 +544,7 @@ void CodeGenOpenCL::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // 
   } while (0);
   os << "((";
   //arm gpu could auto broadcast by hardware, which is faster
-  PrintType(op->dtype, os);
+  PrintType(op->dtype.with_lanes(1), os);
   os << ")(";
   for (int i = 0; i < std::min(1, op->lanes); ++i) {
     if (i != 0) os << ", ";
