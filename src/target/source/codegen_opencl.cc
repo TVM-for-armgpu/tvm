@@ -592,16 +592,9 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     } else {
       // os << vid;
     }
-    // os << "[(";
-    //const AddNode* ad = static_cast<const AddNode*>(index.get());
-
-    // PrintExpr(index, os);
-    // os << ")";
     if (t.bits() == 4 || (t.bits() == 1 && t.is_int())) {
       os << " / " << (32 / t.bits());
     }
-    // os << ']';
-    //os << "read_imagef(" << vid << ",sampler,"
 #if USE_CL_RGBA
     LOG(FATAL) << "Not support fetch one elments froms 4-channel image! want " << vid << " "
                << index;

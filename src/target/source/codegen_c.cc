@@ -548,7 +548,10 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
           int ind = std::stoi(strind) / lanes;
           os << vid << '[' << ind << ']';
         } else {
-          os << vid << '[' << strind << " / " << lane_int << ']';
+          tmpos.str("");
+          tmpos.clear();
+          tmpos << strind << " / " << lane_int;
+          os << vid << '[' << tvm::tir::exprSimp::DoSimplify(tmpos.str()) << ']';
         }
         return os.str();
       }
@@ -1541,7 +1544,11 @@ void CodeGenC::VisitStmt_(const SeqStmtNode* op) {
       PrintStmt(stmt);
     }
   };
-  PrintDeclareWithBody(print_seq);
+  if (_in_simplify_scope) {
+    print_seq();
+  } else {
+    PrintDeclareWithBody(print_seq);
+  }
 }
 
 void CodeGenC::VisitStmt_(const EvaluateNode* op) {
@@ -1660,7 +1667,7 @@ bool CodeGenC::Find_longst_common_str_or_add_key(const std::string& base,
   // 3. less than two op
   const std::string common_op = "+*-/%";
   if (base.find_first_of(common_op) == std::string::npos ||
-      base.find("const_common_") != std::string::npos || count_any_of(base, (common_op)) < 3) {
+      base.find("const_common_") != std::string::npos || count_any_of(base, (common_op)) < 2) {
     new_base_index = base;
     return false;
   }
