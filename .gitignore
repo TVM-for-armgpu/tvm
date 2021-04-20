@@ -237,3 +237,7 @@ install/*
 tvm.si4project/*
 build_orig/*
 arm_runtime/*
+
+build*
+*.ps1
+*.tmp
