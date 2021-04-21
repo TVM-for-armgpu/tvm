@@ -134,14 +134,29 @@ target = tvm.target.Target("opencl")
 # Replace "aarch64-linux-gnu" with the correct target of your board.
 # This target host is used for cross compilation. You can query it by :code:`gcc -v` on your device.
 #target_host = "llvm -mtriple=aarch64-linux-gnu"
-arch = "arm64"
-target_host = "llvm -mtriple=%s-linux-android" % arch
 
 # Also replace this with the device key in your tracker
 device_key = "Adreno640"
 
 # Set this to True if you use android phone
 use_android = True
+
+ARCH_DETAIL = {
+    "max_local_memory_per_thread": int(181 * 4),
+    "max_shared_memory_per_block": 32768,
+    "min_threads_per_block": int(64 * 0.8),
+    "max_threads_per_block": 384,
+    "max_thread_x": 384,
+    "max_thread_y": 384,
+    "max_thread_z": 384,
+    "max_vthread": 1,
+    "max_vector_bytes": 16,
+    "max_vector_elems": 4,
+    "buf_top_cache_bytes": 65536,
+    "img_top_cache_bytes": 1024,
+    "img_alloc_dtype_bytes": 2,
+}
+
 
 ####################################################################
 #
@@ -174,7 +189,7 @@ def tune_tasks(
 ):
     use_transfer_learning=False
     # create tmp log file
-    tmp_log_file = 'tmp/' + os.path.basename(log_filename) + ".tmp"
+    tmp_log_file = os.path.basename(log_filename) + ".tmp"
     if os.path.exists(tmp_log_file):
         os.remove(tmp_log_file)
 
@@ -222,6 +237,30 @@ def tune_tasks(
 
 ########################################################################
 # Finally, we launch tuning jobs and evaluate the end-to-end performance.
+convshape = [
+    #resnet
+    #(1, 14, 14, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    #(1, 19, 19, 512, 256, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
+    #(1, 19, 19, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    #(1, 38, 38, 256, 128, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
+    #(1, 38, 38, 256, 128, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    #(1, 75, 75, 128, 64, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
+    #(1, 75, 75, 64, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 75, 75, 128, 64, 3, 3, (1, 1), (1, 1, 1, 1), (1, 1)),
+    #(1, 299, 299, 64, 4, 7, 7, (2, 2), (3, 3, 3, 3), (1, 1)),
+    #mobilenet
+    #(1, 4, 224, 224, 4, 32, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
+    #(1, 32, 112, 112, 32, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 64, 56, 56, 64, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 128, 56, 56, 128, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 128, 28, 28, 128, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    (1, 256, 28, 28, 256, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 256, 14, 14, 256, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 512, 14, 14, 512, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 512, 7, 7, 512, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    #(1, 1024, 7, 7, 1024, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+]
+
 
 def in_check_point(shape:str) -> bool:
     #return False
@@ -259,25 +298,23 @@ def tune_and_evaluate(tuning_opt):
     # the last layer in resnet
     sys.path.append('remote_tmali')
     sys.path.append('./')
-    import conv_shape_tunning
     tasks = []
-    for net, shapes in conv_shape_tunning.maliexp_shape.items():
-        for ith, shape in enumerate(shapes):
-            N, _, H, W, CI, CO, KH, KW, strides, padding, dialte = shape
-            if KH < -5  or KW < -5:
-                if KH < -5:
-                    H=(1+(H+padding[0]+padding[2])//strides[0])//2*2*strides[0]-padding[0]-padding[2]
-                if KW < -5:
-                    W=(1+(W+padding[1]+padding[3])//strides[1])//2*2*strides[1]-padding[1]-padding[3]
-            else:
-                H=(1+H)//2*2
-                W=(1+W)//2*2
-            task = autotvm.task.create(
-                "conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
-            )
-            tasks.append(task)
+    for ith, shape in enumerate(convshape):
+        N, _, H, W, CI, CO, KH, KW, strides, padding, dialte = shape
+        if KH < -5  or KW < -5:
+            if KH < -5:
+                H=(1+(H+padding[0]+padding[2])//strides[0])//2*2*strides[0]-padding[0]-padding[2]
+            if KW < -5:
+                W=(1+(W+padding[1]+padding[3])//strides[1])//2*2*strides[1]-padding[1]-padding[3]
+        else:
+            H=(1+H)//2*2
+            W=(1+W)//2*2
+        task = autotvm.task.create(
+            "conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target
+        )
+        tasks.append(task)
 
-            # run tuning tasks
+        # run tuning tasks
     print(f"Tuning...{ith}th task", shape, device_key)
     tasks.reverse()
     tune_tasks(tasks, **tuning_opt)
@@ -292,23 +329,17 @@ def tune_and_evaluate(tuning_opt):
     if 1:
         with tvm.target.Target("opencl"):
             s, arg_bufs = conv2d_no_batching(N, H, W, CO, CI, KH, KW, strides, padding)
-            lib = tvm.build(s, arg_bufs, target_host=target_host)
+            lib = tvm.build(s, arg_bufs)
             func=lib
             print(func.imported_modules[0].get_source()) if len(func.imported_modules) > 0 else print("source not imported")
         # export library
         tmp = tempdir()
-        if use_android:
-            from tvm.contrib import ndk
-
-            filename = "net.so"
-            lib.export_library(tmp.relpath(filename), ndk.create_shared)
-        else:
-            filename = "net.tar"
-            lib.export_library(tmp.relpath(filename))
+        filename = "net.stackvm"
+        lib.export_library(tmp.relpath(filename))
 
         # upload module to device
         print("Upload...")
-        remote = autotvm.measure.request_remote(device_key, "0.0.0.0", TRACKER_PORT, timeout=10000)
+        remote = autotvm.measure.request_remote(device_key, "127.0.0.1", TRACKER_PORT, timeout=10000)
         remote.upload(tmp.relpath(filename))
         rlib = remote.load_module(filename)
 
@@ -396,7 +427,7 @@ if __name__ == '__main__':
 
     #### TUNING OPTION ####
     network = "topinhw3c1_packed"
-    log_file = "sp_tune_log/%s.%s.log" % (device_key, network)
+    log_file = "%s.%s.log" % (device_key, network)
     tuning_option = {
         "log_filename": log_file,
         "tuner": "xgb",
@@ -406,13 +437,14 @@ if __name__ == '__main__':
         "measure_option":
         autotvm.measure_option(
             builder=autotvm.LocalBuilder(
-                build_func="ndk" if use_android else "default"),
+                build_func="stackvm"),
             runner=autotvm.RPCRunner(
                 device_key,
-                host="0.0.0.0",
+                host="127.0.0.1",
                 port=TRACKER_PORT,
                 number=10,
                 timeout=5,
+                arch_detail=ARCH_DETAIL,
             ),
         ),
     }

@@ -134,7 +134,7 @@ class PriorityScheduler(Scheduler):
         self._schedule()
 
     def request(self, user, priority, callback):
-        heapq.heappush(self._requests, (-priority, time.time(), callback))
+        heapq.heappush(self._requests, (-priority, time.time(), len(self._requests), callback))
         self._schedule()
 
     def remove(self, value):

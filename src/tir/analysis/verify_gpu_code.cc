@@ -35,18 +35,26 @@ namespace tir {
 
 class GPUCodeVerifier : public StmtExprVisitor {
  public:
-  std::vector<String> Verify(Stmt stmt, int64_t max_local_memory_per_block,
+  std::vector<String> Verify(Stmt stmt, int64_t max_local_memory_per_thread,
                              int64_t max_shared_memory_per_block, int64_t max_threads_per_block,
-                             int64_t max_thread_x, int64_t max_thread_y, int64_t max_thread_z,
-                             int64_t max_vthread, int64_t max_vector_bytes) {
-    max_local_memory_per_block_ = static_cast<size_t>(max_local_memory_per_block);
+                             int64_t min_threads_per_block, int64_t max_thread_x,
+                             int64_t max_thread_y, int64_t max_thread_z, int64_t max_vthread,
+                             int64_t max_vector_bytes, int64_t max_vector_elems,
+                             int64_t buf_top_cache_bytes, int64_t img_top_cache_bytes,
+                             int64_t img_alloc_dtype_bytes) {
+    max_local_memory_per_thread_ = static_cast<size_t>(max_local_memory_per_thread);
     max_shared_memory_per_block_ = static_cast<size_t>(max_shared_memory_per_block);
+    min_threads_per_block_ = static_cast<size_t>(min_threads_per_block);
     max_threads_per_block_ = static_cast<size_t>(max_threads_per_block);
     max_thread_x_ = static_cast<size_t>(max_thread_x);
     max_thread_y_ = static_cast<size_t>(max_thread_y);
     max_thread_z_ = static_cast<size_t>(max_thread_z);
     max_vthread_ = static_cast<size_t>(max_vthread);
     max_vector_bytes_ = static_cast<size_t>(max_vector_bytes);
+    max_vector_elems_ = static_cast<size_t>(max_vector_elems);
+    buf_top_cache_bytes_ = static_cast<size_t>(buf_top_cache_bytes);
+    img_top_cache_bytes_ = static_cast<size_t>(img_top_cache_bytes);
+    img_alloc_dtype_bytes_ = static_cast<size_t>(img_alloc_dtype_bytes);
 
     Reset_();
 
@@ -61,7 +69,7 @@ class GPUCodeVerifier : public StmtExprVisitor {
     // visit an allocation of a buffer in shared memory, record its size
     if (visited_local_buffers_.count(op->buffer_var.get()) != 0) {
       size_t size = static_cast<size_t>(op->constant_allocation_size());
-      local_memory_per_block_ += size * op->dtype.bytes() * op->dtype.lanes();
+      local_memory_per_thread_ += size * op->dtype.bytes() * op->dtype.lanes();
     } else if (visited_shared_buffers_.count(op->buffer_var.get()) != 0) {
       size_t size = static_cast<size_t>(op->constant_allocation_size());
       shared_memory_per_block_ += size * op->dtype.bytes() * op->dtype.lanes();
@@ -147,7 +155,15 @@ class GPUCodeVerifier : public StmtExprVisitor {
 
       if (nest_level_ == 0) {
         // exit a kernel, check the validity
-        auto err = [this](std::string id, size_t num, size_t m) {
+        auto err_lt = [this](std::string id, size_t num, size_t m) {
+          if (num < m) {
+            std::stringstream s;
+            s << "Used " << id << " (" << num << ") is less than the allowed minimum (" << m
+              << ")";
+            errors_.push_back(s.str());
+          }
+        };
+        auto err_gt = [this](std::string id, size_t num, size_t m) {
           if (num > m) {
             std::stringstream s;
             s << "Used " << id << " (" << num << ") is greater than the allowed maximum (" << m
@@ -155,9 +171,10 @@ class GPUCodeVerifier : public StmtExprVisitor {
             errors_.push_back(s.str());
           }
         };
-        err("threads per block", thread_per_block_, max_threads_per_block_);
-        err("local memory per block", local_memory_per_block_, max_local_memory_per_block_);
-        err("shared memory per block", shared_memory_per_block_, max_shared_memory_per_block_);
+        err_lt("threads per block", thread_per_block_, min_threads_per_block_);
+        err_gt("threads per block", thread_per_block_, max_threads_per_block_);
+        err_gt("local memory per thread", local_memory_per_thread_, max_local_memory_per_thread_);
+        err_gt("shared memory per block", shared_memory_per_block_, max_shared_memory_per_block_);
       }
     } else {
       StmtVisitor::VisitStmt_(op);
@@ -182,12 +199,56 @@ class GPUCodeVerifier : public StmtExprVisitor {
   }
 
   void VisitExpr_(const LoadNode* op) {
-    if (op->dtype.lanes() > 1) {
-      if (static_cast<size_t>(op->dtype.lanes() * op->dtype.bytes()) > max_vector_bytes_) {
+    auto bytes = static_cast<size_t>(op->dtype.bytes());
+    auto lanes = static_cast<size_t>(op->dtype.lanes());
+    bool is_img = op->dtype.is_climgfloatrw();
+    if (lanes > 1) {
+      if (bytes * lanes > max_vector_bytes_) {
         std::stringstream s;
-        s << "Number of lanes (" << op->dtype.lanes() << ") times number of bytes ("
-          << op->dtype.bytes() << ") for dtype " << op->dtype
-          << " is greater than the maximum number of vector bytes (" << max_vector_bytes_ << ")";
+        s << "Number of lanes (" << lanes << ") times number of bytes (" << bytes << ") for dtype "
+          << op->dtype << " is greater than the maximum number of vector bytes ("
+          << max_vector_bytes_ << ")";
+        errors_.push_back(s.str());
+      }
+      if (lanes > max_vector_elems_) {
+        std::stringstream s;
+        s << "Number of lanes (" << lanes << ") of dtype " << op->dtype
+          << " is greater than the maximum number of vector elements ("
+          << max_vector_elems_ << ")";
+        errors_.push_back(s.str());
+      }
+    }
+    size_t concur_access_size = 1;
+    {
+      struct ConcurAccessThreadCollector : public ExprVisitor {
+        bool x = false, y = false, z = false;
+        void VisitExpr_(const VarNode* op) {
+          if (op->name_hint == "threadIdx.x") { x = true; }
+          else if (op->name_hint == "threadIdx.y") { y = true; }
+          else if (op->name_hint == "threadIdx.z") { z = true; }
+        }
+        void Collect(const PrimExpr& expr) { this->VisitExpr(expr); }
+      } concur_access_threads{};
+      concur_access_threads.Collect(op->index);
+      if (concur_access_threads.x) { concur_access_size *= thread_x_extent_; };
+      if (concur_access_threads.y) { concur_access_size *= thread_y_extent_; };
+      if (concur_access_threads.z) { concur_access_size *= thread_z_extent_; };
+    }
+
+    if (is_img) {
+      concur_access_size *= img_alloc_dtype_bytes_ * lanes;
+      if (concur_access_size > img_top_cache_bytes_) {
+        std::stringstream s;
+        s << "Concurrent image access size (" << concur_access_size
+          << " bytes) exceeds top level cache size (" << img_top_cache_bytes_ << " bytes)";
+        errors_.push_back(s.str());
+      }
+    } else {
+      concur_access_size *= bytes * lanes;
+      if (concur_access_size > buf_top_cache_bytes_) {
+        std::stringstream s;
+        s << "Concurrent buffer access size (" << concur_access_size
+          << " bytes) exceeds top level cache size (" << buf_top_cache_bytes_ << " bytes)";
         errors_.push_back(s.str());
       }
     }
@@ -217,22 +278,28 @@ class GPUCodeVerifier : public StmtExprVisitor {
 
   size_t thread_x_extent_, thread_y_extent_, thread_z_extent_;
 
-  size_t local_memory_per_block_;
+  size_t local_memory_per_thread_;
   size_t shared_memory_per_block_;
   size_t thread_per_block_;
 
-  size_t max_local_memory_per_block_;
+  size_t max_local_memory_per_thread_;
   size_t max_shared_memory_per_block_;
+  size_t min_threads_per_block_;
   size_t max_threads_per_block_;
   size_t max_thread_x_, max_thread_y_, max_thread_z_, max_vthread_;
   size_t max_vector_bytes_;
+  size_t max_vector_elems_;
+
+  size_t buf_top_cache_bytes_;
+  size_t img_top_cache_bytes_;
+  size_t img_alloc_dtype_bytes_;
 
   std::vector<String> errors_;
 
   void Reset_() {
     visited_local_buffers_.clear();
     visited_shared_buffers_.clear();
-    local_memory_per_block_ = 0;
+    local_memory_per_thread_ = 0;
     shared_memory_per_block_ = 0;
 
     visited_threads_.clear();
@@ -243,21 +310,28 @@ class GPUCodeVerifier : public StmtExprVisitor {
 std::vector<String> VerifyGPUCode_(const PrimFunc& func, Map<String, PrimExpr> constraints) {
   GPUCodeVerifier verifier;
 
-  int64_t max_local_memory_per_block = INT64_MAX;
+  int64_t max_local_memory_per_thread = INT64_MAX;
   int64_t max_shared_memory_per_block = INT64_MAX;
+  int64_t min_threads_per_block = INT64_MAX;
   int64_t max_threads_per_block = INT64_MAX;
   int64_t max_thread_x = INT64_MAX;
   int64_t max_thread_y = INT64_MAX;
   int64_t max_thread_z = INT64_MAX;
   int64_t max_vthread = INT64_MAX;
   int64_t max_vector_bytes = INT64_MAX;
+  int64_t max_vector_elems = INT64_MAX;
+  int64_t buf_top_cache_bytes = INT64_MAX;
+  int64_t img_top_cache_bytes = INT64_MAX;
+  int64_t img_alloc_dtype_bytes = INT64_MAX;
 
   for (auto iter : constraints) {
     const IntImmNode* val = iter.second.as<IntImmNode>();
-    if (iter.first == "max_local_memory_per_block") {
-      max_local_memory_per_block = val->value;
+    if (iter.first == "max_local_memory_per_thread") {
+      max_local_memory_per_thread = val->value;
     } else if (iter.first == "max_shared_memory_per_block") {
       max_shared_memory_per_block = val->value;
+    } else if (iter.first == "min_threads_per_block") {
+      min_threads_per_block = val->value;
     } else if (iter.first == "max_threads_per_block") {
       max_threads_per_block = val->value;
     } else if (iter.first == "max_thread_x") {
@@ -270,18 +344,34 @@ std::vector<String> VerifyGPUCode_(const PrimFunc& func, Map<String, PrimExpr> c
       max_vthread = val->value;
     } else if (iter.first == "max_vector_bytes") {
       max_vector_bytes = val->value;
+    } else if (iter.first == "max_vector_elems") {
+      max_vector_elems = val->value;
+    } else if (iter.first == "buf_top_cache_bytes") {
+      buf_top_cache_bytes = val->value;
+    } else if (iter.first == "img_top_cache_bytes") {
+      img_top_cache_bytes = val->value;
+    } else if (iter.first == "img_alloc_dtype_bytes") {
+      img_alloc_dtype_bytes = val->value;
     } else {
       LOG(FATAL) << "Invalid check item: " << iter.first;
     }
   }
 
-  return verifier.Verify(func->body, max_local_memory_per_block, max_shared_memory_per_block,
-                         max_threads_per_block, max_thread_x, max_thread_y, max_thread_z,
-                         max_vthread, max_vector_bytes);
+  return verifier.Verify(func->body, max_local_memory_per_thread, max_shared_memory_per_block,
+                         max_threads_per_block, min_threads_per_block, max_thread_x, max_thread_y,
+                         max_thread_z, max_vthread, max_vector_bytes, max_vector_elems,
+                         buf_top_cache_bytes, img_top_cache_bytes, img_alloc_dtype_bytes);
 }
 
 bool VerifyGPUCode(const PrimFunc& func, Map<String, PrimExpr> constraints) {
   auto errs = VerifyGPUCode_(func, constraints);
+  if (errs.size() != 0) {
+    std::stringstream s;
+    for (auto& err : errs) {
+      s << std::endl << "    " << err;
+    }
+    LOG(INFO) << "RuntimeError: GPU constraint(s) violated: " << s.str();
+  }
   return errs.size() == 0;
 }
 

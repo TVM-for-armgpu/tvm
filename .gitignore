@@ -11,6 +11,7 @@ __pycache__/
 .Python
 env/
 build/
+build*/
 develop-eggs/
 dist/
 downloads/
@@ -241,3 +242,5 @@ arm_runtime/*
 build*
 *.ps1
 *.tmp
+*.sh
+*.zip

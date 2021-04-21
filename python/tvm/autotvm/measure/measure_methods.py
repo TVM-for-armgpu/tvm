@@ -89,6 +89,8 @@ class LocalBuilder(Builder):
                 build_func = tar.tar
             elif build_func == "ndk":
                 build_func = ndk.create_shared
+            elif build_func == "stackvm":
+                build_func = None
             else:
                 raise ValueError("Invalid build_func" + build_func)
         self.build_func = _WrappedBuildFunc(build_func)
@@ -214,6 +216,7 @@ class RPCRunner(Runner):
         min_repeat_ms=0,
         cooldown_interval=0.1,
         enable_cpu_cache_flush=False,
+        arch_detail=None,
     ):
         super(RPCRunner, self).__init__(timeout, n_parallel)
 
@@ -231,6 +234,7 @@ class RPCRunner(Runner):
         self.cooldown_interval = cooldown_interval
 
         self.executor = LocalExecutor(timeout=timeout * (self.n_parallel + 1))
+        self.arch_detail = arch_detail
 
     def set_task(self, task):
         self.task = task
@@ -261,13 +265,16 @@ class RPCRunner(Runner):
             remote = request_remote(self.key, self.host, self.port)
             ctx = remote.context(str(self.task.target), 0)
             max_dims = ctx.max_thread_dimensions
-            kwargs["check_gpu"] = {
-                "max_shared_memory_per_block": ctx.max_shared_memory_per_block,
-                "max_threads_per_block": ctx.max_threads_per_block,
-                "max_thread_x": max_dims[0],
-                "max_thread_y": max_dims[1],
-                "max_thread_z": max_dims[2],
-            }
+            if self.arch_detail is not None:
+                kwargs["check_gpu"] = self.arch_detail
+            else:
+                kwargs["check_gpu"] = {
+                    "max_shared_memory_per_block": ctx.max_shared_memory_per_block,
+                    "max_threads_per_block": ctx.max_threads_per_block,
+                    "max_thread_x": max_dims[0],
+                    "max_thread_y": max_dims[1],
+                    "max_thread_z": max_dims[2],
+                }
 
             if "cuda" in self.task.target.keys:
                 kwargs["cuda_arch"] = "sm_" + "".join(ctx.compute_version.split("."))
@@ -295,6 +302,7 @@ class RPCRunner(Runner):
                     self.cooldown_interval,
                     remote_args,
                     self.enable_cpu_cache_flush,
+                    self.arch_detail,
                 )
                 futures.append(ret)
 
@@ -449,7 +457,7 @@ class _WrappedBuildFunc:
     """
 
     def __init__(self, build_func):
-        if not hasattr(build_func, "output_format"):
+        if build_func is not None and not hasattr(build_func, "output_format"):
             raise AttributeError("Expect build_func to have the attribute output_format.")
         self.build_func = build_func
 
@@ -467,8 +475,9 @@ class _WrappedBuildFunc:
         """
         tic = time.time()
         try:
+            output_format = "stackvm" if self.build_func is None else self.build_func.output_format
             filename = os.path.join(
-                tmp_dir, "tmp_func_%0x.%s" % (getrandbits(64), self.build_func.output_format)
+                tmp_dir, "tmp_func_%0x.%s" % (getrandbits(64), output_format)
             )
             # TODO(tvm-team) consider linline _build_func_common
             func, arg_info = _build_func_common(measure_input, **kwargs)
@@ -487,6 +496,7 @@ def run_through_rpc(
     cooldown_interval,
     remote_args,
     enable_cpu_cache_flush=False,
+    arch_detail=None,
 ):
     """Run a generated library through rpc
 
@@ -544,6 +554,7 @@ def run_through_rpc(
         remote.upload(build_result.filename)
         func = remote.load_module(os.path.split(build_result.filename)[1])
         ctx = remote.context(str(measure_input.target), 0)
+        ctx.set_arch_detail(arch_detail)
 
         # Limitation:
         # We can not get PackFunction directly in the remote mode as it is wrapped

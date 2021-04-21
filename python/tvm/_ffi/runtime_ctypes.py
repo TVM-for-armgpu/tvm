@@ -202,10 +202,19 @@ class TVMContext(ctypes.Structure):
         "webgpu": 15,
     }
 
-    def __init__(self, device_type, device_id):
+    def __init__(self, device_type, device_id, arch_detail=None):
         super(TVMContext, self).__init__()
         self.device_type = int(device_type)
         self.device_id = device_id
+        self._arch_detail = arch_detail
+
+    @property
+    def arch_detail(self):
+        """Architecture detail for implementation pre-filtering."""
+        return self._arch_detail
+    def set_arch_detail(self, arch_detail):
+        """Set architecture detail for implementation pre-filtering."""
+        self._arch_detail = arch_detail
 
     def _GetDeviceAttr(self, device_type, device_id, attr_id):
         """Internal helper function to invoke runtime.GetDeviceAttr"""
