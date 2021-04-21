@@ -998,7 +998,11 @@ void RPCDevFreeData(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
   void* ptr = args[1];
   handler->GetDeviceAPI(ctx)->FreeDataSpace(ctx, ptr);
 }
-
+void RPCDevGetTc(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
+  TVMContext ctx = args[0];
+  void* tcarr = args[4];
+  handler->GetDeviceAPI(ctx)->GetTc(ctx, tcarr);
+}
 void RPCCopyAmongRemote(RPCSession* handler, TVMArgs args, TVMRetValue* rv) {
   void* from = args[0];
   uint64_t from_offset = args[1];
@@ -1051,6 +1055,9 @@ void RPCEndpoint::EventHandler::HandleSyscall(RPCCode code) {
       break;
     case RPCCode::kDevStreamSync:
       this->HandleSyscallStreamSync();
+      break;
+    case RPCCode::kDevGetTc:
+      SysCallHandler(RPCDevGetTc);
       break;
     case RPCCode::kCopyAmongRemote:
       SysCallHandler(RPCCopyAmongRemote);
@@ -1128,7 +1135,9 @@ class RPCClientSession : public RPCSession, public DeviceAPI {
   void FreeDataSpace(TVMContext ctx, void* ptr) final {
     endpoint_->SysCallRemote(RPCCode::kDevFreeData, ctx, ptr);
   }
-
+  void GetTc(TVMContext ctx, void* tcarray) { 
+      endpoint_->SysCallRemote(RPCCode::kDevStreamSync, ctx);
+  }
   void CopyDataFromTo(const void* from, size_t from_offset, void* to, size_t to_offset, size_t size,
                       TVMContext ctx_from, TVMContext ctx_to, DLDataType type_hint,
                       TVMStreamHandle stream) final {

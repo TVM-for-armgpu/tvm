@@ -1,1 +1,1 @@
-/home/stcadmin/work/tvm/test_and_tune/tune_relay_mobile_gpu_by_x86schedule.py
+../tune_relay_mobile_gpu_by_x86schedule.py

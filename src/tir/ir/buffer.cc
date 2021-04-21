@@ -256,13 +256,6 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
             offset_general = MergeMulMod(&ana, offset_general * n->shape[i] + index[i]);
           }
 #if USE_CL_RGBA
-        int DONT_USE_SPLIT = 0;
-        FILE* fp = fopen("./dont_use_split", "r");
-        if (fp != NULL) {
-          LOG(WARNING) << "transfer to div and mod split mode";
-          DONT_USE_SPLIT = 1;
-          fclose(fp);
-        }
         if (n->dtype.is_climgfloatrw()) {
           int how_much_item_is_for_x_axes = 1;
           switch (index.size()) {
@@ -271,7 +264,18 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
               break;
             }
             case 5: {
-              how_much_item_is_for_x_axes = 2;
+                  //for nhcw4 mace  --> h==w and w!= c/4 then c/4*w*4 as width, n*c as heith
+              std::vector<long long> shape={n->shape[0].as<IntImmNode>()->value,
+                            n->shape[1].as<IntImmNode>()->value,
+                            n->shape[2].as<IntImmNode>()->value,
+                            n->shape[3].as<IntImmNode>()->value,
+                            n->shape[4].as<IntImmNode>()->value};
+              if (((shape[3] == shape[1]) && (shape[3] != shape[2]))
+              ||(shape[2]*shape[3]*shape[4]/4 < 12345)){
+                how_much_item_is_for_x_axes = 3;
+              } else {
+                how_much_item_is_for_x_axes = 2;
+              }
               break;
             }
             case 4: {
@@ -283,7 +287,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
               break;
             }
             case 2: {
-              how_much_item_is_for_x_axes = 2;
+              how_much_item_is_for_x_axes = 1;
               break;
             }
             default : {
@@ -306,7 +310,7 @@ inline PrimExpr ElemOffset(const BufferNode* n, Array<PrimExpr> index) {
             for (size_t i = i_last + 1; i < index.size(); ++i) {
               offset_x = MergeMulMod(&ana, offset_x * n->shape[i] + index[i]);
             }
-            //base = base + indexmod(tvm::tir::Mul(offset, 21139), 21193) + offset_x;
+            //base = base + indexmod(tvm::tir::Mul(offset, 19447), 21193) + offset_x;
             base = general_axis(base + offset_x, offset, offset_general+base);
           }
         } else {

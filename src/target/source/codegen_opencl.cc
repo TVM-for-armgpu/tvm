@@ -71,7 +71,7 @@ void CodeGenOpenCL::PreFunctionBody(const PrimFunc& f) {
 }
 void CodeGenOpenCL::PrintGlobalSamplerDeclare() {
   stream << "__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | "
-            "CLK_ADDRESS_CLAMP_TO_EDGE| CLK_FILTER_NEAREST;\n";
+            "CLK_ADDRESS_CLAMP| CLK_FILTER_NEAREST;\n";
 }
 
 std::string CodeGenOpenCL::Finish() {
@@ -249,7 +249,7 @@ std::string CodeGenOpenCL::get_2Dmemo_floatx1_int2(const std::string& vid,
 #endif
   trimSpace(index_str);
   std::string split_dem = "%21193";
-  std::string amp_factor = "/21139";
+  std::string amp_factor = "/19447";
   size_t pos = index_str.find(split_dem);
   ICHECK(pos != std::string::npos) << index_str << " cant find %202129, kernel CI or CO is equal 202129??";
   int rb = 0, lb = 0;
@@ -312,34 +312,50 @@ void CodeGenOpenCL::PrintVecAddr(const VarNode* buffer, DataType t, PrimExpr bas
         //PrintType(t.element_of(), os);
         //os << "*)";
       }
-      os << vid << ",";
-      if (t.is_climgfloat()) {
-        os << "sampler, ";
+      
+      if (!t.is_climgfloatrw()) {
+        os << vid << ",";
       }
 #if USE_CL_RGBA
       //===
       std::string img_x_axes, img_y_axes;
       int DONT_USE_SPLIT = 0;
-      FILE* fp = fopen("./dont_use_split", "r");
+      FILE* fp = 0;// fopen("./dont_use_split", "r");
       if (fp != NULL) {
         DONT_USE_SPLIT = 1;
         fclose(fp);
       }
 
       if (DONT_USE_SPLIT) {
-        ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
-            << "var buffer shape is essential for opencl var:" << vid;
-        ICHECK(var_buffer_map_[vid]->shape.size() > 2)
-            << "var buffer shape of image memory must be at least 2 dimention";
-        PrimExpr width = var_buffer_map_[vid]->shape[2];
-        PrimExpr channel = IntImm(DataType::Int(32), 4);
+        //ICHECK(var_buffer_map_.find(vid) != var_buffer_map_.end())
+        //    << "var buffer shape is essential for opencl var:" << vid;
+        //ICHECK(var_buffer_map_[vid]->shape.size() > 2)
+        //    << "var buffer shape of image memory must be at least 2 dimention";
+        //PrimExpr width = var_buffer_map_[vid]->shape[2];
+        //PrimExpr channel = IntImm(DataType::Int(32), 4);
+        int channel=4;
+        std::string width = "get_image_dim("+vid+").x*4";
         std::ostringstream xyaxes_base_oss;
-        xyaxes_base_oss << "(" << ossbase.str() << "/" << channel << "%" << indexdiv(width, channel) << ")";
+        std::string simp_base = Simplify_with_const_var(ossbase.str());
+        std::vector<std::string> c_and_n = split_string(simp_base, "+", true);
+
+        //xyaxes_base_oss << "(" << ossbase.str() << "/" << channel << "%" << indexdiv(width, channel) << ")";
+        if (c_and_n.size() == 2) {
+          c_and_n[0].erase(0, 1);
+          c_and_n[1].pop_back();
+          xyaxes_base_oss << "(" << c_and_n[0] << "/" << channel << "%(" << width << "/4) + " << c_and_n[1] << "/4)";
+        } else {
+          xyaxes_base_oss << "(" << simp_base << "/" << channel << "%(" << width << "/4))";
+        }
         // times 4 is for compatable "/4" below
         img_x_axes = xyaxes_base_oss.str() + "*4";
         xyaxes_base_oss.str("");
         xyaxes_base_oss.clear();
-        xyaxes_base_oss << "(" << ossbase.str() << "/" << width << ")";
+        if (c_and_n.size() == 2) {
+          xyaxes_base_oss << "(" << c_and_n[0] << "/(" << width << "))";
+        } else {
+          xyaxes_base_oss << "(" << simp_base << "/(" << width << "))";
+        }
         img_y_axes = xyaxes_base_oss.str();
       } else {
         split_img_xy_axes(ossbase.str(), img_x_axes, img_y_axes);
@@ -527,9 +543,10 @@ void CodeGenOpenCL::VisitExpr_(const BroadcastNode* op, std::ostream& os) {  // 
       }
   } while (0);
   os << "((";
-  PrintType(op->dtype, os);
+  //arm gpu could auto broadcast by hardware, which is faster
+  PrintType(op->dtype.with_lanes(1), os);
   os << ")(";
-  for (int i = 0; i < op->lanes; ++i) {
+  for (int i = 0; i < std::min(1, op->lanes); ++i) {
     if (i != 0) os << ", ";
     os << v;
   }
@@ -575,16 +592,9 @@ std::string CodeGenOpenCL::GetBufferRef(DataType t, const VarNode* buffer, PrimE
     } else {
       // os << vid;
     }
-    // os << "[(";
-    //const AddNode* ad = static_cast<const AddNode*>(index.get());
-
-    // PrintExpr(index, os);
-    // os << ")";
     if (t.bits() == 4 || (t.bits() == 1 && t.is_int())) {
       os << " / " << (32 / t.bits());
     }
-    // os << ']';
-    //os << "read_imagef(" << vid << ",sampler,"
 #if USE_CL_RGBA
     LOG(FATAL) << "Not support fetch one elments froms 4-channel image! want " << vid << " "
                << index;

@@ -207,6 +207,7 @@ class OpenCLWorkspace : public DeviceAPI {
   std::vector<size_t> free_kernel_ids;
   // the mutex for initialization
   std::mutex mu;
+  double tc_duration_s_{0};
   // destructor
   ~OpenCLWorkspace() {
     if (context != nullptr) {
@@ -241,6 +242,7 @@ class OpenCLWorkspace : public DeviceAPI {
                       DataShape* size, TVMContext ctx_from, TVMContext ctx_to,
                       DLDataType type_hint,
                       TVMStreamHandle stream) final;
+  void GetTc(TVMContext ctx_from, void* data_shape) final;
   void StreamSync(TVMContext ctx, TVMStreamHandle stream) final;
   void* AllocWorkspace(TVMContext ctx, size_t size, DLDataType type_hint) final;
   void* AllocWorkspace(TVMContext ctx, DataShape* size, DLDataType type_hint) final;
@@ -320,6 +322,7 @@ class OpenCLModuleNode : public ModuleNode {
 
  public:
   std::vector<double> time_vec_;
+  std::unordered_map<std::string, std::string> global_local_size_map_;
  private:
   // The workspace, need to keep reference to use it in destructor.
   // In case of static destruction order problem.

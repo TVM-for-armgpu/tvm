@@ -1,6 +1,7 @@
 import tvm
 from tvm import te, topi
 from tvm.topi import nn
+from tvm import autotvm
 
 # Algorithm
 # kernel transform
@@ -14,19 +15,18 @@ def kernel_transform(kernel, wino_size, G=None, out_dtype='float32'):
         kernel_shape = tuple(int(i) for i in kernel.shape)
         filter_n = kernel
 
-        
+
     if out_dtype == "climgfloatw32":
         storage_attr = "image"
     else:
         storage_attr = ""
     assert len(kernel_shape) == 6
-    ic_chunk, oc_chunk, KH, KW, _, oc_bn = kernel_shape
-    IC = ic_chunk
+    IC, oc_chunk, KH, KW, _, oc_bn = kernel_shape
 
     k1 = te.reduce_axis((0, KH), "k1")
     k2 = te.reduce_axis((0, KW), "k2")
     G = G if G is not None else te.placeholder((wino_size, KH), name="G")
-    
+
     U = te.compute((IC, oc_chunk, wino_size, wino_size, 1, oc_bn), lambda ic, oc, x, y, bi, bo:
                    te.sum(G[x, k2] * filter_n[ic, oc, k2, k1, bi, bo]*G[y, k1],
                           axis=[k2, k1]),
@@ -34,7 +34,7 @@ def kernel_transform(kernel, wino_size, G=None, out_dtype='float32'):
                    attrs={"data_type": storage_attr},
                    )
     return U
-    
+
 # Default schedule
 #s = te.create_schedule(U.op)
 #========shedule begin=================================
@@ -68,23 +68,24 @@ def kernel_transform_shedule(cfg, s, U):
 
     # Schedule BL local write
     s[UL].compute_at(s[U], kpo)
-    _, _, hp, wp, _, p4 = s[UL].op.axis
+    s[U].reorder(kpo, Uhp, Uwp, Up4)
+    cp, _, hp, wp, _, p4 = s[UL].op.axis
     s[UL].reorder(hp, wp, p4)
     s[UL].vectorize(p4)
     k1, k2 = s[UL].op.reduce_axis
-    #s[UL].unroll(wp)
-    #s[UL].unroll(hp)
-    #s[UL].unroll(k1)
-    #s[UL].unroll(k2)
+    s[UL].unroll(wp)
+    s[UL].unroll(hp)
+    s[UL].unroll(k1)
+    s[UL].unroll(k2)
 
-    s[WL].compute_at(s[UL], hp)
+    s[WL].compute_at(s[UL], cp)
     _, _, hp, wp, _, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
-    #s[WL].unroll(wp)
-    #s[WL].unroll(hp)
+    s[WL].unroll(wp)
+    s[WL].unroll(hp)
     s[U].vectorize(Up4)  # vectorize memory load
-    #s[U].unroll(Uwp)  # vectorize memory load
-    #s[U].unroll(Uhp)  # vectorize memory load
+    s[U].unroll(Uwp)  # vectorize memory load
+    s[U].unroll(Uhp)  # vectorize memory load
 #========shedule end=================================
 #func = tvm.build(s, [filter_n,U], target=target)
 #assert func
@@ -102,7 +103,7 @@ def kernel_transform_shedule(cfg, s, U):
 # data transform
 
 
-def data_transform(data, wino_size, B=None, out_dtype='float32'):
+def data_transform(data, wino_size, padding, B=None, out_dtype='float32'):
     if isinstance(data, tuple):
         data_shape = data
         data_dtype = 'float32'
@@ -111,16 +112,19 @@ def data_transform(data, wino_size, B=None, out_dtype='float32'):
     else:
         data_shape = tuple(int(i) for i in data.shape)
         Data = data
-        
+
     if out_dtype == "climgfloatw32":
         storage_attr = "image"
     else:
         storage_attr = ""
     assert len(data_shape) == 5
+    pt, pl, pb, pr=padding
     N, ic_chunck, img_H, img_W, ic_bn = data_shape
+    H = (img_H + pt + pb - 3) // 1 + 1
+    W = (img_W + pl + pr - 3) // 1 + 1
     tile_size = wino_size - 2
-    wino2H = (img_H + tile_size - 1) // tile_size
-    wino2W = (img_W + tile_size - 1) // tile_size
+    wino2H = (H + tile_size - 1) // tile_size
+    wino2W = (W + tile_size - 1) // tile_size
 
     k1 = te.reduce_axis((0, wino_size), "r_a")
     k2 = te.reduce_axis((0, wino_size), "r_b")
@@ -131,15 +135,16 @@ def data_transform(data, wino_size, B=None, out_dtype='float32'):
     #ox = int(tx / wino_size) * 2+ k2;
     #oy = int(ty / wino_size * 2 + k1;
     #V[x][y] += BT(tx % wino_size, k2) * D[ox ][oy] * B(k1, (ty % wino_size);
-    pt = pl = pb = pr = tile_size - 1
-    Data_pad = nn.pad(Data, (0, 0, pt, pl, 0),
-                      (0, 0, pb, pr, 0), name="Data_pad")
+    Data_pad = nn.pad(Data, (0, 0, pt, pl, 0), (0, 0, pb, pr, 0),
+                      name="Data_pad")
 
     def _transform_V(ic, oc, x, y, bo):
         tx = y // wino2W * wino_size + x // wino_size
         ty = (y % wino2W) * wino_size + x % wino_size
-        ox = tx // wino_size * tile_size + k2 - 1
-        oy = ty // wino_size * tile_size + k1 - 1
+        #ox = tx // wino_size * tile_size + tx % wino_size
+        #oy = ty // wino_size * tile_size + ty % wino_size
+        ox = tx // wino_size * tile_size + k2
+        oy = ty // wino_size * tile_size + k1
         return te.sum(B[k2, tx % wino_size]*Data_pad[ic, oc, ox, oy, bo]*B[k1, ty % wino_size],
                       axis=[k2, k1],
                       )
@@ -157,7 +162,7 @@ def data_transform_shedule(cfg,  s, V):
     B, Data_pad = s[V].op.input_tensors
     s[B].compute_inline()
     s[Data_pad].compute_inline()
-    
+
     if isinstance(Data_pad.op, tvm.te.tensor.ComputeOp):
         packed_data, = s[Data_pad].op.input_tensors
         if isinstance(packed_data.op, tvm.te.tensor.ComputeOp):
@@ -175,8 +180,16 @@ def data_transform_shedule(cfg,  s, V):
     n, cp, hp, wp, Vp4 = s[V].op.axis
 
     cpo, cpi = cfg["data_cp"].apply(s, V, cp)
-    wpo, wpi, Vwp = cfg["data_wp"].apply(s, V, wp)
-    hpo, hpi, Vhp = cfg["data_hp"].apply(s, V, hp)
+    #wpo, wpi, Vwp = cfg["data_wp"].apply(s, V, wp)
+    #hpo, hpi, Vhp = cfg["data_hp"].apply(s, V, hp)
+    # for rdong's code schedule
+    wp, Vwp = s[V].split(wp, factor=4)
+    wpo, wpi = s[V].split(wp, factor=cfg["data_wp"].size[1])
+    wpo,wpoif= s[V].split(wpo, factor=4)
+    s[V].reorder(wpo, wpi,wpoif,hp)
+    hp=s[V].fuse(wpoif,hp)
+    hp, Vhp = s[V].split(hp, factor=4)
+    hpo, hpi = s[V].split(hp, factor=cfg["data_hp"].size[1])
 
     #cpo, cpi = s[V].split(cp, factor=4)
 
@@ -208,11 +221,11 @@ def data_transform_shedule(cfg,  s, V):
     s[WL].compute_at(s[VL], hp)
     _, _, hp, wp, p4 = s[WL].op.axis
     s[WL].vectorize(p4)  # vectorize memory load
-    #s[WL].unroll(wp)
-    #s[WL].unroll(hp)
+    s[WL].unroll(wp)
+    s[WL].unroll(hp)
     s[V].vectorize(Vp4)  # vectorize memory load
-    #s[V].unroll(Vwp)  # vectorize memory load
-    #s[V].unroll(Vhp)  # vectorize memory load
+    s[V].unroll(Vwp)  # vectorize memory load
+    s[V].unroll(Vhp)  # vectorize memory load
 #========shedule end=================================
 #func = tvm.build(s, [Data,V], target=target)
 #assert func
@@ -227,18 +240,21 @@ def batch_gemm(U=None, V=None, out_dtype='float32'):
     else:
         storage_attr = ""
     U = U if U is not None else te.placeholder((256, 256//4, 4, 4,
-                        1, 4), name="U") 
+                        1, 4), name="U")
     V = V if V is not None else te.placeholder((1, 256//4, 16, 3 * 5, 4), name="V")
     IC, oc_chunk, wino_size, _, _, oc_bn = U.shape
     N, _, wino_all_size, NTILE, _ = V.shape
-
+    assert V.shape[1] * V.shape[-1] == U.shape[
+        0], f'CIn channel must the same {V.shape} vs {U.shape}'
+    assert wino_all_size == wino_size*wino_size
     rc = te.reduce_axis((0, IC), "r_c")
-    M = te.compute((N, oc_chunk, wino_all_size, NTILE, oc_bn), lambda n, oc, h, w, bo:
-                   te.sum(U[rc, oc, h//wino_size, h % wino_size, 0, bo]*V[n, rc//oc_bn, h, w, rc % oc_bn],
-                          axis=[rc]),
-                   name="mali_conv2d_nchw_winograd_M",
-                   attrs={"data_type": storage_attr},
-                   )
+    M = te.compute((N, oc_chunk, wino_all_size, NTILE, oc_bn),
+                    lambda n, oc, h, w, bo:
+                    te.sum(U[rc, oc, h//wino_size, h % wino_size, 0, bo]*V[n, rc // oc_bn, h, w, rc % oc_bn],
+                            axis=[rc]),
+                    name="mali_conv2d_nchw_winograd_M",
+                    attrs={"data_type": storage_attr},
+                    )
     return M
 #s = te.create_schedule(M.op)
 
@@ -284,11 +300,11 @@ def batch_gemm_shedule(cfg, s, M):
     _, _, hp, wp, p4 = s[ML].op.axis
     rc, = s[ML].op.reduce_axis
     rco, rci = s[ML].split(rc, factor=4)
-    s[ML].reorder(rco, wp, rci, p4)
+    s[ML].reorder(rco, rci, wp, p4)
     s[ML].vectorize(p4)
-    #s[ML].unroll(wp)
-    #s[ML].unroll(hp)
-    #s[ML].unroll(k1)
+    s[ML].unroll(wp)
+    s[ML].unroll(hp)
+    s[ML].unroll(rci)
 
     #schedule UL VL local read
     s[UL].compute_at(s[ML], rco)
@@ -297,16 +313,16 @@ def batch_gemm_shedule(cfg, s, M):
     #split Ul VL workload
     a, b, hp, wp, _, p4 = s[UL].op.axis
     s[UL].vectorize(p4)  # vectorize memory load
-    #s[UL].unroll(wp)
-    #s[UL].unroll(hp)
+    s[UL].unroll(wp)
+    s[UL].unroll(hp)
+    s[UL].unroll(a)
     _, _, hp, wp, p4 = s[VL].op.axis
     s[VL].vectorize(p4)  # vectorize memory load
-    #s[VL].unroll(wp)
-    #s[VL].unroll(hp)
+    s[VL].unroll(wp)
+    s[VL].unroll(hp)
 
     s[M].vectorize(Mp4)  # vectorize memory load
-    #s[M].unroll(Mwp)  # vectorize memory load
-    #s[M].unroll(Mhp)  # vectorize memory load
+    s[M].unroll(Mwp)  # vectorize memory load
 #========shedule end=================================
 
 #func = tvm.build(s, [U,V,M], target=target)
@@ -323,9 +339,9 @@ def inverse_transform(out_shape, A=None, M=None, out_dtype='float32'):
         storage_attr = "image"
     else:
         storage_attr = ""
-    A = A if A is not None else te.placeholder((4, 2), name="A") 
+    A = A if A is not None else te.placeholder((4, 2), name="A")
     M = M if M is not None else te.placeholder((1, 256 // 4, 16,
-                        3 * 5, 4), name="M") 
+                        3 * 5, 4), name="M")
     N, oc_chunk, wino_all_size, NTILE, oc_bn = M.shape
     _, _, img_H, img_W, _ = out_shape
     tile_size = A.shape[1]
@@ -333,28 +349,27 @@ def inverse_transform(out_shape, A=None, M=None, out_dtype='float32'):
     wino2W = (img_W + tile_size - 1) // tile_size
     wino_size = tile_size + 2
 
-    assert wino_size * wino_size == wino_all_size
+    assert wino_size * wino_size == wino_all_size, f'{wino_size * wino_size} vs{wino_all_size}'
     assert wino2H * wino2W == NTILE
-
+    assert out_shape[1] == oc_chunk
     k1 = te.reduce_axis((0, wino_size), "r_a")
     k2 = te.reduce_axis((0, wino_size), "r_b")
 
     def _transform_inverse(n, oc, h, w, bo):
         th = h // tile_size * wino_size + k2
         tw = w // tile_size * wino_size + k1
-        oh = (th % wino_size + tw // wino_size) * \
-            wino_size + tw % wino_size
-        ow = tw // wino_size + (th // wino_size) * wino2W
+        oh = (th % wino_size)*wino_size + tw % wino_size
+        ow = (th // wino_size) * wino2W + tw // wino_size
         #AT(th % tile_size, k2) * M[ox][oy] * A(k1, tw % 2)
-        return te.sum(A[k2, th % tile_size]*M[n, oc, oh, ow, bo]*A[k1, tw % tile_size],
+        return te.sum(A[k2, h % tile_size]*M[n, oc, oh, ow, bo]*A[k1, w % tile_size],
                       axis=[k1, k2])
 
-       #int th = int(h / tile_size) * wino_size + k2;
-       #int tw = int(w / tile_size) * wino_size + k1;
-       #
-       #int ox = (th % wino_size) * wino_size + tw % wino_size;
-       #int oy = int(tw / wino_size) + int(th / wino_size) * trans_image_size_block_W;
-       #output[h][w] += AT(th % tile_size, k2) * M[ox][oy] * A(k1, tw % 2);
+    #int th = int(h / tile_size) * wino_size + k2;
+    #int tw = int(w / tile_size) * wino_size + k1;
+    #
+    #int ox = (th % wino_size) * wino_size + tw % wino_size;
+    #int oy = int(tw / wino_size) + int(th / wino_size) * trans_image_size_block_W;
+    #output[h][w] += AT(th % tile_size, k2) * M[ox][oy] * A(k1, tw % 2);
 
     output = te.compute((N, oc_chunk, img_H, img_W, oc_bn), _transform_inverse,
                         name="mali_conv2d_nchw_winograd_output",
@@ -392,15 +407,15 @@ def inverse_transform_shedule(cfg, s, op):
         n, cp, hp, wp = s[O].op.axis
     else:
         n, cp, hp, wp, Op4 = s[O].op.axis
-    
+
     cpo, cpi = cfg["inv_cp"].apply(s, O, cp)
-    wpo, wpi, Owp=cfg["inv_wp"].apply(s, O, wp)
-    hpo, hpi, Ohp=cfg["inv_hp"].apply(s, O, hp)
+    wpo, wpi, Owp = cfg["inv_wp"].apply(s, O, wp)
+    hpo, hpi, Ohp = cfg["inv_hp"].apply(s, O, hp)
 
     #cpo, cpi = s[O].split(cp, factor=4)
-    #wp, Owp = s[O].split(wp, factor=4)
+    #wp, Owp = s[O].split(wp, factor=2)
     #wpo, wpi = s[O].split(wp, factor=4)
-    #hp, Ohp = s[O].split(hp, factor=4)
+    #hp, Ohp = s[O].split(hp, factor=2)
     #hpo, hpi = s[O].split(hp, factor=4)
 
     if len_4_flag:
@@ -416,24 +431,25 @@ def inverse_transform_shedule(cfg, s, op):
 
     # Schedule BL local write
     s[OL].compute_at(s[O], n)
-    _, _, hp, wp, p4 = s[OL].op.axis
+    s[O].reorder(n,Owp, Ohp, Op4)
+    _, cp, hp, wp, p4 = s[OL].op.axis
     s[OL].reorder(hp, wp, p4)
     s[OL].vectorize(p4)
     k1, k2 = s[OL].op.reduce_axis
-    #s[OL].unroll(wp)
-    #s[OL].unroll(hp)
-    #s[OL].unroll(k1)
-    #s[OL].unroll(k2)
+    s[OL].unroll(wp)
+    s[OL].unroll(hp)
+    s[OL].unroll(k1)
+    s[OL].unroll(k2)
 
-    s[ML].compute_at(s[OL], hp)
+    s[ML].compute_at(s[OL], cp)
     _, _, hp, wp, p4 = s[ML].op.axis
     s[ML].vectorize(p4)  # vectorize memory load
-    #s[ML].unroll(wp)
-    #s[ML].unroll(hp)
+    s[ML].unroll(wp)
+    s[ML].unroll(hp)
     s[O].vectorize(Op4)  # vectorize memory load
 
-    #s[O].unroll(Owp)  # vectorize memory load
-    #s[O].unroll(Ohp)  # vectorize memory load
+    s[O].unroll(Owp)  # vectorize memory load
+    s[O].unroll(Ohp)  # vectorize memory load
 #========shedule end=================================
 
 
@@ -441,14 +457,20 @@ def _schedule_winograd_nchwc_io(cfg, s, op):
     output = op.output(0)
     A, M = s[output].op.input_tensors
     U, V = s[M].op.input_tensors
-    G, filter_n = s[U].op.input_tensors
+    #in_tunning or pass by user
+    if not autotvm.GLOBAL_SCOPE.in_tuning and isinstance(
+            s[U].op, tvm.te.tensor.ComputeOp):
+        G, filter_n = s[U].op.input_tensors
     B, DataPad = s[V].op.input_tensors
     Data, = s[DataPad].op.input_tensors
     #==============
     inverse_transform_shedule(cfg, s, op)
     U, V = s[M].op.input_tensors
     batch_gemm_shedule(cfg, s, M)
-    kernel_transform_shedule(cfg, s, U)
+    #in_tunning or pass by user
+    if not autotvm.GLOBAL_SCOPE.in_tuning and isinstance(
+            s[U].op, tvm.te.tensor.ComputeOp):
+        kernel_transform_shedule(cfg, s, U)
     data_transform_shedule(cfg, s, V)
 #========shedule end=================================
 

@@ -144,7 +144,6 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, size_t size, size_t alignm
     LOG(WARNING) << "attention:size == 0, may cause the wrong ans";
   }
   mptr = clCreateBuffer(this->context, CL_MEM_READ_WRITE, size, nullptr, &err_code);
-  LOG(WARNING) << "buffersize="<<size << " type_hint="<<type_hint << " " << mptr;
   OPENCL_CHECK_ERROR(err_code);
   return mptr;
 }
@@ -161,8 +160,16 @@ void OpenCLWorkspace::get_image_t_size(TVMContext ctx, DataShape* dsize, size_t&
             dsize->shape[5] / lans;
     height = dsize->shape[0];
   } else if (dsize->ndim == 5) {
-    width = dsize->shape[3] * dsize->shape[4] / lans;
-    height = dsize->shape[2] * dsize->shape[1] * dsize->shape[0];
+    //for nhcw4 mace  --> h==w and w!= c/4 then c/4*w*4 as width, n*c as heith
+    if ((dsize->shape[3] == dsize->shape[1] && dsize->shape[3] != dsize->shape[2])
+    || (dsize->shape[2]*dsize->shape[3] * dsize->shape[4] / lans < 12345)
+    ){
+      width = dsize->shape[2]*dsize->shape[3] * dsize->shape[4] / lans;
+      height = dsize->shape[1] * dsize->shape[0];
+    } else {
+      width = dsize->shape[3] * dsize->shape[4] / lans;
+      height = dsize->shape[2] * dsize->shape[1] * dsize->shape[0];
+    }
   } else if (dsize->ndim == 4) {
       width = dsize->shape[2] * dsize->shape[3] / lans;
       height = dsize->shape[1] * dsize->shape[0];
@@ -208,7 +215,7 @@ void* OpenCLWorkspace::AllocDataSpace(TVMContext ctx, DataShape* dsize, size_t a
   ICHECK(context != nullptr) << "No OpenCL device";
   cl_int err_code;
 #if USE_CL_RGBA
-  cl_image_format fmt = {CL_RGBA, CL_FLOAT};
+  cl_image_format fmt = {CL_RGBA, CL_HALF_FLOAT};
  #else
   cl_image_format fmt = {CL_R, CL_FLOAT};
 #endif
@@ -331,6 +338,12 @@ void OpenCLWorkspace::CopyDataFromTo(const void* from, size_t from_offset, void*
   } else {
     LOG(FATAL) << "Expect copy from/to OpenCL or between OpenCL";
   }
+}
+
+void OpenCLWorkspace::GetTc(TVMContext ctx_from, void* data_shape) {
+  ICHECK(data_shape != nullptr) << "time array is null";
+  *(double*)data_shape = tc_duration_s_;
+  tc_duration_s_=0;
 }
 
 void OpenCLWorkspace::StreamSync(TVMContext ctx, TVMStreamHandle stream) {

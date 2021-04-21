@@ -357,27 +357,31 @@ PackedFunc WrapTimeEvaluator(PackedFunc pf, TVMContext ctx, int number, int repe
     std::ostringstream os;
     // skip first time call, to activate lazy compilation components.
     pf.CallPacked(args, &temp);
-
+    
     DeviceAPI::Get(ctx)->StreamSync(ctx, nullptr);
 
     for (int i = 0; i < repeat; ++i) {
       if (f_preproc != nullptr) {
         f_preproc.CallPacked(args, &temp);
       }
+      
       std::chrono::time_point<std::chrono::high_resolution_clock, std::chrono::nanoseconds> tbegin,
           tend;
       double duration_ms = 0.0;
-
+      double cl_duration_ms = 0.0;
+      double tc_each_time = 0.0;
       do {
         if (duration_ms > 0.0) {
           number = static_cast<int>(std::max((min_repeat_ms / (duration_ms / number) + 1),
                                              number * 1.618));  // 1.618 is chosen by random
         }
-
+        
         tbegin = std::chrono::high_resolution_clock::now();
         // start timing
         for (int i = 0; i < number; ++i) {
           pf.CallPacked(args, &temp);
+          DeviceAPI::Get(ctx)->GetTc(ctx, &tc_each_time);
+          cl_duration_ms += tc_each_time;
         }
         DeviceAPI::Get(ctx)->StreamSync(ctx, nullptr);
         tend = std::chrono::high_resolution_clock::now();
@@ -388,6 +392,9 @@ PackedFunc WrapTimeEvaluator(PackedFunc pf, TVMContext ctx, int number, int repe
 
       double speed =
           std::chrono::duration_cast<std::chrono::duration<double>>(tend - tbegin).count() / number;
+      if ((ctx.device_type % kRPCSessMask) == kDLOpenCL && cl_duration_ms > 0.0) {
+        speed = cl_duration_ms / number;
+      }
       os.write(reinterpret_cast<char*>(&speed), sizeof(speed));
     }
 

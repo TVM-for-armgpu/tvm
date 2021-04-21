@@ -55,6 +55,11 @@ class RPCDeviceAPI final : public DeviceAPI {
     space->sess = std::move(sess);
     return space;
    }
+   void GetTc(TVMContext ctx, void* data_shape) final {
+     auto sess = GetSess(ctx);
+     auto remote_ctx = RemoveRPCSessionMask(ctx);
+     sess->GetDeviceAPI(remote_ctx)->GetTc(remote_ctx, data_shape);
+   }
   void* AllocDataSpace(TVMContext ctx, size_t nbytes, size_t alignment,
                        DLDataType type_hint) final {
     auto sess = GetSess(ctx);

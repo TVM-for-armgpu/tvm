@@ -87,7 +87,7 @@ import sys
 # We can also load models from MXNet, ONNX and TensorFlow.
 
 TRACKER_PORT=9090
-@autotvm.template("tutorial/conv2d_no_batching")
+@autotvm.template("conv2d_no_batching")
 def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     assert N == 1, "Only consider batch_size = 1 in this template"
 
@@ -106,10 +106,16 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
                              name='data', dtype=ddtype)
     kernel_pl = te.placeholder((CI,K_P, KH, KW, 1, PACK4),
                                name='filter', dtype=ddtype)
-    conv_pl = topi.mali.conv2d_NCHWc_io(data_pl, kernel_pl, stride, padding, 1,
-                                        'NCHWc', 'NCHWc',
-                                        ddtype.replace('r', 'w'))
-    s = topi.mali.schedule_conv2d_NCHWc_io(conv_pl)
+    if "Mali" in device_key:
+        conv_pl = topi.mali.conv2d_NCHWc_mali_io(data_pl, kernel_pl, stride, padding, 1,
+                                            'NCHWc', 'NCHWc',
+                                            ddtype.replace('r', 'w'))
+        s = topi.mali.schedule_conv2d_NCHWc_mali_io(conv_pl)
+    else:
+        conv_pl = topi.mali.conv2d_NCHWc_io(data_pl, kernel_pl, stride, padding, 1,
+                                            'NCHWc', 'NCHWc',
+                                            ddtype.replace('r', 'w'))
+        s = topi.mali.schedule_conv2d_NCHWc_io(conv_pl)
     #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True))
     #exit(0)
 
@@ -166,13 +172,17 @@ def tune_tasks(
     log_filename="tuning.log",
     use_transfer_learning=True,
 ):
-    use_transfer_learning=True
+    use_transfer_learning=False
     # create tmp log file
-    tmp_log_file = log_filename + ".tmp"
-    #if os.path.exists(tmp_log_file):
-    #    os.remove(tmp_log_file)
+    tmp_log_file = 'tmp/' + os.path.basename(log_filename) + ".tmp"
+    if os.path.exists(tmp_log_file):
+        os.remove(tmp_log_file)
 
     for i, tsk in enumerate(reversed(tasks)):
+        if in_check_point(tsk.args):
+            print(f"skip finished {i}th task",tsk.args)
+            continue
+        print(f"start tuning {i+1}th task",tsk.args)
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # create tuner
@@ -204,45 +214,24 @@ def tune_tasks(
             ],
         )
 
-    # pick best records to a cache file
-    autotvm.record.pick_best(tmp_log_file, log_filename)
-    #os.remove(tmp_log_file)
+        # pick best records to a cache file
+        autotvm.record.pick_best(tmp_log_file, log_filename)
+        #os.remove(tmp_log_file)
+        time.sleep(60*1)
 
 
 ########################################################################
 # Finally, we launch tuning jobs and evaluate the end-to-end performance.
-convshape = [
-    #resnet
-    (1, 14, 14, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    (1, 19, 19, 512, 256, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
-    (1, 19, 19, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    (1, 38, 38, 256, 128, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
-    (1, 38, 38, 256, 128, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    (1, 75, 75, 128, 64, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
-    (1, 75, 75, 64, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 75, 75, 128, 64, 3, 3, (1, 1), (1, 1, 1, 1), (1, 1)),
-    (1, 299, 299, 64, 4, 7, 7, (2, 2), (3, 3, 3, 3), (1, 1)),
-    #mobilenet
-    (1, 4, 224, 224, 4, 32, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    (1, 32, 112, 112, 32, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 64, 56, 56, 64, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 128, 56, 56, 128, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 128, 28, 28, 128, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 256, 28, 28, 256, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 256, 14, 14, 256, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 512, 14, 14, 512, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 512, 7, 7, 512, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 1024, 7, 7, 1024, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-]
-
 
 def in_check_point(shape:str) -> bool:
+    #return False
     import json
     if isinstance(shape, tuple):
         shape = list(shape)
 
     if len(shape) == 11:
         shape.pop(1)
+    #shape.pop(-1)
     for ind, sp in enumerate(shape):
         if isinstance(sp, tuple):
             shape[ind] = list(sp)
@@ -258,7 +247,7 @@ def in_check_point(shape:str) -> bool:
 
 def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
-    print("Extract tasks...")
+    print("Extract tasks...",os.getpid())
     #mod, params, input_shape, _ = get_network(network, batch_size=1)
     #tasks = autotvm.task.extract_from_program(
     #    mod["main"],
@@ -268,28 +257,39 @@ def tune_and_evaluate(tuning_opt):
     #    ops=(relay.op.get("nn.conv2d"),),
     #)
     # the last layer in resnet
-    for ith, shape in enumerate(convshape):
-        if in_check_point(shape):
-            continue
-        if len(shape) == 10:
-            N, H, W, CO, CI, KH, KW, strides, padding, dialte = shape
-        else:
-            N, _, H, W, CO, CI, KH, KW, strides, padding, dialte = shape
-        tasks = autotvm.task.create(
-            "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
-        )
+    sys.path.append('remote_tmali')
+    sys.path.append('./')
+    import conv_shape_tunning
+    tasks = []
+    for net, shapes in conv_shape_tunning.maliexp_shape.items():
+        for ith, shape in enumerate(shapes):
+            N, _, H, W, CI, CO, KH, KW, strides, padding, dialte = shape
+            if KH < -5  or KW < -5:
+                if KH < -5:
+                    H=(1+(H+padding[0]+padding[2])//strides[0])//2*2*strides[0]-padding[0]-padding[2]
+                if KW < -5:
+                    W=(1+(W+padding[1]+padding[3])//strides[1])//2*2*strides[1]-padding[1]-padding[3]
+            else:
+                H=(1+H)//2*2
+                W=(1+W)//2*2
+            task = autotvm.task.create(
+                "conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
+            )
+            tasks.append(task)
 
-        # run tuning tasks
-        print(f"Tuning...{ith}th task", shape, device_key)
-        tune_tasks([tasks], **tuning_opt)
-        time.sleep(60*5)
+            # run tuning tasks
+    print(f"Tuning...{ith}th task", shape, device_key)
+    tasks.reverse()
+    tune_tasks(tasks, **tuning_opt)
+
 
     # compile kernels with history best records
-    with autotvm.apply_history_best(log_file) as dispatch_context:
-        best_config = dispatch_context.query(tasks.target, tasks.workload)
-        print("\nBest config:")
-        print(best_config)
-        print("Compile...")
+    #with autotvm.apply_history_best(log_file) as dispatch_context:
+    #    best_config = dispatch_context.query(tasks[0].target, tasks[0].workload)
+    #    print("\nBest config:")
+    #    print(best_config)
+    #    print("Compile...")
+    if 1:
         with tvm.target.Target("opencl"):
             s, arg_bufs = conv2d_no_batching(N, H, W, CO, CI, KH, KW, strides, padding)
             lib = tvm.build(s, arg_bufs, target_host=target_host)
@@ -332,7 +332,7 @@ def tune_and_evaluate(tuning_opt):
         ao_np = np.arange(in_channel*in_size*in_size)
         a_np = ao_np
         a_np = a_np.reshape(C_P*PACK4, H_P*W_P)
-        wo_np = np.arange(in_channel*out_channel*KH*KW).reshape(out_channel,in_channel,KH,KW)
+        wo_np = np.arange(in_channel*out_channel*KH*KW).reshape(out_channel,in_channel)
         w_np = wo_np
         #==A-tvm data prepare
         a_np_tvm = a_np.T.reshape(C_P*H_P*W_P, 4)
@@ -392,17 +392,17 @@ if __name__ == '__main__':
         exit(0)
 
     device_key = sys.argv[1]
-    assert device_key in ["Adreno640", "Adreno630"]
+    assert device_key in ["MaliG72", "MaliG76", "Adreno640", "Adreno630"]
 
     #### TUNING OPTION ####
-    network = "topinhw4c1"
-    log_file = "%s.%s.log" % (device_key, network)
+    network = "topinhw3c1_packed"
+    log_file = "sp_tune_log/%s.%s.log" % (device_key, network)
     tuning_option = {
         "log_filename": log_file,
         "tuner": "xgb",
         "n_trial": 500,
         "use_transfer_learning": False,
-        "early_stopping": 350,
+        "early_stopping": 500,
         "measure_option":
         autotvm.measure_option(
             builder=autotvm.LocalBuilder(

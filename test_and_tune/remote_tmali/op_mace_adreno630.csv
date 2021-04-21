@@ -1,0 +1,233 @@
+No.,op_type,op_name,tips,filter_shape,output_shape,time_wino0,time_wino2,total_macs_wino0,total_macs_wino2,gflops_wino0,gflops_wino2, Stride ,   Pad , Dilation ,alphaNHWCK,K(Cout),C(Cin),r,s,N,H_out,W_out
+2,Conv2D,InceptionV3/InceptionV3/Conv2d_1a_3x3/Relu,stride2,"[32,3,3,3]","[1,149,149,32]",0.414,0.397,1.92E+07,1.92E+07,92.67,,"  [2,2] ", VALID ,"    [1,1] ",8.53E+06,32,3,3,3,1,149,149
+3,Conv2D,InceptionV3/InceptionV3/Conv2d_2a_3x3/Relu,wino2x2,"[32,32,3,3]","[1,147,147,32]",2.664,2.025,1.99E+08,9.82E+07,149.51,96.98,"  [1,1] ", VALID ,"    [1,1] ",8.85E+07,32,32,3,3,1,147,147
+4,Conv2D,InceptionV3/InceptionV3/Conv2d_2b_3x3/Relu,wino2x2,"[64,32,3,3]","[1,147,147,64]",5.184,3.507,3.98E+08,1.91E+08,153.66,108.84,"  [1,1] ",  SAME ,"    [1,1] ",1.77E+08,64,32,3,3,1,147,147
+6,Conv2D,InceptionV3/InceptionV3/Conv2d_3b_1x1/Relu,1x1,"[80,64,1,1]","[1,73,73,80]",0.35,0.346,2.73E+07,2.73E+07,155.91,,"  [1,1] ", VALID ,"    [1,1] ",1.09E+08,80,64,1,1,1,73,73
+7,Conv2D,InceptionV3/InceptionV3/Conv2d_4a_3x3/Relu,wino2x2,"[192,80,3,3]","[1,71,71,192]",9.317,4.592,696867840,3.19E+08,149.59,138.83,"  [1,1] ", VALID ,"    [1,1] ",3.10E+08,192,80,3,3,1,71,71
+9,Conv2D,InceptionV3/InceptionV3/Mixed_5b/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[64,192,1,1]","[1,35,35,64]",0.189,0.184,1.51E+07,1.51E+07,159.29,,"  [1,1] ",  SAME ,"    [1,1] ",6.02E+07,64,192,1,1,1,35,35
+10,Conv2D,InceptionV3/InceptionV3/Mixed_5b/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[48,192,1,1]","[1,35,35,48]",0.15,0.135,1.13E+07,1.13E+07,150.53,,"  [1,1] ",  SAME ,"    [1,1] ",4.52E+07,48,192,1,1,1,35,35
+11,Conv2D,InceptionV3/InceptionV3/Mixed_5b/Branch_1/Conv2d_0b_5x5/Relu,otherS1,"[64,48,5,5]","[1,35,35,64]",1.309,1.204,9.41E+07,9.41E+07,143.74,,"  [1,1] ",  SAME ,"    [1,1] ",1.51E+07,64,48,5,5,1,35,35
+12,Conv2D,InceptionV3/InceptionV3/Mixed_5b/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[64,192,1,1]","[1,35,35,64]",0.176,0.179,1.51E+07,1.51E+07,171.05,,"  [1,1] ",  SAME ,"    [1,1] ",6.02E+07,64,192,1,1,1,35,35
+13,Conv2D,InceptionV3/InceptionV3/Mixed_5b/Branch_2/Conv2d_0b_3x3/Relu,wino2x2,"[96,64,3,3]","[1,35,35,96]",0.895,0.56,6.77E+07,3.14E+07,151.37,112.28,"  [1,1] ",  SAME ,"    [1,1] ",3.01E+07,96,64,3,3,1,35,35
+14,Conv2D,InceptionV3/InceptionV3/Mixed_5b/Branch_2/Conv2d_0c_3x3/Relu,wino2x2,"[96,96,3,3]","[1,35,35,96]",1.345,0.752,1.02E+08,4.68E+07,151.09,124.48,"  [1,1] ",  SAME ,"    [1,1] ",4.52E+07,96,96,3,3,1,35,35
+16,Conv2D,InceptionV3/InceptionV3/Mixed_5b/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[32,192,1,1]","[1,35,35,32]",0.131,0.108,7.53E+06,7.53E+06,114.91,,"  [1,1] ",  SAME ,"    [1,1] ",3.01E+07,32,192,1,1,1,35,35
+18,Conv2D,InceptionV3/InceptionV3/Mixed_5c/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[64,256,1,1]","[1,35,35,64]",0.241,0.246,2.01E+07,2.01E+07,166.56,,"  [1,1] ",  SAME ,"    [1,1] ",8.03E+07,64,256,1,1,1,35,35
+19,Conv2D,InceptionV3/InceptionV3/Mixed_5c/Branch_1/Conv2d_0b_1x1/Relu,1x1,"[48,256,1,1]","[1,35,35,48]",0.201,0.18,1.51E+07,1.51E+07,149.78,,"  [1,1] ",  SAME ,"    [1,1] ",6.02E+07,48,256,1,1,1,35,35
+20,Conv2D,InceptionV3/InceptionV3/Mixed_5c/Branch_1/Conv_1_0c_5x5/Relu,otherS1,"[64,48,5,5]","[1,35,35,64]",1.31,1.207,9.41E+07,9.41E+07,143.63,,"  [1,1] ",  SAME ,"    [1,1] ",1.51E+07,64,48,5,5,1,35,35
+21,Conv2D,InceptionV3/InceptionV3/Mixed_5c/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[64,256,1,1]","[1,35,35,64]",0.232,0.239,2.01E+07,2.01E+07,173.02,,"  [1,1] ",  SAME ,"    [1,1] ",8.03E+07,64,256,1,1,1,35,35
+22,Conv2D,InceptionV3/InceptionV3/Mixed_5c/Branch_2/Conv2d_0b_3x3/Relu,wino2x2,"[96,64,3,3]","[1,35,35,96]",0.891,0.564,6.77E+07,3.14E+07,152.05,111.48,"  [1,1] ",  SAME ,"    [1,1] ",3.01E+07,96,64,3,3,1,35,35
+23,Conv2D,InceptionV3/InceptionV3/Mixed_5c/Branch_2/Conv2d_0c_3x3/Relu,wino2x2,"[96,96,3,3]","[1,35,35,96]",1.351,0.752,1.02E+08,4.68E+07,150.42,124.48,"  [1,1] ",  SAME ,"    [1,1] ",4.52E+07,96,96,3,3,1,35,35
+25,Conv2D,InceptionV3/InceptionV3/Mixed_5c/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[64,256,1,1]","[1,35,35,64]",0.246,0.245,2.01E+07,2.01E+07,163.17,,"  [1,1] ",  SAME ,"    [1,1] ",8.03E+07,64,256,1,1,1,35,35
+27,Conv2D,InceptionV3/InceptionV3/Mixed_5d/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[64,288,1,1]","[1,35,35,64]",0.27,0.269,2.26E+07,2.26E+07,167.25,,"  [1,1] ",  SAME ,"    [1,1] ",9.03E+07,64,288,1,1,1,35,35
+28,Conv2D,InceptionV3/InceptionV3/Mixed_5d/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[48,288,1,1]","[1,35,35,48]",0.222,0.2,1.69E+07,1.69E+07,152.56,,"  [1,1] ",  SAME ,"    [1,1] ",6.77E+07,48,288,1,1,1,35,35
+29,Conv2D,InceptionV3/InceptionV3/Mixed_5d/Branch_1/Conv2d_0b_5x5/Relu,otherS1,"[64,48,5,5]","[1,35,35,64]",1.297,1.205,9.41E+07,9.41E+07,145.07,,"  [1,1] ",  SAME ,"    [1,1] ",1.51E+07,64,48,5,5,1,35,35
+30,Conv2D,InceptionV3/InceptionV3/Mixed_5d/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[64,288,1,1]","[1,35,35,64]",0.256,0.268,2.26E+07,2.26E+07,176.4,,"  [1,1] ",  SAME ,"    [1,1] ",9.03E+07,64,288,1,1,1,35,35
+31,Conv2D,InceptionV3/InceptionV3/Mixed_5d/Branch_2/Conv2d_0b_3x3/Relu,wino2x2,"[96,64,3,3]","[1,35,35,96]",0.895,0.564,6.77E+07,3.14E+07,151.37,111.48,"  [1,1] ",  SAME ,"    [1,1] ",3.01E+07,96,64,3,3,1,35,35
+32,Conv2D,InceptionV3/InceptionV3/Mixed_5d/Branch_2/Conv2d_0c_3x3/Relu,wino2x2,"[96,96,3,3]","[1,35,35,96]",1.348,0.761,1.02E+08,4.68E+07,150.75,123.01,"  [1,1] ",  SAME ,"    [1,1] ",4.52E+07,96,96,3,3,1,35,35
+34,Conv2D,InceptionV3/InceptionV3/Mixed_5d/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[64,288,1,1]","[1,35,35,64]",0.28,0.274,2.26E+07,2.26E+07,161.28,,"  [1,1] ",  SAME ,"    [1,1] ",9.03E+07,64,288,1,1,1,35,35
+36,Conv2D,InceptionV3/InceptionV3/Mixed_6a/Branch_0/Conv2d_1a_1x1/Relu,stride2,"[384,288,3,3]","[1,17,17,384]",5.057,4.56,2.88E+08,2.88E+08,113.76,,"  [2,2] ", VALID ,"    [1,1] ",1.28E+08,384,288,3,3,1,17,17
+37,Conv2D,InceptionV3/InceptionV3/Mixed_6a/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[64,288,1,1]","[1,35,35,64]",0.257,0.266,2.26E+07,2.26E+07,175.71,,"  [1,1] ",  SAME ,"    [1,1] ",9.03E+07,64,288,1,1,1,35,35
+38,Conv2D,InceptionV3/InceptionV3/Mixed_6a/Branch_1/Conv2d_0b_3x3/Relu,wino2x2,"[96,64,3,3]","[1,35,35,96]",0.899,0.563,6.77E+07,3.14E+07,150.7,111.68,"  [1,1] ",  SAME ,"    [1,1] ",3.01E+07,96,64,3,3,1,35,35
+39,Conv2D,InceptionV3/InceptionV3/Mixed_6a/Branch_1/Conv2d_1a_1x1/Relu,stride2,"[96,96,3,3]","[1,17,17,96]",0.465,0.427,2.40E+07,2.40E+07,103.1,,"  [2,2] ", VALID ,"    [1,1] ",1.07E+07,96,96,3,3,1,17,17
+42,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.593,0.599,4.26E+07,4.26E+07,143.73,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+43,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[128,768,1,1]","[1,17,17,128]",0.445,0.448,2.84E+07,2.84E+07,127.68,,"  [1,1] ",  SAME ,"    [1,1] ",1.14E+08,128,768,1,1,1,17,17
+44,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_1/Conv2d_0b_1x7/Relu,otherS1,"[128,128,1,7]","[1,17,17,128]",0.591,0.608,3.31E+07,3.31E+07,112.17,,"  [1,1] ",  SAME ,"    [1,1] ",1.89E+07,128,128,1,7,1,17,17
+45,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_1/Conv2d_0c_7x1/Relu,otherS1,"[192,128,7,1]","[1,17,17,192]",0.81,0.806,4.97E+07,4.97E+07,122.76,,"  [1,1] ",  SAME ,"    [1,1] ",2.84E+07,192,128,7,1,1,17,17
+46,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[128,768,1,1]","[1,17,17,128]",0.448,0.445,2.84E+07,2.84E+07,126.83,,"  [1,1] ",  SAME ,"    [1,1] ",1.14E+08,128,768,1,1,1,17,17
+47,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_2/Conv2d_0b_7x1/Relu,otherS1,"[128,128,7,1]","[1,17,17,128]",0.543,0.523,3.31E+07,3.31E+07,122.08,,"  [1,1] ",  SAME ,"    [1,1] ",1.89E+07,128,128,7,1,1,17,17
+48,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_2/Conv2d_0c_1x7/Relu,otherS1,"[128,128,1,7]","[1,17,17,128]",0.613,0.6,3.31E+07,3.31E+07,108.14,,"  [1,1] ",  SAME ,"    [1,1] ",1.89E+07,128,128,1,7,1,17,17
+49,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_2/Conv2d_0d_7x1/Relu,otherS1,"[128,128,7,1]","[1,17,17,128]",0.548,0.521,3.31E+07,3.31E+07,120.97,,"  [1,1] ",  SAME ,"    [1,1] ",1.89E+07,128,128,7,1,1,17,17
+50,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_2/Conv2d_0e_1x7/Relu,otherS1,"[192,128,1,7]","[1,17,17,192]",0.825,0.816,4.97E+07,4.97E+07,120.53,,"  [1,1] ",  SAME ,"    [1,1] ",2.84E+07,192,128,1,7,1,17,17
+52,Conv2D,InceptionV3/InceptionV3/Mixed_6b/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.598,0.6,4.26E+07,4.26E+07,142.52,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+54,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.6,0.598,4.26E+07,4.26E+07,142.05,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+55,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[160,768,1,1]","[1,17,17,160]",0.478,0.487,3.55E+07,3.55E+07,148.59,,"  [1,1] ",  SAME ,"    [1,1] ",1.42E+08,160,768,1,1,1,17,17
+56,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_1/Conv2d_0b_1x7/Relu,otherS1,"[160,160,1,7]","[1,17,17,160]",0.857,0.851,5.18E+07,5.18E+07,120.86,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,1,7,1,17,17
+57,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_1/Conv2d_0c_7x1/Relu,otherS1,"[192,160,7,1]","[1,17,17,192]",0.999,1.004,6.21E+07,6.21E+07,124.42,,"  [1,1] ",  SAME ,"    [1,1] ",3.55E+07,192,160,7,1,1,17,17
+58,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[160,768,1,1]","[1,17,17,160]",0.483,0.482,3.55E+07,3.55E+07,147.05,,"  [1,1] ",  SAME ,"    [1,1] ",1.42E+08,160,768,1,1,1,17,17
+59,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_2/Conv2d_0b_7x1/Relu,otherS1,"[160,160,7,1]","[1,17,17,160]",0.805,0.805,5.18E+07,5.18E+07,128.67,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,7,1,1,17,17
+60,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_2/Conv2d_0c_1x7/Relu,otherS1,"[160,160,1,7]","[1,17,17,160]",0.849,0.845,5.18E+07,5.18E+07,122,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,1,7,1,17,17
+61,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_2/Conv2d_0d_7x1/Relu,otherS1,"[160,160,7,1]","[1,17,17,160]",0.811,0.814,5.18E+07,5.18E+07,127.72,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,7,1,1,17,17
+62,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_2/Conv2d_0e_1x7/Relu,otherS1,"[192,160,1,7]","[1,17,17,192]",1.016,1.007,6.21E+07,6.21E+07,122.34,,"  [1,1] ",  SAME ,"    [1,1] ",3.55E+07,192,160,1,7,1,17,17
+64,Conv2D,InceptionV3/InceptionV3/Mixed_6c/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.599,0.599,4.26E+07,4.26E+07,142.29,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+66,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.602,0.598,4.26E+07,4.26E+07,141.58,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+67,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[160,768,1,1]","[1,17,17,160]",0.479,0.487,3.55E+07,3.55E+07,148.28,,"  [1,1] ",  SAME ,"    [1,1] ",1.42E+08,160,768,1,1,1,17,17
+68,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_1/Conv2d_0b_1x7/Relu,otherS1,"[160,160,1,7]","[1,17,17,160]",0.845,0.846,5.18E+07,5.18E+07,122.58,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,1,7,1,17,17
+69,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_1/Conv2d_0c_7x1/Relu,otherS1,"[192,160,7,1]","[1,17,17,192]",1.004,1.002,6.21E+07,6.21E+07,123.8,,"  [1,1] ",  SAME ,"    [1,1] ",3.55E+07,192,160,7,1,1,17,17
+70,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[160,768,1,1]","[1,17,17,160]",0.488,0.482,3.55E+07,3.55E+07,145.54,,"  [1,1] ",  SAME ,"    [1,1] ",1.42E+08,160,768,1,1,1,17,17
+71,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_2/Conv2d_0b_7x1/Relu,otherS1,"[160,160,7,1]","[1,17,17,160]",0.807,0.797,5.18E+07,5.18E+07,128.35,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,7,1,1,17,17
+72,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_2/Conv2d_0c_1x7/Relu,otherS1,"[160,160,1,7]","[1,17,17,160]",0.843,0.844,5.18E+07,5.18E+07,122.87,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,1,7,1,17,17
+73,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_2/Conv2d_0d_7x1/Relu,otherS1,"[160,160,7,1]","[1,17,17,160]",0.806,0.801,5.18E+07,5.18E+07,128.51,,"  [1,1] ",  SAME ,"    [1,1] ",2.96E+07,160,160,7,1,1,17,17
+74,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_2/Conv2d_0e_1x7/Relu,otherS1,"[192,160,1,7]","[1,17,17,192]",1.021,0.999,6.21E+07,6.21E+07,121.74,,"  [1,1] ",  SAME ,"    [1,1] ",3.55E+07,192,160,1,7,1,17,17
+76,Conv2D,InceptionV3/InceptionV3/Mixed_6d/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.61,0.605,4.26E+07,4.26E+07,139.72,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+78,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.601,0.594,4.26E+07,4.26E+07,141.81,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+79,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.597,0.59,4.26E+07,4.26E+07,142.76,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+80,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_1/Conv2d_0b_1x7/Relu,otherS1,"[192,192,1,7]","[1,17,17,192]",1.208,1.201,7.46E+07,7.46E+07,123.47,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,1,7,1,17,17
+81,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_1/Conv2d_0c_7x1/Relu,otherS1,"[192,192,7,1]","[1,17,17,192]",1.208,1.199,7.46E+07,7.46E+07,123.47,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,7,1,1,17,17
+82,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.596,0.603,4.26E+07,4.26E+07,143,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+83,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_2/Conv2d_0b_7x1/Relu,otherS1,"[192,192,7,1]","[1,17,17,192]",1.198,1.19,7.46E+07,7.46E+07,124.5,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,7,1,1,17,17
+84,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_2/Conv2d_0c_1x7/Relu,otherS1,"[192,192,1,7]","[1,17,17,192]",1.207,1.207,7.46E+07,7.46E+07,123.57,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,1,7,1,17,17
+85,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_2/Conv2d_0d_7x1/Relu,otherS1,"[192,192,7,1]","[1,17,17,192]",1.197,1.194,7.46E+07,7.46E+07,124.6,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,7,1,1,17,17
+86,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_2/Conv2d_0e_1x7/Relu,otherS1,"[192,192,1,7]","[1,17,17,192]",1.224,1.201,7.46E+07,7.46E+07,121.86,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,1,7,1,17,17
+88,Conv2D,InceptionV3/InceptionV3/Mixed_6e/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.601,0.601,4.26E+07,4.26E+07,141.81,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+90,Conv2D,InceptionV3/InceptionV3/Mixed_7a/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.606,0.604,4.26E+07,4.26E+07,140.64,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+91,Conv2D,InceptionV3/InceptionV3/Mixed_7a/Branch_0/Conv2d_1a_3x3/Relu,stride2,"[320,192,3,3]","[1,8,8,320]",0.859,0.83,3.54E+07,3.54E+07,82.4,,"  [2,2] ", VALID ,"    [1,1] ",1.57E+07,320,192,3,3,1,8,8
+92,Conv2D,InceptionV3/InceptionV3/Mixed_7a/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[192,768,1,1]","[1,17,17,192]",0.597,0.59,4.26E+07,4.26E+07,142.76,,"  [1,1] ",  SAME ,"    [1,1] ",1.70E+08,192,768,1,1,1,17,17
+93,Conv2D,InceptionV3/InceptionV3/Mixed_7a/Branch_1/Conv2d_0b_1x7/Relu,otherS1,"[192,192,1,7]","[1,17,17,192]",1.21,1.197,7.46E+07,7.46E+07,123.27,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,1,7,1,17,17
+94,Conv2D,InceptionV3/InceptionV3/Mixed_7a/Branch_1/Conv2d_0c_7x1/Relu,otherS1,"[192,192,7,1]","[1,17,17,192]",1.199,1.197,7.46E+07,7.46E+07,124.4,,"  [1,1] ",  SAME ,"    [1,1] ",4.26E+07,192,192,7,1,1,17,17
+95,Conv2D,InceptionV3/InceptionV3/Mixed_7a/Branch_1/Conv2d_1a_3x3/Relu,stride2,"[192,192,3,3]","[1,8,8,192]",0.474,0.462,2.12E+07,2.12E+07,89.59,,"  [2,2] ", VALID ,"    [1,1] ",9.44E+06,192,192,3,3,1,8,8
+98,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[320,1280,1,1]","[1,8,8,320]",0.494,0.313,2.62E+07,2.62E+07,106.13,,"  [1,1] ",  SAME ,"    [1,1] ",1.05E+08,320,1280,1,1,1,8,8
+99,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[384,1280,1,1]","[1,8,8,384]",0.497,0.505,3.15E+07,3.15E+07,126.59,,"  [1,1] ",  SAME ,"    [1,1] ",1.26E+08,384,1280,1,1,1,8,8
+100,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_1/Conv2d_0b_1x3/Relu,otherS1,"[384,384,1,3]","[1,8,8,384]",0.565,0.532,2.83E+07,2.83E+07,100.22,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,1,3,1,8,8
+101,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_1/Conv2d_0b_3x1/Relu,otherS1,"[384,384,3,1]","[1,8,8,384]",0.563,0.555,2.83E+07,2.83E+07,100.57,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,3,1,1,8,8
+103,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[448,1280,1,1]","[1,8,8,448]",0.557,0.53,3.67E+07,3.67E+07,131.78,,"  [1,1] ",  SAME ,"    [1,1] ",1.47E+08,448,1280,1,1,1,8,8
+104,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_2/Conv2d_0b_3x3/Relu,wino2x2,"[384,448,3,3]","[1,8,8,384]",1.936,0.708,9.91E+07,4.44E+07,102.37,125.47,"  [1,1] ",  SAME ,"    [1,1] ",4.40E+07,384,448,3,3,1,8,8
+105,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_2/Conv2d_0c_1x3/Relu,otherS1,"[384,384,1,3]","[1,8,8,384]",0.564,0.538,2.83E+07,2.83E+07,100.4,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,1,3,1,8,8
+106,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_2/Conv2d_0d_3x1/Relu,otherS1,"[384,384,3,1]","[1,8,8,384]",0.565,0.559,2.83E+07,2.83E+07,100.22,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,3,1,1,8,8
+109,Conv2D,InceptionV3/InceptionV3/Mixed_7b/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[192,1280,1,1]","[1,8,8,192]",0.296,0.297,1.57E+07,1.57E+07,106.27,,"  [1,1] ",  SAME ,"    [1,1] ",6.29E+07,192,1280,1,1,1,8,8
+111,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_0/Conv2d_0a_1x1/Relu,1x1,"[320,2048,1,1]","[1,8,8,320]",0.799,0.495,4.19E+07,4.19E+07,104.99,,"  [1,1] ",  SAME ,"    [1,1] ",1.68E+08,320,2048,1,1,1,8,8
+112,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_1/Conv2d_0a_1x1/Relu,1x1,"[384,2048,1,1]","[1,8,8,384]",0.816,0.806,5.03E+07,5.03E+07,123.36,,"  [1,1] ",  SAME ,"    [1,1] ",2.01E+08,384,2048,1,1,1,8,8
+113,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_1/Conv2d_0b_1x3/Relu,otherS1,"[384,384,1,3]","[1,8,8,384]",0.569,0.535,2.83E+07,2.83E+07,99.51,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,1,3,1,8,8
+114,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_1/Conv2d_0c_3x1/Relu,otherS1,"[384,384,3,1]","[1,8,8,384]",0.565,0.579,2.83E+07,2.83E+07,100.22,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,3,1,1,8,8
+116,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_2/Conv2d_0a_1x1/Relu,1x1,"[448,2048,1,1]","[1,8,8,448]",0.872,0.85,5.87E+07,5.87E+07,134.68,,"  [1,1] ",  SAME ,"    [1,1] ",2.35E+08,448,2048,1,1,1,8,8
+117,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_2/Conv2d_0b_3x3/Relu,wino2x2,"[384,448,3,3]","[1,8,8,384]",1.943,0.701,9.91E+07,4.44E+07,102,126.72,"  [1,1] ",  SAME ,"    [1,1] ",4.40E+07,384,448,3,3,1,8,8
+118,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_2/Conv2d_0c_1x3/Relu,otherS1,"[384,384,1,3]","[1,8,8,384]",0.564,0.53,2.83E+07,2.83E+07,100.4,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,1,3,1,8,8
+119,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_2/Conv2d_0d_3x1/Relu,otherS1,"[384,384,3,1]","[1,8,8,384]",0.563,0.559,2.83E+07,2.83E+07,100.57,,"  [1,1] ",  SAME ,"    [1,1] ",3.77E+07,384,384,3,1,1,8,8
+122,Conv2D,InceptionV3/InceptionV3/Mixed_7c/Branch_3/Conv2d_0b_1x1/Relu,1x1,"[192,2048,1,1]","[1,8,8,192]",0.468,0.471,2.52E+07,2.52E+07,107.55,,"  [1,1] ",  SAME ,"    [1,1] ",1.01E+08,192,2048,1,1,1,8,8
+125,Conv2D,InceptionV3/Logits/Conv2d_1c_1x1/BiasAdd,1x1,"[1001,2048,1,1]","[1,1,1,1001]",0.442,0.465,2.05E+06,2.05E+06,9.28,,"  [1,1] ",  SAME ,"    [1,1] ",8.20E+06,1001,2048,1,1,1,1,1
+250,Conv2D,relu_conv1,stride2_7x7,"[96,3,7,7]","[1,111,111,96]",2.784,2.726,1.74E+08,1.74E+08,124.91,,"  [2,2] "," [0,0] ",          ,1.42E+07,96,3,7,7,1,111,111
+252,Conv2D,fire2/relu_squeeze1x1,1x1,"[16,96,1,1]","[1,55,55,16]",0.095,0.081,4.65E+06,4.65E+06,97.82,,"  [1,1] "," [0,0] ",          ,1.86E+07,16,96,1,1,1,55,55
+253,Conv2D,fire2/relu_expand1x1,1x1,"[64,16,1,1]","[1,55,55,64]",0.058,0.059,3.10E+06,3.10E+06,106.81,,"  [1,1] "," [0,0] ",          ,1.24E+07,64,16,1,1,1,55,55
+254,Conv2D,fire2/relu_expand3x3,wino2x2,"[64,16,3,3]","[1,55,55,64]",0.353,0.364,2.79E+07,1.39E+07,157.95,76.59,"  [1,1] "," [2,2] ",          ,1.24E+07,64,16,3,3,1,55,55
+256,Conv2D,fire3/relu_squeeze1x1,1x1,"[16,128,1,1]","[1,55,55,16]",0.118,0.096,6.20E+06,6.20E+06,105,,"  [1,1] "," [0,0] ",          ,2.48E+07,16,128,1,1,1,55,55
+257,Conv2D,fire3/relu_expand1x1,1x1,"[64,16,1,1]","[1,55,55,64]",0.056,0.06,3.10E+06,3.10E+06,110.63,,"  [1,1] "," [0,0] ",          ,1.24E+07,64,16,1,1,1,55,55
+258,Conv2D,fire3/relu_expand3x3,wino2x2,"[64,16,3,3]","[1,55,55,64]",0.35,0.356,2.79E+07,1.39E+07,159.31,78.31,"  [1,1] "," [2,2] ",          ,1.24E+07,64,16,3,3,1,55,55
+260,Conv2D,fire4/relu_squeeze1x1,1x1,"[32,128,1,1]","[1,55,55,32]",0.158,0.16,1.24E+07,1.24E+07,156.84,,"  [1,1] "," [0,0] ",          ,4.96E+07,32,128,1,1,1,55,55
+261,Conv2D,fire4/relu_expand1x1,1x1,"[128,32,1,1]","[1,55,55,128]",0.155,0.16,1.24E+07,1.24E+07,159.88,,"  [1,1] "," [0,0] ",          ,4.96E+07,128,32,1,1,1,55,55
+262,Conv2D,fire4/relu_expand3x3,wino2x2,"[128,32,3,3]","[1,55,55,128]",1.349,0.977,1.12E+08,5.27E+07,165.33,107.8,"  [1,1] "," [2,2] ",          ,4.96E+07,128,32,3,3,1,55,55
+265,Conv2D,fire5/relu_squeeze1x1,1x1,"[32,256,1,1]","[1,27,27,32]",0.116,0.116,5.97E+06,5.97E+06,102.96,,"  [1,1] "," [0,0] ",          ,2.39E+07,32,256,1,1,1,27,27
+266,Conv2D,fire5/relu_expand1x1,1x1,"[128,32,1,1]","[1,27,27,128]",0.047,0.052,2.99E+06,2.99E+06,127.06,,"  [1,1] "," [0,0] ",          ,1.19E+07,128,32,1,1,1,27,27
+267,Conv2D,fire5/relu_expand3x3,wino2x2,"[128,32,3,3]","[1,27,27,128]",0.41,0.274,2.69E+07,1.27E+07,131.09,92.63,"  [1,1] "," [2,2] ",          ,1.19E+07,128,32,3,3,1,27,27
+269,Conv2D,fire6/relu_squeeze1x1,1x1,"[48,256,1,1]","[1,27,27,48]",0.118,0.117,8.96E+06,8.96E+06,151.83,,"  [1,1] "," [0,0] ",          ,3.58E+07,48,256,1,1,1,27,27
+270,Conv2D,fire6/relu_expand1x1,1x1,"[192,48,1,1]","[1,27,27,192]",0.087,0.091,6.72E+06,6.72E+06,154.45,,"  [1,1] "," [0,0] ",          ,2.69E+07,192,48,1,1,1,27,27
+271,Conv2D,fire6/relu_expand3x3,wino2x2,"[192,48,3,3]","[1,27,27,192]",0.905,0.497,6.05E+07,2.80E+07,133.63,112.65,"  [1,1] "," [2,2] ",          ,2.69E+07,192,48,3,3,1,27,27
+273,Conv2D,fire7/relu_squeeze1x1,1x1,"[48,384,1,1]","[1,27,27,48]",0.172,0.168,1.34E+07,1.34E+07,156.24,,"  [1,1] "," [0,0] ",          ,5.37E+07,48,384,1,1,1,27,27
+274,Conv2D,fire7/relu_expand1x1,1x1,"[192,48,1,1]","[1,27,27,192]",0.095,0.091,6.72E+06,6.72E+06,141.44,,"  [1,1] "," [0,0] ",          ,2.69E+07,192,48,1,1,1,27,27
+275,Conv2D,fire7/relu_expand3x3,wino2x2,"[192,48,3,3]","[1,27,27,192]",0.905,0.504,6.05E+07,2.80E+07,133.63,111.09,"  [1,1] "," [2,2] ",          ,2.69E+07,192,48,3,3,1,27,27
+277,Conv2D,fire8/relu_squeeze1x1,1x1,"[64,384,1,1]","[1,27,27,64]",0.245,0.238,1.79E+07,1.79E+07,146.25,,"  [1,1] "," [0,0] ",          ,7.17E+07,64,384,1,1,1,27,27
+278,Conv2D,fire8/relu_expand1x1,1x1,"[256,64,1,1]","[1,27,27,256]",0.149,0.149,1.19E+07,1.19E+07,160.32,,"  [1,1] "," [0,0] ",          ,4.78E+07,256,64,1,1,1,27,27
+279,Conv2D,fire8/relu_expand3x3,wino2x2,"[256,64,3,3]","[1,27,27,256]",1.588,0.814,1.07E+08,4.93E+07,135.38,121.05,"  [1,1] "," [2,2] ",          ,4.78E+07,256,64,3,3,1,27,27
+282,Conv2D,fire9/relu_squeeze1x1,1x1,"[64,512,1,1]","[1,13,13,64]",0.114,0.112,5.54E+06,5.54E+06,97.15,,"  [1,1] "," [0,0] ",          ,2.22E+07,64,512,1,1,1,13,13
+283,Conv2D,fire9/relu_expand1x1,1x1,"[256,64,1,1]","[1,13,13,256]",0.052,0.051,2.77E+06,2.77E+06,106.5,,"  [1,1] "," [0,0] ",          ,1.11E+07,256,64,1,1,1,13,13
+284,Conv2D,fire9/relu_expand3x3,wino2x2,"[256,64,3,3]","[1,13,13,256]",0.469,0.239,2.49E+07,1.14E+07,106.27,95.58,"  [1,1] "," [2,2] ",          ,1.11E+07,256,64,3,3,1,13,13
+286,Conv2D,relu_conv10,1x1,"[1000,512,1,1]","[1,15,15,1000]",1.395,1.392,1.15E+08,1.15E+08,165.16,,"  [1,1] "," [2,2] ",          ,4.61E+08,1000,512,1,1,1,15,15
+291,Conv2D,            MobilenetV1/MobilenetV1/Conv2d_0/Relu6 ,stride2,"      [32,3,3,3] "," [1,112,112,32] ",0.242,,1.08E+07,,89.57,,"  [2,2] ",  SAME ,"    [1,1] ",,32,3,3,3,1,112,112
+292,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_1_depthwise/Relu6 ,dw,"      [1,32,3,3] "," [1,112,112,32] ",0.243,,3.61E+06,,29.73,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+293,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_1_pointwise/Relu6 ,1x1,"     [64,32,1,1] "," [1,112,112,64] ",0.358,,2.57E+07,,143.52,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+294,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_2_depthwise/Relu6 ,dw,"      [1,64,3,3] ","   [1,56,56,64] ",0.17,,1.81E+06,,21.25,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+295,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_2_pointwise/Relu6 ,1x1,"    [128,64,1,1] ","  [1,56,56,128] ",0.308,,2.57E+07,,166.82,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+296,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_3_depthwise/Relu6 ,dw,"     [1,128,3,3] ","  [1,56,56,128] ",0.236,,3.61E+06,,30.62,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+297,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_3_pointwise/Relu6 ,1x1,"   [128,128,1,1] ","  [1,56,56,128] ",0.583,,5.14E+07,,176.26,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+298,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_4_depthwise/Relu6 ,dw,"     [1,128,3,3] ","  [1,28,28,128] ",0.084,,9.03E+05,,21.5,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+299,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_4_pointwise/Relu6 ,1x1,"   [256,128,1,1] ","  [1,28,28,256] ",0.285,,2.57E+07,,180.28,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+300,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_5_depthwise/Relu6 ,dw,"     [1,256,3,3] ","  [1,28,28,256] ",0.113,,1.81E+06,,31.97,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+301,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_5_pointwise/Relu6 ,1x1,"   [256,256,1,1] ","  [1,28,28,256] ",0.56,,5.14E+07,,183.5,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+302,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_6_depthwise/Relu6 ,dw,"     [1,256,3,3] ","  [1,14,14,256] ",0.042,,4.52E+05,,21.5,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+303,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_6_pointwise/Relu6 ,1x1,"   [512,256,1,1] ","  [1,14,14,512] ",0.325,,2.57E+07,,158.09,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+304,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_7_depthwise/Relu6 ,dw,"     [1,512,3,3] ","  [1,14,14,512] ",0.065,,9.03E+05,,27.79,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+305,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_7_pointwise/Relu6 ,1x1,"   [512,512,1,1] ","  [1,14,14,512] ",0.639,,5.14E+07,,160.81,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+306,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_8_depthwise/Relu6 ,dw,"     [1,512,3,3] ","  [1,14,14,512] ",0.066,,9.03E+05,,27.37,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+307,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_8_pointwise/Relu6 ,1x1,"   [512,512,1,1] ","  [1,14,14,512] ",0.643,,5.14E+07,,159.81,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+308,DepthwiseConv2d,  MobilenetV1/MobilenetV1/Conv2d_9_depthwise/Relu6 ,dw,"     [1,512,3,3] ","  [1,14,14,512] ",0.065,,9.03E+05,,27.79,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+309,Conv2D,  MobilenetV1/MobilenetV1/Conv2d_9_pointwise/Relu6 ,1x1,"   [512,512,1,1] ","  [1,14,14,512] ",0.646,,5.14E+07,,159.07,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+310,DepthwiseConv2d, MobilenetV1/MobilenetV1/Conv2d_10_depthwise/Relu6 ,dw,"     [1,512,3,3] ","  [1,14,14,512] ",0.065,,9.03E+05,,27.79,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+311,Conv2D, MobilenetV1/MobilenetV1/Conv2d_10_pointwise/Relu6 ,1x1,"   [512,512,1,1] ","  [1,14,14,512] ",0.638,,5.14E+07,,161.07,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+312,DepthwiseConv2d, MobilenetV1/MobilenetV1/Conv2d_11_depthwise/Relu6 ,dw,"     [1,512,3,3] ","  [1,14,14,512] ",0.064,,9.03E+05,,28.22,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+313,Conv2D, MobilenetV1/MobilenetV1/Conv2d_11_pointwise/Relu6 ,1x1,"   [512,512,1,1] ","  [1,14,14,512] ",0.636,,5.14E+07,,161.57,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+314,DepthwiseConv2d, MobilenetV1/MobilenetV1/Conv2d_12_depthwise/Relu6 ,dw,"     [1,512,3,3] ","    [1,7,7,512] ",0.03,,2.26E+05,,15.05,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+315,Conv2D, MobilenetV1/MobilenetV1/Conv2d_12_pointwise/Relu6 ,1x1,"  [1024,512,1,1] ","   [1,7,7,1024] ",0.416,,2.57E+07,,123.51,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+316,DepthwiseConv2d, MobilenetV1/MobilenetV1/Conv2d_13_depthwise/Relu6 ,dw,"    [1,1024,3,3] ","   [1,7,7,1024] ",0.034,,4.52E+05,,26.56,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+317,Conv2D, MobilenetV1/MobilenetV1/Conv2d_13_pointwise/Relu6 ,1x1," [1024,1024,1,1] ","   [1,7,7,1024] ",0.852,,5.14E+07,,120.61,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+319,Conv2D,          MobilenetV1/Logits/Conv2d_1c_1x1/BiasAdd ,1x1," [1001,1024,1,1] ","   [1,1,1,1001] ",0.226,,1.03E+06,,9.07,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+324,Conv2D,                                        MobilenetV2/Conv/Relu6 ,stride2,"      [32,3,3,3] "," [1,112,112,32] ",0.24,,10837920,,90.32,,"  [2,2] ",  SAME ,"    [1,1] ",,32,3,3,3,1,112,112
+325,DepthwiseConv2d,                     MobilenetV2/expanded_conv/depthwise/Relu6 ,dw,"      [1,32,3,3] "," [1,112,112,32] ",0.244,,3612664,,29.61,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+326,Conv2D,    MobilenetV2/expanded_conv/project/BatchNorm/FusedBatchNorm ,1x1,"     [16,32,1,1] "," [1,112,112,16] ",0.106,,6422540,,121.18,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+327,Conv2D,                      MobilenetV2/expanded_conv_1/expand/Relu6 ,1x1,"     [96,16,1,1] "," [1,112,112,96] ",0.294,,19267584,,131.07,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+328,DepthwiseConv2d,                   MobilenetV2/expanded_conv_1/depthwise/Relu6 ,dw,"      [1,96,3,3] ","   [1,56,56,96] ",0.27,,2709450,,20.07,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+329,Conv2D,  MobilenetV2/expanded_conv_1/project/BatchNorm/FusedBatchNorm ,1x1,"     [24,96,1,1] ","   [1,56,56,24] ",0.113,,7225333,,127.88,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+330,Conv2D,                      MobilenetV2/expanded_conv_2/expand/Relu6 ,1x1,"    [144,24,1,1] ","  [1,56,56,144] ",0.146,,10838018,,148.47,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+331,DepthwiseConv2d,                   MobilenetV2/expanded_conv_2/depthwise/Relu6 ,dw,"     [1,144,3,3] ","  [1,56,56,144] ",0.267,,4064274,,30.44,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+332,Conv2D,  MobilenetV2/expanded_conv_2/project/BatchNorm/FusedBatchNorm ,1x1,"    [24,144,1,1] ","   [1,56,56,24] ",0.163,,10838033,,132.98,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+334,Conv2D,                      MobilenetV2/expanded_conv_3/expand/Relu6 ,1x1,"    [144,24,1,1] ","  [1,56,56,144] ",0.146,,10838018,,148.47,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+335,DepthwiseConv2d,                   MobilenetV2/expanded_conv_3/depthwise/Relu6 ,dw,"     [1,144,3,3] ","  [1,28,28,144] ",0.094,,1016046,,21.62,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+336,Conv2D,  MobilenetV2/expanded_conv_3/project/BatchNorm/FusedBatchNorm ,1x1,"    [32,144,1,1] ","   [1,28,28,32] ",0.068,,3612704,,106.26,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+337,Conv2D,                      MobilenetV2/expanded_conv_4/expand/Relu6 ,1x1,"    [192,32,1,1] ","  [1,28,28,192] ",0.069,,4816890,,139.62,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+338,DepthwiseConv2d,                   MobilenetV2/expanded_conv_4/depthwise/Relu6 ,dw,"     [1,192,3,3] ","  [1,28,28,192] ",0.093,,1354731,,29.13,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+339,Conv2D,  MobilenetV2/expanded_conv_4/project/BatchNorm/FusedBatchNorm ,1x1,"    [32,192,1,1] ","   [1,28,28,32] ",0.087,,4816929,,110.73,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+341,Conv2D,                      MobilenetV2/expanded_conv_5/expand/Relu6 ,1x1,"    [192,32,1,1] ","  [1,28,28,192] ",0.066,,4816878,,145.97,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+342,DepthwiseConv2d,                   MobilenetV2/expanded_conv_5/depthwise/Relu6 ,dw,"     [1,192,3,3] ","  [1,28,28,192] ",0.093,,1354731,,29.13,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+343,Conv2D,  MobilenetV2/expanded_conv_5/project/BatchNorm/FusedBatchNorm ,1x1,"    [32,192,1,1] ","   [1,28,28,32] ",0.089,,4816858,,108.24,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+345,Conv2D,                      MobilenetV2/expanded_conv_6/expand/Relu6 ,1x1,"    [192,32,1,1] ","  [1,28,28,192] ",0.071,,4816924,,135.69,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+346,DepthwiseConv2d,                   MobilenetV2/expanded_conv_6/depthwise/Relu6 ,dw,"     [1,192,3,3] ","  [1,14,14,192] ",0.038,,338694,,17.83,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+347,Conv2D,  MobilenetV2/expanded_conv_6/project/BatchNorm/FusedBatchNorm ,1x1,"    [64,192,1,1] ","   [1,14,14,64] ",0.051,,2408424,,94.45,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+348,Conv2D,                      MobilenetV2/expanded_conv_7/expand/Relu6 ,1x1,"    [384,64,1,1] ","  [1,14,14,384] ",0.075,,4816875,,128.45,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+349,DepthwiseConv2d,                   MobilenetV2/expanded_conv_7/depthwise/Relu6 ,dw,"     [1,384,3,3] ","  [1,14,14,384] ",0.046,,677396,,29.45,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+350,Conv2D,  MobilenetV2/expanded_conv_7/project/BatchNorm/FusedBatchNorm ,1x1,"    [64,384,1,1] ","   [1,14,14,64] ",0.085,,4816865,,113.34,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+352,Conv2D,                      MobilenetV2/expanded_conv_8/expand/Relu6 ,1x1,"    [384,64,1,1] ","  [1,14,14,384] ",0.074,,4816882,,130.19,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+353,DepthwiseConv2d,                   MobilenetV2/expanded_conv_8/depthwise/Relu6 ,dw,"     [1,384,3,3] ","  [1,14,14,384] ",0.046,,677396,,29.45,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+354,Conv2D,  MobilenetV2/expanded_conv_8/project/BatchNorm/FusedBatchNorm ,1x1,"    [64,384,1,1] ","   [1,14,14,64] ",0.098,,4816896,,98.3,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+356,Conv2D,                      MobilenetV2/expanded_conv_9/expand/Relu6 ,1x1,"    [384,64,1,1] ","  [1,14,14,384] ",0.073,,4816905,,131.97,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+357,DepthwiseConv2d,                   MobilenetV2/expanded_conv_9/depthwise/Relu6 ,dw,"     [1,384,3,3] ","  [1,14,14,384] ",0.048,,677376,,28.22,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+358,Conv2D,  MobilenetV2/expanded_conv_9/project/BatchNorm/FusedBatchNorm ,1x1,"    [64,384,1,1] ","   [1,14,14,64] ",0.087,,4816929,,110.73,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+360,Conv2D,                     MobilenetV2/expanded_conv_10/expand/Relu6 ,1x1,"    [384,64,1,1] ","  [1,14,14,384] ",0.073,,4816905,,131.97,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+361,DepthwiseConv2d,                  MobilenetV2/expanded_conv_10/depthwise/Relu6 ,dw,"     [1,384,3,3] ","  [1,14,14,384] ",0.048,,677376,,28.22,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+362,Conv2D, MobilenetV2/expanded_conv_10/project/BatchNorm/FusedBatchNorm ,1x1,"    [96,384,1,1] ","   [1,14,14,96] ",0.15,,7225350,,96.34,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+363,Conv2D,                     MobilenetV2/expanded_conv_11/expand/Relu6 ,1x1,"    [576,96,1,1] ","  [1,14,14,576] ",0.146,,10838018,,148.47,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+364,DepthwiseConv2d,                  MobilenetV2/expanded_conv_11/depthwise/Relu6 ,dw,"     [1,576,3,3] ","  [1,14,14,576] ",0.072,,1016064,,28.22,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+365,Conv2D, MobilenetV2/expanded_conv_11/project/BatchNorm/FusedBatchNorm ,1x1,"    [96,576,1,1] ","   [1,14,14,96] ",0.221,,10838061,,98.08,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+367,Conv2D,                     MobilenetV2/expanded_conv_12/expand/Relu6 ,1x1,"    [576,96,1,1] ","  [1,14,14,576] ",0.143,,10837970,,151.58,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+368,DepthwiseConv2d,                  MobilenetV2/expanded_conv_12/depthwise/Relu6 ,dw,"     [1,576,3,3] ","  [1,14,14,576] ",0.073,,1016087,,27.84,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+369,Conv2D, MobilenetV2/expanded_conv_12/project/BatchNorm/FusedBatchNorm ,1x1,"    [96,576,1,1] ","   [1,14,14,96] ",0.216,,10838016,,100.35,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+371,Conv2D,                     MobilenetV2/expanded_conv_13/expand/Relu6 ,1x1,"    [576,96,1,1] ","  [1,14,14,576] ",0.143,,10837970,,151.58,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+372,DepthwiseConv2d,                  MobilenetV2/expanded_conv_13/depthwise/Relu6 ,dw,"     [1,576,3,3] ","    [1,7,7,576] ",0.033,,254001,,15.39,,"  [2,2] ",  SAME ,"    [1,1] ",,,,,,,,
+373,Conv2D, MobilenetV2/expanded_conv_13/project/BatchNorm/FusedBatchNorm ,1x1,"   [160,576,1,1] ","    [1,7,7,160] ",0.122,,4515830,,74.03,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+374,Conv2D,                     MobilenetV2/expanded_conv_14/expand/Relu6 ,1x1,"   [960,160,1,1] ","    [1,7,7,960] ",0.119,,7526393,,126.49,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+375,DepthwiseConv2d,                  MobilenetV2/expanded_conv_14/depthwise/Relu6 ,dw,"     [1,960,3,3] ","    [1,7,7,960] ",0.039,,423345,,21.71,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+376,Conv2D, MobilenetV2/expanded_conv_14/project/BatchNorm/FusedBatchNorm ,1x1,"   [160,960,1,1] ","    [1,7,7,160] ",0.207,,7526313,,72.72,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+378,Conv2D,                     MobilenetV2/expanded_conv_15/expand/Relu6 ,1x1,"   [960,160,1,1] ","    [1,7,7,960] ",0.118,,7526394,,127.57,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+379,DepthwiseConv2d,                  MobilenetV2/expanded_conv_15/depthwise/Relu6 ,dw,"     [1,960,3,3] ","    [1,7,7,960] ",0.035,,423360,,24.19,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+380,Conv2D, MobilenetV2/expanded_conv_15/project/BatchNorm/FusedBatchNorm ,1x1,"   [160,960,1,1] ","    [1,7,7,160] ",0.203,,7526428,,74.15,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+382,Conv2D,                     MobilenetV2/expanded_conv_16/expand/Relu6 ,1x1,"   [960,160,1,1] ","    [1,7,7,960] ",0.118,,7526394,,127.57,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+383,DepthwiseConv2d,                  MobilenetV2/expanded_conv_16/depthwise/Relu6 ,dw,"     [1,960,3,3] ","    [1,7,7,960] ",0.033,,423357,,25.66,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+384,Conv2D, MobilenetV2/expanded_conv_16/project/BatchNorm/FusedBatchNorm ,1x1,"   [320,960,1,1] ","    [1,7,7,320] ",0.347,,15052860,,86.76,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+385,Conv2D,                                      MobilenetV2/Conv_1/Relu6 ,1x1,"  [1280,320,1,1] ","   [1,7,7,1280] ",0.299,,20070375,,134.25,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+387,Conv2D,                      MobilenetV2/Logits/Conv2d_1c_1x1/BiasAdd ,1x1," [1001,1280,1,1] ","   [1,1,1,1001] ",0.286,,1281280,,8.96,,"  [1,1] ",  SAME ,"    [1,1] ",,,,,,,,
+389,Conv2D,resnet_v2_50/conv1/BiasAdd,stride2_7x7,"[64,3,7,7]","[1,112,112,64]",1.831,1.823,118013443,,128.91,,"  [2,2] ", VALID ,"    [1,1] ",,64,3,7,7,1,112,112
+392,Conv2D,resnet_v2_50/block1/unit_1/bottleneck_v2/shortcut/BiasAdd,1x1,"[256,64,1,1]","[1,56,56,256]",0.559,0.574,51380485,,183.83,,"  [1,1] ",  SAME ,"    [1,1] ",,256,64,1,1,1,56,56
+393,Conv2D,resnet_v2_50/block1/unit_1/bottleneck_v2/conv1/Relu,1x1,"[64,64,1,1]","[1,56,56,64]",0.148,0.152,12845068,,173.58,,"  [1,1] ",  SAME ,"    [1,1] ",,64,64,1,1,1,56,56
+394,Conv2D,resnet_v2_50/block1/unit_1/bottleneck_v2/conv2/Relu,wino2x2,"[64,64,3,3]","[1,56,56,64]",1.497,1.506,115605825,5.42E+07,154.45,71.97,"  [1,1] ",  SAME ,"    [1,1] ",5.14E+07,64,64,3,3,1,56,56
+395,Conv2D,resnet_v2_50/block1/unit_1/bottleneck_v2/conv3/BiasAdd,1x1,"[256,64,1,1]","[1,56,56,256]",0.564,0.577,51380400,,182.2,,"  [1,1] ",  SAME ,"    [1,1] ",,256,64,1,1,1,56,56
+399,Conv2D,resnet_v2_50/block1/unit_2/bottleneck_v2/conv1/Relu,1x1,"[64,256,1,1]","[1,56,56,64]",0.575,0.586,51380275,,178.71,,"  [1,1] ",  SAME ,"    [1,1] ",,64,256,1,1,1,56,56
+401,Conv2D,resnet_v2_50/block1/unit_2/bottleneck_v2/conv2/Relu,stride2,"[64,64,3,3]","[1,28,28,64]",0.439,0.428,28901565,,131.67,,"  [2,2] ", VALID ,"    [1,1] ",,64,64,3,3,1,28,28
+402,Conv2D,resnet_v2_50/block1/unit_2/bottleneck_v2/conv3/BiasAdd,1x1,"[256,64,1,1]","[1,28,28,256]",0.152,0.151,12845064,,169.01,,"  [1,1] ",  SAME ,"    [1,1] ",,256,64,1,1,1,28,28
+405,Conv2D,resnet_v2_50/block2/unit_1/bottleneck_v2/shortcut/BiasAdd,1x1,"[512,256,1,1]","[1,28,28,512]",1.077,1.07,102760878,,190.83,,"  [1,1] ",  SAME ,"    [1,1] ",,512,256,1,1,1,28,28
+406,Conv2D,resnet_v2_50/block2/unit_1/bottleneck_v2/conv1/Relu,1x1,"[128,256,1,1]","[1,28,28,128]",0.276,0.286,25690080,,186.16,,"  [1,1] ",  SAME ,"    [1,1] ",,128,256,1,1,1,28,28
+407,Conv2D,resnet_v2_50/block2/unit_1/bottleneck_v2/conv2/Relu,wino2x2,"[128,128,3,3]","[1,28,28,128]",1.611,1.614,115605360,5.28E+07,143.52,65.41,"  [1,1] ",  SAME ,"    [1,1] ",5.14E+07,128,128,3,3,1,28,28
+408,Conv2D,resnet_v2_50/block2/unit_1/bottleneck_v2/conv3/BiasAdd,1x1,"[512,128,1,1]","[1,28,28,512]",0.545,0.549,51380420,,188.55,,"  [1,1] ",  SAME ,"    [1,1] ",,512,128,1,1,1,28,28
+412,Conv2D,resnet_v2_50/block2/unit_2/bottleneck_v2/conv1/Relu,1x1,"[128,512,1,1]","[1,28,28,128]",0.573,1.258,51380337,,179.34,,"  [1,1] ",  SAME ,"    [1,1] ",,128,512,1,1,1,28,28
+414,Conv2D,resnet_v2_50/block2/unit_2/bottleneck_v2/conv2/Relu,stride2,"[128,128,3,3]","[1,14,14,128]",0.544,0.557,28901632,,106.26,,"  [2,2] ", VALID ,"    [1,1] ",,128,128,3,3,1,14,14
+415,Conv2D,resnet_v2_50/block2/unit_2/bottleneck_v2/conv3/BiasAdd,1x1,"[512,128,1,1]","[1,14,14,512]",0.171,0.17,12845007,,150.23,,"  [1,1] ",  SAME ,"    [1,1] ",,512,128,1,1,1,14,14
+418,Conv2D,resnet_v2_50/block3/unit_1/bottleneck_v2/shortcut/BiasAdd,1x1,"[1024,512,1,1]","[1,14,14,1024]",1.296,1.243,102759840,,158.58,,"  [1,1] ",  SAME ,"    [1,1] ",,1024,512,1,1,1,14,14
+419,Conv2D,resnet_v2_50/block3/unit_1/bottleneck_v2/conv1/Relu,1x1,"[256,512,1,1]","[1,14,14,256]",0.329,0.336,25689965,,156.17,,"  [1,1] ",  SAME ,"    [1,1] ",,256,512,1,1,1,14,14
+420,Conv2D,resnet_v2_50/block3/unit_1/bottleneck_v2/conv2/Relu,wino2x2,"[256,256,3,3]","[1,14,14,256]",1.744,1.858,115606272,5.21E+07,132.58,56.06,"  [1,1] ",  SAME ,"    [1,1] ",5.14E+07,256,256,3,3,1,14,14
+421,Conv2D,resnet_v2_50/block3/unit_1/bottleneck_v2/conv3/BiasAdd,1x1,"[1024,256,1,1]","[1,14,14,1024]",0.64,0.622,51380480,,160.56,,"  [1,1] ",  SAME ,"    [1,1] ",,1024,256,1,1,1,14,14
+425,Conv2D,resnet_v2_50/block3/unit_2/bottleneck_v2/conv1/Relu,1x1,"[256,1024,1,1]","[1,14,14,256]",0.657,0.657,51380028,,156.41,,"  [1,1] ",  SAME ,"    [1,1] ",,256,1024,1,1,1,14,14
+427,Conv2D,resnet_v2_50/block3/unit_2/bottleneck_v2/conv2/Relu,stride2,"[256,256,3,3]","[1,7,7,256]",0.672,0.665,28901376,,86.02,,"  [2,2] ", VALID ,"    [1,1] ",,256,256,3,3,1,7,7
+428,Conv2D,resnet_v2_50/block3/unit_2/bottleneck_v2/conv3/BiasAdd,1x1,"[1024,256,1,1]","[1,7,7,1024]",0.18,0.218,12844980,,142.72,,"  [1,1] ",  SAME ,"    [1,1] ",,1024,256,1,1,1,7,7
+431,Conv2D,resnet_v2_50/block4/unit_1/bottleneck_v2/shortcut/BiasAdd,1x1,"[2048,1024,1,1]","[1,7,7,2048]",1.516,1.536,102760544,,135.57,,"  [1,1] ",  SAME ,"    [1,1] ",,2048,1024,1,1,1,7,7
+432,Conv2D,resnet_v2_50/block4/unit_1/bottleneck_v2/conv1/Relu,1x1,"[512,1024,1,1]","[1,7,7,512]",0.432,0.429,25690176,,118.94,,"  [1,1] ",  SAME ,"    [1,1] ",,512,1024,1,1,1,7,7
+433,Conv2D,resnet_v2_50/block4/unit_1/bottleneck_v2/conv2/Relu,wino2x2,"[512,512,3,3]","[1,7,7,512]",4.363,3.207,115606411,5.17E+07,52.99,32.26,"  [1,1] ",  SAME ,"    [1,1] ",5.14E+07,512,512,3,3,1,7,7
+434,Conv2D,resnet_v2_50/block4/unit_1/bottleneck_v2/conv3/BiasAdd,1x1,"[2048,512,1,1]","[1,7,7,2048]",1.131,0.761,51380199,,90.86,,"  [1,1] ",  SAME ,"    [1,1] ",,2048,512,1,1,1,7,7
+437,Conv2D,resnet_v2_50/block4/unit_2/bottleneck_v2/conv1/Relu,1x1,"[512,2048,1,1]","[1,7,7,512]",0.869,0.871,51380494,,118.25,,"  [1,1] ",  SAME ,"    [1,1] ",,512,2048,1,1,1,7,7
+438,Conv2D,resnet_v2_50/block4/unit_2/bottleneck_v2/conv2/Relu,wino2x2,"[512,512,3,3]","[1,7,7,512]",2.637,3.191,115606080,5.17E+07,87.68,32.42,"  [1,1] ",  SAME ,"    [1,1] ",5.14E+07,512,512,3,3,1,7,7
+439,Conv2D,resnet_v2_50/block4/unit_2/bottleneck_v2/conv3/BiasAdd,1x1,"[2048,512,1,1]","[1,7,7,2048]",0.758,0.762,51380272,,135.57,,"  [1,1] ",  SAME ,"    [1,1] ",,2048,512,1,1,1,7,7
+443,Conv2D,resnet_v2_50/logits/BiasAdd,1x1,"[1001,2048,1,1]","[1,1,1,1001]",0.447,0.44,2049942,,9.17,,"  [1,1] ",  SAME ,"    [1,1] ",,1001,2048,1,1,1,1,1

@@ -120,6 +120,9 @@ void LocalSession::CopyFromRemote(void* from, size_t from_offset, void* to, size
   // synchronize to make sure that copy is completed
   this->GetDeviceAPI(ctx_from)->StreamSync(ctx_from, nullptr);
 }
+void LocalSession::GetTc(TVMContext ctx, void* tcarr) {
+  this->GetDeviceAPI(ctx)->GetTc(ctx, tcarr);
+}
 void LocalSession::CopyFromRemote(void* from, size_t from_offset, void* to, size_t to_offset,
                                   size_t nbytes, TVMContext ctx_from, DLDataType type_hint) {
   TVMContext cpu_ctx;

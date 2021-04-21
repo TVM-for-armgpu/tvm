@@ -28,6 +28,7 @@ from ..nn.conv2d import unpack_NCHWc_to_nchw
 from ..utils import get_const_tuple
 from ..nn.utils import get_pad_tuple
 from ..nn.depthwise_conv2d import _get_workload, depthwise_conv2d_infer_layout
+from .conv2d_nchwc import mali_cfg_with_buffer_image
 
 # register original implementation of depthwise_conv2d_nchw since we don't need to change this part
 @autotvm.register_topi_compute("depthwise_conv2d_nchw_io.mali")
@@ -183,9 +184,21 @@ def schedule_depthwise_conv2d_nchwc_io_wrap(outs):
     """Create schedule for depthwise_conv2d_nchw."""
     return schedule_depthwise_conv2d_NCHWc_io(outs)
 
+@autotvm.register_topi_compute("depthwise_conv2d_NCHWc_mali_io.mali")
+def depthwise_conv2d_NCHWc_mali_io(
+    cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype=None
+):
+    mali_cfg_with_buffer_image(cfg, data, kernel)
+    return nn_depthwise_conv2d_NCHWc_io(cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype)
+
 
 @autotvm.register_topi_compute("depthwise_conv2d_NCHWc_io.mali")
 def depthwise_conv2d_NCHWc_io(
+    cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype=None
+):
+    return nn_depthwise_conv2d_NCHWc_io(cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype)
+
+def nn_depthwise_conv2d_NCHWc_io(
     cfg, data, kernel, strides, padding, dilation, layout, out_layout, out_dtype=None
 ):
     """Compute depthwise conv2d with NCHWc layout"""
@@ -301,7 +314,7 @@ def depthwise_conv2d_NCHWc_io(
         tag="depthwise_conv2d_NCHWc",
     )
     shape = [batch, oc_chunk, out_height, out_width, oc_bn,filter_height,filter_width]
-    cfg.add_flop(np.prod(shape))
+    cfg.add_flop(2*np.prod(shape))
     return Output
 
 
@@ -346,8 +359,8 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     bc, tc = cfg.define_split("tile_cp", c, num_outputs=2)
     by, ty, yi = cfg.define_split("tile_hp", y, num_outputs=3, filter=lambda y: y.size[-1] <=8)
     bx, tx, xi = cfg.define_split("tile_wp", x, num_outputs=3, filter=lambda y: y.size[-1] <=8)
-    cfg.define_annotate(
-        "ann_spatial", [yi, xi], policy="try_unroll_vec")
+    #cfg.define_annotate(
+    #    "ann_spatial", [yi, xi], policy="try_unroll_vec")
 
     # fallback support
     if cfg.is_fallback:
@@ -373,7 +386,8 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     #    s[kernel].compute_inline()
     output = conv
     #cache
-    pad_dataL = s.cache_read(pad_data, "local", [conv])
+    #pad_dataL = s.cache_read(pad_data, "local", [conv])
+    pad_dataL = pad_data
     kernelL = s.cache_read(kernel, "local", [conv])
     OL = s.cache_write(conv, "local")
 
@@ -407,31 +421,31 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
     s[OL].compute_at(s[output], n)
 
     k1, k2 = s[OL].op.reduce_axis
-    _, _, hp, wp, p4 = s[OL].op.axis
-    s[OL].reorder(hp, wp, p4)
+    _, _p, hp, wp, p4 = s[OL].op.axis
+    s[OL].reorder(_p, k1, k2, hp, wp, p4)
     s[OL].vectorize(p4)
-    #s[OL].unroll(wp)
-    #s[OL].unroll(hp)
-    #s[OL].unroll(k1)
-    #s[OL].unroll(k2)
+    s[OL].unroll(wp)
+    s[OL].unroll(hp)
+    s[OL].unroll(k1)
+    s[OL].unroll(k2)
 
     #schedule UL VL local read
-    s[pad_dataL].compute_at(s[OL], hp)
-    s[kernelL].compute_at(s[OL], hp)
+    #s[pad_dataL].compute_at(s[OL], _p)
+    s[kernelL].compute_at(s[OL], _p)
 
     #split Ul VL workload
     a, b, hp, wp, _, p4 = s[kernelL].op.axis
     s[kernelL].vectorize(p4)  # vectorize memory load
-    #s[kernelL].unroll(wp)
-    #s[kernelL].unroll(hp)
+    s[kernelL].unroll(wp)
+    s[kernelL].unroll(hp)
     _, _, hp, wp, p4 = s[pad_dataL].op.axis
     s[pad_dataL].vectorize(p4)  # vectorize memory load
-    #s[pad_dataL].unroll(wp)
-    #s[pad_dataL].unroll(hp)
+    s[pad_dataL].unroll(wp)
+    s[pad_dataL].unroll(hp)
 
     s[output].vectorize(Op4)  # vectorize memory load
-    #s[output].unroll(Owp)  # vectorize memory load
-    #s[output].unroll(Ohp)  # vectorize memory load
+    s[output].unroll(Owp)  # vectorize memory load
+    s[output].unroll(Ohp)  # vectorize memory load
 
     #n, ci, yi, xi = s[OL].op.axis
 

@@ -139,6 +139,7 @@ class TVM_DLL DeviceAPI {
     abort();
     return;
   }
+  virtual void GetTc(TVMContext ctx_from, void* data_shape) { }
   /*!
    * \brief Create a new stream of execution.
    *

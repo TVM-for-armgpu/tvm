@@ -280,7 +280,9 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
  protected:
   Map<const String, tvm::tir::Buffer> var_buffer_map_;
   std::unordered_map<std::string, std::string> var_declare_map_;
+  std::vector<std::string> var_declare_map_order_key_;
   std::string need_declar_value_;
+  int _in_simplify_scope{0};
  private:
   /*! \brief whether to print in SSA form */
   bool print_ssa_form_{false};

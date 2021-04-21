@@ -51,6 +51,7 @@ enum class RPCCode : int {
   kDevFreeData,
   kDevStreamSync,
   kCopyAmongRemote,
+  kDevGetTc,
 };
 
 /*!

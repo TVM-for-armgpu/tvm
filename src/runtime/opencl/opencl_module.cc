@@ -53,6 +53,19 @@ class OpenCLWrappedFunc {
   void operator()(TVMArgs args, TVMRetValue* rv, void** void_args) const {
     ICHECK(w_->context != nullptr) << "No OpenCL device";
     cl::OpenCLThreadEntry* t = w_->GetThreadEntry();
+    ThreadWorkLoad wl = thread_axis_cfg_.Extract(args);
+    cl_uint work_dim = static_cast<cl_uint>(thread_axis_cfg_.work_dim());
+    for (cl_uint i = 0; i < work_dim; ++i) {
+      wl.work_size[i] *= wl.work_size[i + 3];
+    }
+    if (!m_->global_local_size_map_.count(func_name_)) {
+      std::ostringstream  local_global_;
+      for (int i = 0; i < 6; ++i) {
+        local_global_ << wl.work_size[i] << ",";
+      }
+      local_global_ << "=========";
+      m_->global_local_size_map_[func_name_]=local_global_.str();
+    }
     // get the kernel from thread local kernel table.
     if (entry_.kernel_id >= t->kernel_table.size()) {
       t->kernel_table.resize(entry_.kernel_id + 1);
@@ -67,26 +80,20 @@ class OpenCLWrappedFunc {
       OPENCL_CALL(clSetKernelArg(kernel, i, arg_size_[i], void_args[i]));
     }
     cl_command_queue queue = w_->GetQueue(t->context);
-    ThreadWorkLoad wl = thread_axis_cfg_.Extract(args);
-    cl_uint work_dim = static_cast<cl_uint>(thread_axis_cfg_.work_dim());
-    for (cl_uint i = 0; i < work_dim; ++i) {
-      wl.work_size[i] *= wl.work_size[i + 3];
-    }
-    //for (int i = 0; i < 6; ++i) {
-    //  std::cout << wl.work_size[i]<<",";
-    //}
+    
     // launch kernel
     // cl event for time statistic
-    //cl_event event;
+    cl_event event;
     OPENCL_CALL(clEnqueueNDRangeKernel(queue, kernel, work_dim, nullptr, wl.work_size,
-                                       wl.work_size + 3, 0, nullptr, 0));
-                                       //wl.work_size + 3, 0, nullptr, &event));
-    //clWaitForEvents(1, &event);
-    //cl_ulong time_start, time_end;
-    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+                                       //wl.work_size + 3, 0, nullptr, 0));
+                                       wl.work_size + 3, 0, nullptr, &event));
+    clWaitForEvents(1, &event);
+    cl_ulong time_start, time_end;
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
     //m_->time_vec_.push_back((time_end - time_start)/ 1000000.0);
-    //LOG(WARNING) << " func_name_="<<func_name_<<" "<<m_->time_vec_.back();
+    //LOG(WARNING) << " func_name_="<<func_name_<<" " << (time_end - time_start)/ 1000000.0;
+    w_->tc_duration_s_ += (time_end - time_start) / 1000000000.0;
   }
 
  private:
@@ -123,6 +130,9 @@ OpenCLModuleNode::~OpenCLModuleNode() {
   }
   //double avg_time = std::accumulate(time_vec_.begin(), time_vec_.end(), 0.0)/time_vec_.size();
   //LOG(WARNING) << "kernerl avg running time =======" << avg_time;
+  for (auto kv : global_local_size_map_) {
+    LOG(WARNING) << "kernerl thread " << kv.first << "===>" << kv.second;
+  }
 }
 
 cl::OpenCLWorkspace* OpenCLModuleNode::GetGlobalWorkspace() {

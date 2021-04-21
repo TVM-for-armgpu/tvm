@@ -25,10 +25,10 @@ import sys
 # We can also load models from MXNet, ONNX and TensorFlow.
 
 TRACKER_PORT=9090
-@autotvm.template("tutorial/conv2d_no_batching")
-def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
+@autotvm.template("winograd_2")
+def winograd_2(N, H, W, CO, CI, KH, KW, stride, padding):
     assert N == 1, "Only consider batch_size = 1 in this template"
-    
+
     H_P, W_P = H, W
     PACK4=4
     K_P=CO//PACK4
@@ -41,12 +41,22 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
     if open_image:
         ddtype = 'climgfloatr32'
     data_pl = te.placeholder((1, CI//4, H, W,4),
-                             name='data', dtype=ddtype)
-    kernel_pl = te.placeholder((CI, CO//4, KW, KH, 1, 4),
-                               name='filter', dtype=ddtype)
+                             name='placeholder', dtype=ddtype)
+    filter_trans=False
+    if not filter_trans:
+        kernel_pl = te.placeholder((CI, CO // 4, KW+1, KH+1, 1, 4),
+                                name='mali_conv2d_nchw_winograd_U',
+                                dtype=ddtype)
+    else:
+        kernel_pl = te.placeholder((CI, CO // 4, KW, KH , 1, 4),
+                                   name='placeholder',
+                                   dtype=ddtype)
     conv_pl = topi.mali.conv2d_nchw_winograd_NCHWc_io(data_pl, kernel_pl, 1, 1,
                                      1, 'NCHW', 'NCHWc', ddtype.replace('r','w'))
     s = topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io([conv_pl])
+    a_kernel = conv_pl.op.input_tensors[1].op.input_tensors[0]
+    #if autotvm.GLOBAL_SCOPE.in_tuning:
+    #    kernel_pl = a_kernel
     return s, [data_pl,kernel_pl,conv_pl]
 
 # ------------------
@@ -65,34 +75,9 @@ target = tvm.target.Target("opencl -device=mali")
 arch = "arm64"
 target_host = "llvm -mtriple=%s-linux-android" % arch
 
-# Also replace this with the device key in your tracker
-device_key = "Adreno640"
-
 # Set this to True if you use android phone
 use_android = True
 
-#### TUNING OPTION ####
-network = "topi_winograd3x3"
-log_file = "%s.%s.log" % (device_key, network)
-dtype = "float32"
-
-tuning_option = {
-    "log_filename": log_file,
-    "tuner": "xgb",
-    "n_trial": 80,
-    "use_transfer_learning":True,
-    "early_stopping": 45,
-    "measure_option": autotvm.measure_option(
-        builder=autotvm.LocalBuilder(build_func="ndk" if use_android else "default"),
-        runner=autotvm.RPCRunner(
-            device_key,
-            host="0.0.0.0",
-            port=TRACKER_PORT,
-            number=10,
-            timeout=15,
-        ),
-    ),
-}
 
 ####################################################################
 #
@@ -112,6 +97,26 @@ tuning_option = {
 # Here, we provide a simple utility function to tune a list of tasks.
 # This function is just an initial implementation which tunes them in sequential order.
 # We will introduce a more sophisticated tuning scheduler in the future.
+def in_check_point(shape: str) -> bool:
+    #return False
+    import json
+    if isinstance(shape, tuple):
+        shape = list(shape)
+
+    if len(shape) == 11:
+        shape.pop(1)
+    #shape.pop(-1)
+    for ind, sp in enumerate(shape):
+        if isinstance(sp, tuple):
+            shape[ind] = list(sp)
+    if not os.path.exists(log_file):
+        return False
+    with open(log_file) as fp:
+        for sp_hist in fp:
+            sp_hist_json = json.loads(sp_hist)
+            if sp_hist_json["input"][2] == shape:
+                return True
+    return False
 
 # You can skip the implementation of this function for this tutorial.
 def tune_tasks(
@@ -126,10 +131,14 @@ def tune_tasks(
     use_transfer_learning=False
     # create tmp log file
     tmp_log_file = log_filename + ".tmp"
-    #if os.path.exists(tmp_log_file):
-    #    os.remove(tmp_log_file)
+    if os.path.exists(tmp_log_file):
+        os.remove(tmp_log_file)
 
     for i, tsk in enumerate(reversed(tasks)):
+        print(tsk.args)
+        if in_check_point(tsk.args):
+            print("skip ")
+            continue
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # create tuner
@@ -161,10 +170,10 @@ def tune_tasks(
             ],
         )
 
-    # pick best records to a cache file
-    autotvm.record.pick_best(tmp_log_file, log_filename)
-    #os.remove(tmp_log_file)
 
+        # pick best records to a cache file
+        autotvm.record.pick_best(tmp_log_file, log_filename)
+        #os.remove(tmp_log_file)
 
 ########################################################################
 # Finally, we launch tuning jobs and evaluate the end-to-end performance.
@@ -174,24 +183,33 @@ def tune_and_evaluate(tuning_opt):
     # extract workloads from relay program
 
     print("Extract tasks...", os.getpid())
-    N, H, W, CO, CI, KH, KW, strides, padding = 1, 47, 47, 512, 512, 3, 3, (1, 1), (1, 1)
-    tasks = autotvm.task.create(
-        "tutorial/conv2d_no_batching", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
-    )
+    sys.path.append('remote_tmali')
+    sys.path.append('./')
+    import conv_shape_tunning
+    tasks = []
+    for net, shapes in conv_shape_tunning.conv3x3shape.items():
+        for ith, shape in enumerate(shapes):
+            N, _, H, W, CI, CO, KH, KW, strides, padding, dialte = shape
+            task = autotvm.task.create(
+                "winograd_2", args=(N, H, W, CO, CI, KH, KW, strides, padding), target=target,target_host=target_host
+            )
+            tasks.append(task)
+
 
     # run tuning tasks
     print("Tuning...")
-    #tune_tasks([tasks], **tuning_opt)
+    tasks.reverse()
+    tune_tasks(tasks, **tuning_opt)
 
     # compile kernels with history best records
     with autotvm.apply_history_best(log_file) as dispatch_context:
-        best_config = dispatch_context.query(tasks.target, tasks.workload)
+        best_config = dispatch_context.query(task.target, task.workload)
         print("\nBest config:")
         print(best_config)
         print("Compile...")
-    #if 1==1:
+        #if 1==1:
         with tvm.target.Target("opencl"):
-            s, arg_bufs = conv2d_no_batching(N, H, W, CO, CI, KH, KW, strides, padding)
+            s, arg_bufs = winograd_2(N, H, W, CO, CI, KH, KW, strides, padding)
             lib = tvm.build(s, arg_bufs, target_host=target_host)
             func = lib
             with open('dd.cl','w')as fp:
@@ -229,17 +247,17 @@ def tune_and_evaluate(tuning_opt):
         out_channel = CO
         in_size=H
         ctx = remote.context(str(target), 0)
-        #===============tvm data format 
+        #===============tvm data format
         a_np_tvm = np.arange(np.prod(a_s)).reshape(a_s)
         w_np_tvm = np.arange(np.prod(w_s)).reshape(w_s)
-        
+
         a_tvm = tvm.nd.array(a_np_tvm, ctx=ctx, dtype=arg_bufs[0].dtype)
         w_tvm = tvm.nd.array(w_np_tvm, ctx=ctx, dtype=arg_bufs[1].dtype)
         c_tvm = tvm.nd.empty(arg_bufs[2].shape, ctx=ctx, dtype=arg_bufs[2].dtype)
         ####numpy calculate the answer over
 
         #c_np = conv2d_nchw_python(a_np, w_np, strides, padding)
-        time_f = rlib.time_evaluator(rlib.entry_name, ctx, number=10)
+        time_f = rlib.time_evaluator(rlib.entry_name, ctx, number=20)
         cost = time_f(a_tvm, w_tvm, c_tvm).mean
         GFLOPS = 3*3*W_P*H_P*CI*CO*2/cost/1e9
         print("Time cost of this operator: %f, %f gflops" %( cost,GFLOPS))
@@ -266,7 +284,39 @@ def tune_and_evaluate(tuning_opt):
 # We do not run the tuning in our webpage server since it takes too long.
 # Uncomment the following line to run it by yourself.
 
-tune_and_evaluate(tuning_option)
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("please give a device_key")
+        exit(0)
 
+    device_key = sys.argv[1]
+    assert device_key in ["MaliG72", "MaliG76", "Adreno640", "Adreno630"]
 
-
+    #### TUNING OPTION ####
+    network = "wino3x3"
+    log_file = "%s.%s.log" % (device_key, network)
+    #log_file = f'_from_rd_{device_key}.conf'
+    tuning_option = {
+        "log_filename":
+        log_file,
+        "tuner":
+        "xgb",
+        "n_trial":
+        1050,
+        "use_transfer_learning":
+        False,
+        "early_stopping": 140,
+        "measure_option":
+        autotvm.measure_option(
+            builder=autotvm.LocalBuilder(
+                build_func="ndk" if use_android else "default"),
+            runner=autotvm.RPCRunner(
+                device_key,
+                host="0.0.0.0",
+                port=TRACKER_PORT,
+                number=15,
+                timeout=5,
+            ),
+        ),
+    }
+    tune_and_evaluate(tuning_option)

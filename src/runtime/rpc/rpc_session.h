@@ -143,6 +143,7 @@ class RPCSession {
                             DLDataType type_hint) {
     LOG(FATAL) << "api not implemented";
   }
+  virtual void GetTc(TVMContext remote_ctx, void* nbytes) = 0;
   /*!
    * \brief Copy bytes from remote array content.
    * \param remote_from The source host data.

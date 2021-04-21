@@ -58,18 +58,32 @@ def get_network(network):
 
     input_shape = (batch_size,) + image_shape
     output_shape = (batch_size, 1000)
+    name = network
     if network == "resnet":
         mod, params = tvm.relay.testing.resnet.get_workload(
             batch_size=batch_size,
             layout=layout,
             dtype=dtype,
             image_shape=image_shape)
-    else:
+    elif name == "mobilenet":
         mod, params = tvm.relay.testing.mobilenet.get_workload(
             batch_size=batch_size,
             layout=layout,
             dtype=dtype,
             image_shape=image_shape)
+    elif name == "squeezenet_v1.1":
+        mod, params = tvm.relay.testing.squeezenet.get_workload(
+            batch_size=batch_size, version="1.1",
+            layout=layout,
+            dtype=dtype,
+            image_shape=image_shape
+        )
+    elif name == "inception_v3":
+        input_shape = (batch_size, 4, 299, 299)
+        mod, params = tvm.relay.testing.inception_v3.get_workload(
+            batch_size=batch_size, dtype=dtype, image_shape=(4, 299, 299))
+    else:
+        raise ValueError("Unsupported network: " + name)
     return mod, params, input_shape, input_dtype
     def extract(path):
         import tarfile
@@ -124,36 +138,6 @@ arch = "arm64"
 target_host = tvm.target.Target("llvm -mtriple=%s-linux-android" % arch)
 target = tvm.target.Target("opencl -device=mali")
 
-# Also replace this with the device key in your tracker
-device_key = "Adreno640"
-
-
-#### TUNING OPTION ####
-dtype = 'float32'
-dtype = 'climgfloatr32'
-
-network_name = 'resnet'
-network_name = 'mobilenet'
-log_file = "%s.%s.log" % (dtype, network_name)
-
-
-use_android=True
-tuning_option = {
-    'log_filename': log_file,
-    'tuner': 'xgb',
-    'n_trial': 600,
-    'early_stopping': 450,
-
-    'measure_option': autotvm.measure_option(
-        builder=autotvm.LocalBuilder(
-            build_func='ndk' if use_android else 'default'),
-        runner=autotvm.RPCRunner(
-            device_key, host='0.0.0.0', port=9090,
-            number=5,
-            timeout=10,
-        ),
-    ),
-}
 
 ####################################################################
 #
@@ -177,7 +161,27 @@ tuning_option = {
 # Here, we provide a simple utility function to tune a list of tasks.
 # This function is just an initial implementation which tunes them in sequential order.
 # We will introduce a more sophisticated tuning scheduler in the future.
+def in_check_point(tsk:str, log_file:str) -> bool:
+    shape=[]
+    import json
+    shape = list(tsk.args[0][1])
+    shape = shape + list(tsk.args[1][1])
+    shape.append(list(tsk.args[2]))
+    shape.append(list(tsk.args[3]))
+    shape.append(list(tsk.args[4]))
 
+    if not os.path.exists(log_file):
+        return False
+    with open(log_file) as fp:
+        for sp_hist in fp:
+            sp_hist_json = json.loads(sp_hist)
+            cp_shape = sp_hist_json['input'][2][0][1] + sp_hist_json['input'][2][1][1]
+            cp_shape.append(sp_hist_json['input'][2][2])
+            cp_shape.append(sp_hist_json['input'][2][3])
+            cp_shape.append(sp_hist_json['input'][2][4])
+            if cp_shape == shape:
+                return True
+    return False
 # You can skip the implementation of this function for this tutorial.
 def tune_tasks(tasks,
                measure_option,
@@ -187,19 +191,21 @@ def tune_tasks(tasks,
                log_filename='tuning.log',
                use_transfer_learning=True):
     # create tmp log file
-    tmp_log_file = log_filename + ".tmp"
-    if os.path.exists(tmp_log_file):
-        os.remove(tmp_log_file)
+    tmp_log_file = 'tmp/' + log_filename + ".tmp"
+    #if os.path.exists(tmp_log_file):
+    #    os.remove(tmp_log_file)
     use_transfer_learning=False
     import threading
     import time
 
     for i, tsk in enumerate(reversed(tasks)):
         if 'wino' in tsk.name:
-            n_trial_=320
+            n_trial_=80
         else:
             n_trial_ = n_trial
-
+        if in_check_point(tsk,log_filename):
+            print(f"skip task{tsk} form checkpoint")
+            continue
         print("tunning ", tsk)
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
         # create tuner
@@ -230,10 +236,10 @@ def tune_tasks(tasks,
                 autotvm.callback.log_to_file(tmp_log_file),
             ],
         )
-        time.sleep(60 * 5)
         # pick best records to a cache file
         autotvm.record.pick_best(tmp_log_file, log_filename)
         #os.remove(tmp_log_file)
+        time.sleep(60 * 5)
 
 # At commit baff99c83f9f691174434e7c78a4fee48b558547, ARM NHWC schedule is not high performance. So,
 # we first switch to NCHW. Further, Relay build calls AlterOpLayout to optimize the data layout to
@@ -338,4 +344,41 @@ def tune_and_evaluate(tuning_opt):
 
 # We do not run the tuning in our webpage server since it takes too long.
 # Uncomment the following line to run it by yourself.
-tune_and_evaluate(tuning_option)
+if __name__ =='__main__':
+    if len(sys.argv) < 2:
+        print("please give a device_key")
+        exit(0)
+
+    device_key = sys.argv[1]
+    assert device_key in ["MaliG72", "MaliG76","Adreno640", "Adreno630"]
+    #### TUNING OPTION ####
+    dtype = 'float32'
+    dtype = 'climgfloatr32'
+
+    network_name = 'resnet'
+    if len(sys.argv) == 3:
+        if sys.argv[2] == 'resnet':
+            network_name = 'resnet'
+        elif sys.argv[2] == 'mobilenet':
+            network_name = 'mobilenet'
+    log_file = "%s-%s-%s.log" % (dtype,device_key, network_name)
+
+
+    use_android=True
+    tuning_option = {
+        'log_filename': log_file,
+        'tuner': 'xgb',
+        'n_trial': 350,
+        'early_stopping': 350,
+
+        'measure_option': autotvm.measure_option(
+            builder=autotvm.LocalBuilder(
+                build_func='ndk' if use_android else 'default'),
+            runner=autotvm.RPCRunner(
+                device_key, host='0.0.0.0', port=9090,
+                number=5,
+                timeout=10,
+            ),
+        ),
+    }
+    tune_and_evaluate(tuning_option)
