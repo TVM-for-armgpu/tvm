@@ -1112,7 +1112,7 @@ def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out
     cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
     if kernel_height == 1 and kernel_width == 1 and (
         (HSTR == 1 and WSTR == 1) or (out_width % 4 == 0 and out_height % 4 == 0)):
-        ow_lambda = lambda y: y.size[-1] % 2 ==0 and y.size[-1] <= 8
+        ow_lambda = lambda y:y.size[-1] == 1 or (y.size[-1] % 2 == 0 and y.size[-1] <= 8)
         ow_policy='factors'
     else:
         ow_lambda = lambda y: y.size[-1] <= 8
@@ -1123,7 +1123,7 @@ def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out
                      filter=ow_lambda,
                      policy=ow_policy)
     if kernel_height == 1 and kernel_width == 1:
-        oh_lambda = lambda y: y.size[-1] % 2 == 0 and y.size[-1] <= 8
+        oh_lambda = lambda y: y.size[-1] == 1 or (y.size[-1] % 2 == 0 and y.size[-1] <= 8)
         oh_policy='factors'
     else:
         oh_lambda = lambda y: y.size[-1] <= 8
