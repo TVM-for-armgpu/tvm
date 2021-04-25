@@ -96,7 +96,7 @@ def matmul(M, K, N, A, B):
     s = te.create_schedule(C.op)
 
     # Lower to TIR and optimize.
-    with tvm.transform.PassContext(config={"tir.add_lower_pass": [(1, analyze)]}):
+    with tvm.transform.PassContext():
         print(tvm.lower(s, [A, B, C]))
 
     # Define intrinsic binding.

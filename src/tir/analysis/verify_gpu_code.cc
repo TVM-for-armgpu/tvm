@@ -312,7 +312,7 @@ std::vector<String> VerifyGPUCode_(const PrimFunc& func, Map<String, PrimExpr> c
 
   int64_t max_local_memory_per_thread = INT64_MAX;
   int64_t max_shared_memory_per_block = INT64_MAX;
-  int64_t min_threads_per_block = INT64_MAX;
+  int64_t min_threads_per_block = 0;
   int64_t max_threads_per_block = INT64_MAX;
   int64_t max_thread_x = INT64_MAX;
   int64_t max_thread_y = INT64_MAX;
@@ -322,7 +322,7 @@ std::vector<String> VerifyGPUCode_(const PrimFunc& func, Map<String, PrimExpr> c
   int64_t max_vector_elems = INT64_MAX;
   int64_t buf_top_cache_bytes = INT64_MAX;
   int64_t img_top_cache_bytes = INT64_MAX;
-  int64_t img_alloc_dtype_bytes = INT64_MAX;
+  int64_t img_alloc_dtype_bytes = INT64_MAX; // Must be provided.
 
   for (auto iter : constraints) {
     const IntImmNode* val = iter.second.as<IntImmNode>();

@@ -117,6 +117,8 @@ def conv2d_no_batching(N, H, W, CO, CI, KH, KW, stride, padding):
                                             ddtype.replace('r', 'w'))
         s = topi.mali.schedule_conv2d_NCHWc_io(conv_pl)
     #print(tvm.lower(s, [data_pl,kernel_pl,conv_pl], simple_mode=True))
+    #lib = tvm.build(s, [data_pl,kernel_pl,conv_pl])
+    #print(func.imported_modules[0].get_source()) if len(func.imported_modules) > 0 else print("source not imported")
     #exit(0)
 
     return s, [data_pl,kernel_pl,conv_pl]
@@ -154,6 +156,9 @@ ARCH_DETAIL = {
     "max_vector_elems": 4,
     "buf_top_cache_bytes": 65536,
     "img_top_cache_bytes": 1024,
+    "img_alloc_dtype_bytes": 2,
+}
+ARCH_DETAIL = {
     "img_alloc_dtype_bytes": 2,
 }
 
@@ -238,27 +243,8 @@ def tune_tasks(
 ########################################################################
 # Finally, we launch tuning jobs and evaluate the end-to-end performance.
 convshape = [
-    #resnet
-    #(1, 14, 14, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    #(1, 19, 19, 512, 256, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
-    #(1, 19, 19, 512, 256, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    #(1, 38, 38, 256, 128, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
-    #(1, 38, 38, 256, 128, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    #(1, 75, 75, 128, 64, 1, 1, (2, 2), (0, 0, 0, 0), (1, 1)),
-    #(1, 75, 75, 64, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 75, 75, 128, 64, 3, 3, (1, 1), (1, 1, 1, 1), (1, 1)),
-    #(1, 299, 299, 64, 4, 7, 7, (2, 2), (3, 3, 3, 3), (1, 1)),
-    #mobilenet
-    #(1, 4, 224, 224, 4, 32, 3, 3, (2, 2), (1, 1, 1, 1), (1, 1)),
-    #(1, 32, 112, 112, 32, 64, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 64, 56, 56, 64, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 128, 56, 56, 128, 128, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 128, 28, 28, 128, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    (1, 256, 28, 28, 256, 256, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 256, 14, 14, 256, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 512, 14, 14, 512, 512, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 512, 7, 7, 512, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
-    #(1, 1024, 7, 7, 1024, 1024, 1, 1, (1, 1), (0, 0, 0, 0), (1, 1)),
+    [1, 0, 14, 14, 512, 256, 3, 3, [2, 2], [1, 1, 1, 1], [1, 1]],
+    [1, 0, 36, 36, 384, 288, 3, 3, [2, 2], [0, 0, 0, 0], [1, 1]],
 ]
 
 
@@ -431,9 +417,9 @@ if __name__ == '__main__':
     tuning_option = {
         "log_filename": log_file,
         "tuner": "xgb",
-        "n_trial": 500,
+        "n_trial": 1000,
         "use_transfer_learning": False,
-        "early_stopping": 500,
+        "early_stopping": 1000,
         "measure_option":
         autotvm.measure_option(
             builder=autotvm.LocalBuilder(

@@ -1,4 +1,5 @@
 from os import environ
+from sys import argv
 
 import numpy as np
 
@@ -7,27 +8,14 @@ from tvm import te
 from tvm import rpc
 from tvm.contrib import utils
 
-
-ARCH_DETAIL = {
-    "max_local_memory_per_block": 181 * 384,
-    "max_shared_memory_per_block": 32768,
-    "max_threads_per_block": 384,
-    "max_thread_x": 384,
-    "max_thread_y": 384,
-    "max_thread_z": 384,
-    "max_vthread": 1,
-    "max_vector_bytes": 16,
-    "buf_top_cache_bytes": 65536,
-    "img_top_cache_bytes": 1024,
-}
-
-
 HOST = environ["DEVICE_THETHERING_IP"]
 PORT = 9090
-REMOTE = rpc.connect(HOST, PORT)
+print(0)
+TRACKER = rpc.connect_tracker("127.0.0.1", PORT)
+print(argv[1])
+REMOTE = TRACKER.request(argv[1] or "", priority=1, session_timeout=5)
+print(2)
 CTXT = REMOTE.cl()
-
-CTXT.set_arch_detail(ARCH_DETAIL)
 
 class DeviceFunction:
     def __init__(self, host_fn):
@@ -71,39 +59,52 @@ def matmul(M, K, N):
         name="C",
     )
     s = te.create_schedule(C.op)
+    AA = s.cache_read(A, "local", [C])
+    BB = s.cache_read(B, "local", [C])
+    CC = s.cache_write(C, "local")
 
-    # Define intrinsic binding.
+    m_item_id, n_item_id = C.op.axis
+    m_global_id, m_unroll_id = s[C].split(m_item_id, factor=2)
+    n_global_id, n_unroll_id = s[C].split(n_item_id, factor=2)
 
-    m_item_id = C.op.axis[0]
-    k_item_id = s[C].op.reduce_axis[0]
-    n_item_id = C.op.axis[1]
-
-    m_vec_id, m_comp_id = s[C].split(m_item_id, factor=4)
-    m_group_id, m_local_id = s[C].split(m_vec_id, factor=8)
-
-    k_vec_id, k_comp_id = s[C].split(k_item_id, factor=4)
-
-    n_global_id, n_unroll_id = s[C].split(n_item_id, factor=4)
-    n_group_id, n_local_id = s[C].split(n_global_id, factor=8)
+    m_group_id, m_local_id = s[C].split(m_global_id, factor=2)
+    n_group_id, n_local_id = s[C].split(n_global_id, factor=2)
 
     s[C].reorder(
         n_group_id,
-        n_local_id,
         m_group_id,
+        n_local_id,
         m_local_id,
-        k_vec_id,
-        k_comp_id,
         n_unroll_id,
-        m_comp_id,
+        m_unroll_id,
     )
 
-    s[C].vectorize(m_comp_id)
-    s[C].unroll(k_comp_id)
-    s[C].unroll(n_unroll_id)
+    s[CC].compute_at(s[C], m_local_id)
     s[C].bind(m_group_id, te.thread_axis("blockIdx.x"))
     s[C].bind(n_group_id, te.thread_axis("blockIdx.y"))
     s[C].bind(m_local_id, te.thread_axis("threadIdx.x"))
     s[C].bind(n_local_id, te.thread_axis("threadIdx.y"))
+
+    s[C].unroll(m_unroll_id)
+    s[C].vectorize(n_unroll_id)
+
+    k_item_id = CC.op.reduce_axis[0]
+    s[AA].compute_at(s[CC], k_item_id)
+    s[BB].compute_at(s[CC], k_item_id)
+
+    m_unroll_id, n_unroll_id = CC.op.axis
+    s[AA].vectorize(s[AA].op.axis[-1])
+    s[BB].vectorize(s[BB].op.axis[-1])
+
+    s[CC].reorder(
+        k_item_id,
+        n_unroll_id,
+        m_unroll_id,
+    )
+    s[CC].unroll(m_unroll_id)
+    s[CC].vectorize(n_unroll_id)
+
+    print(tvm.lower(s, [A, B, C])); assert False
 
     func = tvm.build(s, [A, B, C], "opencl", name="matmul")
 
@@ -116,15 +117,15 @@ def matmul(M, K, N):
 def main():
     print(111)
     # Define schedule.
-    M = tvm.runtime.convert(1024)
-    K = tvm.runtime.convert(1024)
-    N = tvm.runtime.convert(1024)
+    M = tvm.runtime.convert(8)
+    K = tvm.runtime.convert(8)
+    N = tvm.runtime.convert(8)
 
     dev_func = matmul(M, K, N)
 
     # Preview generated CL source.
-    #for src in dev_func.srcs:
-    #    print(src)
+    for src in dev_func.srcs:
+        print(src)
 
     # Run & test.
     A_data = tvm.nd.array(np.random.uniform(size=(K.value * M.value)).astype("float32").reshape(K.value, M.value), CTXT)
