@@ -1108,7 +1108,7 @@ def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out
     # Define autotvm tuning space
     #x.size[-1] == ic_bn must exist, don't change it
     cfg.define_split("tile_ic", in_channel, num_outputs=3,
-                     #filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn
+                     filter=lambda x: x.size[1] <= 12 and x.size[-1] == ic_bn
     )
     cfg.define_split("tile_oc", oc_chunk, num_outputs=2)
     if kernel_height == 1 and kernel_width == 1 and (
@@ -1121,7 +1121,7 @@ def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out
     cfg.define_split("tile_ow",
                      (1+out_width)//2*2,
                      num_outputs=3,
-                     #filter=ow_lambda,
+                     filter=ow_lambda,
                      policy=ow_policy)
     if kernel_height == 1 and kernel_width == 1:
         oh_lambda = lambda y: y.size[-1] == 1 or (y.size[-1] % 2 == 0 and y.size[-1] <= 8)
@@ -1133,7 +1133,7 @@ def nn_conv2d_NCHWc_io(cfg, data, kernel, stride, padding, dilation, layout, out
         "tile_oh",
         (1+out_height)//2*2,
         num_outputs=3,
-        #filter=oh_lambda,
+        filter=oh_lambda,
         policy=oh_policy,
     )
     #for 3x3 or 5x5 or 7x7 convolution

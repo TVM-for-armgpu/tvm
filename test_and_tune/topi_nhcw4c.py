@@ -147,18 +147,15 @@ ARCH_DETAIL = {
     "max_local_memory_per_thread": int(181 * 4),
     "max_shared_memory_per_block": 32768,
     "min_threads_per_block": int(64 * 0.8),
-    "max_threads_per_block": 384,
-    "max_thread_x": 384,
-    "max_thread_y": 384,
-    "max_thread_z": 384,
+    "max_threads_per_block": 1024,
+    "max_thread_x": 1024,
+    "max_thread_y": 1024,
+    "max_thread_z": 1024,
     "max_vthread": 1,
     "max_vector_bytes": 16,
     "max_vector_elems": 4,
     "buf_top_cache_bytes": 65536,
     "img_top_cache_bytes": 1024,
-    "img_alloc_dtype_bytes": 2,
-}
-ARCH_DETAIL = {
     "img_alloc_dtype_bytes": 2,
 }
 
@@ -243,8 +240,7 @@ def tune_tasks(
 ########################################################################
 # Finally, we launch tuning jobs and evaluate the end-to-end performance.
 convshape = [
-    [1, 0, 14, 14, 512, 256, 3, 3, [2, 2], [1, 1, 1, 1], [1, 1]],
-    [1, 0, 36, 36, 384, 288, 3, 3, [2, 2], [0, 0, 0, 0], [1, 1]],
+    [1, 0, 28, 28, 256, 256, 1, 1, [1, 1], [0, 0, 0, 0], [0, 0]],
 ]
 
 

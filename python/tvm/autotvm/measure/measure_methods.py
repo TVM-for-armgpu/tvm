@@ -37,7 +37,7 @@ import tvm.ir.transform
 from tvm import nd, rpc as _rpc
 from tvm.error import TVMError
 from tvm.driver import build
-from tvm.contrib import nvcc, ndk, tar
+from tvm.contrib import nvcc, ndk, tar, stackvm
 
 from ..utils import get_const_tuple
 from ..env import AutotvmGlobalScope
@@ -90,7 +90,7 @@ class LocalBuilder(Builder):
             elif build_func == "ndk":
                 build_func = ndk.create_shared
             elif build_func == "stackvm":
-                build_func = None
+                build_func = stackvm.stackvm
             else:
                 raise ValueError("Invalid build_func" + build_func)
         self.build_func = _WrappedBuildFunc(build_func)
@@ -238,6 +238,10 @@ class RPCRunner(Runner):
 
     def set_task(self, task):
         self.task = task
+        print(task.config_space)
+        for i, x in task.config_space.space_map.items():
+            print(i, x.entities)
+        exit()
 
         while True:
             if check_remote(task.target, self.key, self.host, self.port):
@@ -457,7 +461,7 @@ class _WrappedBuildFunc:
     """
 
     def __init__(self, build_func):
-        if build_func is not None and not hasattr(build_func, "output_format"):
+        if not hasattr(build_func, "output_format"):
             raise AttributeError("Expect build_func to have the attribute output_format.")
         self.build_func = build_func
 
@@ -475,7 +479,7 @@ class _WrappedBuildFunc:
         """
         tic = time.time()
         try:
-            output_format = "stackvm" if self.build_func is None else self.build_func.output_format
+            output_format = self.build_func.output_format
             filename = os.path.join(
                 tmp_dir, "tmp_func_%0x.%s" % (getrandbits(64), output_format)
             )

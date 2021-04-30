@@ -6,7 +6,7 @@ import numpy as np
 import tvm
 from tvm import te
 from tvm import rpc
-from tvm.contrib import utils
+from tvm.contrib import utils, stackvm
 
 HOST = environ["DEVICE_THETHERING_IP"]
 PORT = 9090
@@ -24,7 +24,7 @@ class DeviceFunction:
 
         temp = utils.tempdir()
         path = temp.relpath("lib_cl.stackvm")
-        host_fn.export_library(path)
+        host_fn.export_library(path, stackvm.stackvm)
         REMOTE.upload(path)
         self.dev_fn = REMOTE.load_module("lib_cl.stackvm")
         self.timer = self.dev_fn.time_evaluator(self.dev_fn.entry_name, CTXT, number=10)
@@ -104,7 +104,7 @@ def matmul(M, K, N):
     s[CC].unroll(m_unroll_id)
     s[CC].vectorize(n_unroll_id)
 
-    print(tvm.lower(s, [A, B, C])); assert False
+    #print(tvm.lower(s, [A, B, C])); assert False
 
     func = tvm.build(s, [A, B, C], "opencl", name="matmul")
 
@@ -115,7 +115,6 @@ def matmul(M, K, N):
 
 
 def main():
-    print(111)
     # Define schedule.
     M = tvm.runtime.convert(8)
     K = tvm.runtime.convert(8)
@@ -131,7 +130,6 @@ def main():
     A_data = tvm.nd.array(np.random.uniform(size=(K.value * M.value)).astype("float32").reshape(K.value, M.value), CTXT)
     B_data = tvm.nd.array(np.random.uniform(size=(K.value * N.value)).astype("float32").reshape(K.value, N.value), CTXT)
     C_data = tvm.nd.array(np.zeros((M.value * N.value), dtype="float32").reshape(M.value, N.value), CTXT)
-    print(222)
 
     dev_func(A_data, B_data, C_data)
 
