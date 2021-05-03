@@ -238,10 +238,9 @@ class RPCRunner(Runner):
 
     def set_task(self, task):
         self.task = task
-        print(task.config_space)
-        for i, x in task.config_space.space_map.items():
-            print(i, x.entities)
-        exit()
+        #print(task.config_space)
+        #for i, x in task.config_space.space_map.items():
+        #    print(i, x.entities)
 
         while True:
             if check_remote(task.target, self.key, self.host, self.port):
