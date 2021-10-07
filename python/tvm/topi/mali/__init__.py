@@ -19,6 +19,7 @@
 """ARM Mali GPU specific declaration and schedules."""
 from __future__ import absolute_import as _abs
 
+from .injective import *
 from .conv2d import *
 from .conv2d_nchwc import *
 from .mali_winograd import *
@@ -26,3 +27,4 @@ from .depthwise_conv2d import *
 from .dense import *
 from .softmax import *
 from .pooling import *
+from .reduction import schedule_reduce

@@ -1,6 +1,7 @@
 """Schedule for pooling operators"""
 import tvm
 from tvm import te
+from tvm import autotvm
 from .. import tag
 from ..utils import traverse_inline
 
@@ -95,14 +96,14 @@ def schedule_adaptive_pool(outs, layout="NCHW"):
     traverse(outs[0].op)
     return s
 
-#@autotvm.register_topi_compute("adaptive_pool.mali")
-#def adaptive_pool(_, data, out_dtype=None):
-#    a=0
-#    a=a+1
-#    return a
-#
-#@autotvm.register_topi_schedule("adaptive_pool.mali")
-#def schedule_adaptive_pool(_, data, out_dtype=None):
-#    a=0
-#    a=a+1
-#    return a
+@autotvm.register_topi_compute("adaptive_pool.mali")
+def adaptive_pool(_, data, out_dtype=None):
+   a=0
+   a=a+1
+   return a
+
+@autotvm.register_topi_schedule("adaptive_pool.mali")
+def _schedule_adaptive_pool(_, data, out_dtype=None):
+   a=0
+   a=a+1
+   return a

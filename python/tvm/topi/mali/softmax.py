@@ -16,8 +16,10 @@
 # under the License.
 # pylint: disable=invalid-name, unused-variable, trailing-whitespace
 """Schedule for softmax operator"""
+import tvm
 from tvm.target import Target
-from tvm import te
+from tvm import te, topi
+from tvm import autotvm
 from .. import generic
 
 

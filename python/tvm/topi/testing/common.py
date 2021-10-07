@@ -28,6 +28,7 @@ _injective_schedule = {
     "arm_cpu": topi.arm_cpu.schedule_injective,
     "gpu": topi.cuda.schedule_injective,
     "hls": topi.hls.schedule_injective,
+    "mali": topi.mali.schedule_injective,
 }
 
 _reduce_schedule = {
@@ -35,6 +36,7 @@ _reduce_schedule = {
     "cpu": topi.x86.schedule_reduce,
     "gpu": topi.cuda.schedule_reduce,
     "hls": topi.cuda.schedule_reduce,
+    "mali": topi.mali.schedule_reduce,
 }
 
 

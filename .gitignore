@@ -237,3 +237,8 @@ install/*
 tvm.si4project/*
 build_orig/*
 arm_runtime/*
+
+# debug
+build_x86
+build_arm
+*.cl

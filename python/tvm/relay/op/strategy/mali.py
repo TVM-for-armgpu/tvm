@@ -23,6 +23,28 @@ from .generic import *
 from .. import op as _op
 
 
+@schedule_injective.register("mali")
+def schedule_injective_mali(attrs, outs, target):
+    """schedule injective ops for mali"""
+    with target:
+        return topi.mali.schedule_injective(outs)
+
+# TCY TODO
+@schedule_reduce.register("mali")
+def schedule_reduce_mali(attrs, outs, target):
+    """schedule reduction ops for mali"""
+    with target:
+        return topi.mali.schedule_reduce(outs)
+
+# TCY TODO
+@schedule_concatenate.register("mali")
+def schedule_concatenate_mali(attrs, outs, target):
+    """schedule concatenate for mali"""
+    with target:
+        return topi.mali.schedule_injective(outs)
+        # return topi.mali.schedule_concatenate(outs)
+
+
 @conv2d_strategy.register("mali")
 def conv2d_strategy_mali(attrs, inputs, out_type, target):
     """conv2d mali strategy"""
@@ -33,6 +55,9 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
     groups = attrs.groups
     layout = attrs.data_layout
     kernel_layout = attrs.kernel_layout
+    print(layout)
+    print(kernel_layout)
+
     if dilation_h < 1 or dilation_w < 1:
         raise ValueError("dilation should be positive value")
 
@@ -375,18 +400,18 @@ def dense_strategy_mali(attrs, inputs, out_type, target):
     return strategy
 
 
-#@softmax_strategy.register(["mali1231"])
-#def softmax_strategy_mali(attrs, inputs, out_type, target):
-#    """softmax cuda strategy"""
-#    strategy = _op.OpStrategy()
-#    strategy.add_implementation(
-#        wrap_compute_softmax(topi.nn.softmax),
-#        wrap_topi_schedule(topi.mali.schedule_softmax),
-#        name="softmax.mali",
-#    )
-#    return strategy
+@softmax_strategy.register("mali")
+def softmax_strategy_mali(attrs, inputs, out_type, target):
+   """softmax mali strategy"""
+   strategy = _op.OpStrategy()
+   strategy.add_implementation(
+       wrap_compute_softmax(topi.nn.softmax),
+       wrap_topi_schedule(topi.mali.schedule_softmax),
+       name="softmax.mali",
+   )
+   return strategy
 
-@schedule_adaptive_pool.register(["mali"])
+@schedule_adaptive_pool.register("mali")
 def schedule_adaptive_pool_mali(attrs, outs, target):
     """schedule adaptive pooling ops for mali"""
     with target:
