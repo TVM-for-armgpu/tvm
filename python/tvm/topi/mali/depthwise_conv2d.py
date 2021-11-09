@@ -378,8 +378,17 @@ def _schedule_depthwise_conv2d_NCHWc_impl(s, cfg, pad_data, kernel, conv, op):
             s[data_pack].compute_inline()
     elif isinstance(s[pad_data].op, tvm.te.ComputeOp) and "pack" in pad_data.op.tag:
         s[pad_data].compute_inline()
+    def reverse_compute_inline(outop):
+        if isinstance(s[outop].op, tvm.te.ComputeOp):
+            s[outop].compute_inline()
+        for iop in s[outop].op.input_tensors:
+            reverse_compute_inline(iop)
+
+    reverse_compute_inline(pad_data)
+    reverse_compute_inline(kernel)
     # kernel pack
-    if isinstance(s[kernel].op, tvm.te.ComputeOp) and "pack" in kernel.op.tag:
+    #layout transform, injective, or pad
+    if isinstance(s[kernel].op, tvm.te.ComputeOp):#and "injective" in kernel.op.tag:
         s[kernel].compute_inline()
     ## schedule dilation
     #if isinstance(kernel.op, tvm.te.ComputeOp) and "dilate" in kernel.op.tag:

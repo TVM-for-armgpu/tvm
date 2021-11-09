@@ -86,8 +86,20 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op, from_rf=Fal
     B = op.output(0)
     Apad, W = s[B].op.input_tensors
     #==========
-    if isinstance(s[Apad].op, tvm.te.ComputeOp) and "pad" in Apad.op.tag:
+    #layout tranform injective
+    if isinstance(s[W].op, tvm.te.ComputeOp):  # and "pad" in Apad.op.tag:
+        s[W].compute_inline()
+    if isinstance(s[Apad].op, tvm.te.ComputeOp):# and "pad" in Apad.op.tag:
         s[Apad].compute_inline()
+
+    def reverse_compute_inline(outop):
+        if isinstance(s[outop].op, tvm.te.ComputeOp):
+            s[outop].compute_inline()
+        for iop in s[outop].op.input_tensors:
+            reverse_compute_inline(iop)
+    #consesive layout_trnasform fused and it's injective 
+    reverse_compute_inline(W)
+    reverse_compute_inline(Apad)
     AL = s.cache_read(Apad, "local", [B])
     WL = s.cache_read(W, "local", [B])
     BL = s.cache_write(B, "local")
@@ -164,10 +176,14 @@ def _schedule_conv_NCHWc(s, cfg, data_vec, kernel_vec, conv_out, op, from_rf=Fal
 
 
     at_axis = rco
-    # theoreticallym  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
-    if cfg['cmpat_when_kernel'].val == 2:
+    # theoretically  the condition should be cfg["cmpat_when_kernel"].size[-1]-1, but the current would be better
+    try:
+        cmpat_when_kernel_v = cfg['cmpat_when_kernel'].val
+    except:
+        cmpat_when_kernel_v = cfg['cmpat_when_kernel'].size[-1]
+    if cmpat_when_kernel_v == 2:
         at_axis = kh
-    elif cfg['cmpat_when_kernel'].val == 3:
+    elif cmpat_when_kernel_v == 3:
         at_axis = kw
     s[AL].compute_at(s[BL], at_axis)
     s[WL].compute_at(s[BL], at_axis)

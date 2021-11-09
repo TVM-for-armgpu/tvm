@@ -127,7 +127,10 @@ def schedule_dense_NW4w(cfg, outs):
                 s[B].compute_inline()
                 B = s.outputs[0].output(0)
                 if op.output(0).op not in s.outputs:
-                    Bp,_ = output.op.input_tensors
+                    if len(output.op.input_tensors)==2:
+                        Bp,_ = output.op.input_tensors
+                    else:
+                        Bp, = output.op.input_tensors
                     s[Bp].compute_inline()
                     B = s.outputs[0].output(0)
 
