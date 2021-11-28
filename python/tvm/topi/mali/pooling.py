@@ -1,12 +1,11 @@
 """Schedule for pooling operators"""
 import tvm
 from tvm import te
-from tvm import autotvm
 from .. import tag
 from ..utils import traverse_inline
 
 
-def schedule_adaptive_pool(outs, layout="NCHW"):
+def schedule_adaptive_pool(outs):
     """Schedule for adaptive_pool.
 
     Parameters
@@ -20,90 +19,156 @@ def schedule_adaptive_pool(outs, layout="NCHW"):
     s: Schedule
         The computation schedule for adaptive_pool.
     """
+    layout = "NCHW4c"
+    s = te.create_schedule(outs.op)
+
+    B = outs
+    if tag.is_broadcast(B.op.tag):
+        TBUF = s[B].op.input_tensors[0]
+        n, c, h, w, p4 = s[B].op.axis
+        cpo, cpi = s[B].split(c, factor=1)
+        s[B].bind(cpo, te.thread_axis("blockIdx.x"))
+        s[B].bind(cpi, te.thread_axis("threadIdx.x"))
+        s[B].reorder(cpo, cpi, n)
+        s[B].vectorize(p4)
+        s[TBUF].compute_at(s[B], n)
+        n, c, h, w, p4 = s[TBUF].op.axis
+        s[TBUF].vectorize(p4)
+    elif B.op.tag.startswith("adaptive_pool"):
+        n, c, h, w, p4 = s[B].op.axis
+        BL = s.cache_write(B, "local")
+        cpo, cpi = s[B].split(c, factor=1)
+        s[B].bind(cpo, te.thread_axis("blockIdx.x"))
+        s[B].bind(cpi, te.thread_axis("threadIdx.x"))
+        s[B].reorder(cpo, cpi, n)
+        s[B].vectorize(p4)
+        s[BL].compute_at(s[B], n)
+        n, c, h, w, p4 = s[BL].op.axis
+        s[BL].reorder(c, h, w, n)
+        s[BL].vectorize(p4)
+
+
+    else:
+        raise RuntimeError("Unsupported operator: %s" % B.op.tag)
+
+    return s
+
+def schedule_pool(outs):
+    """Schedule for pool.
+
+    Parameters
+    ----------
+    outs: Array of Tensor
+        The computation graph description of pool
+        in the format of an array of tensors.
+
+    layout: str
+        Data layout.
+
+    Returns
+    -------
+    s: Schedule
+        The computation schedule for pool.
+    """
+    layout = "NCHW4c"
+    s = te.create_schedule(outs.op)
+
+    B = outs
+    # inline all one-to-one-mapping operators except the last stage (output)
+    if tag.is_broadcast(B.op.tag):    # avg - True, max - False
+        TBUF = s[B].op.input_tensors[0]
+        n, c, h, w, p4 = s[B].op.axis
+        cpo, cpi = s[B].split(c, factor=1)
+        hpo, hpi = s[B].split(h, factor=1)
+        wpo, wpi = s[B].split(w, factor=1)
+
+        s[B].bind(cpo, te.thread_axis("blockIdx.z"))
+        s[B].bind(cpi, te.thread_axis("threadIdx.z"))
+        s[B].bind(hpi, te.thread_axis("blockIdx.y"))
+        s[B].bind(hpo, te.thread_axis("threadIdx.y"))
+        s[B].bind(wpi, te.thread_axis("blockIdx.x"))
+        s[B].bind(wpo, te.thread_axis("threadIdx.x"))
+        s[B].reorder(wpi, hpo, cpo, cpi, hpi, wpo, n)
+        s[B].vectorize(p4)
+
+        s[TBUF].compute_at(s[B], n)
+        n, c, h, w, p4 = s[TBUF].op.axis
+        dh, dw = s[TBUF].op.reduce_axis
+        s[TBUF].reorder(c, h, w, n)
+        s[TBUF].vectorize(p4)
+        s[TBUF].unroll(dh)
+        s[TBUF].unroll(dw)
+    # schedule pool
+    elif B.op.tag == 'pool_max':
+        OL = s.cache_write(B, "local")
+        n, c, h, w, p4 = s[B].op.axis
+        cpo, cpi = s[B].split(c, factor=1)
+        hpo, hpi = s[B].split(h, factor=1)
+        wpo, wpi = s[B].split(w, factor=1)
+        s[B].bind(cpo, te.thread_axis("blockIdx.z"))
+        s[B].bind(cpi, te.thread_axis("threadIdx.z"))
+        s[B].bind(hpi, te.thread_axis("blockIdx.y"))
+        s[B].bind(hpo, te.thread_axis("threadIdx.y"))
+        s[B].bind(wpi, te.thread_axis("blockIdx.x"))
+        s[B].bind(wpo, te.thread_axis("threadIdx.x"))
+        s[B].reorder(wpi, hpo, cpo, cpi, hpi, wpo, n)
+        s[B].vectorize(p4)
+
+        s[OL].compute_at(s[B], n)
+        n, c, h, w, p4 = s[OL].op.axis
+        dh, dw = s[OL].op.reduce_axis
+        s[OL].reorder(c, h, w, n)
+        s[OL].vectorize(p4)
+        s[OL].unroll(dh)
+        s[OL].unroll(dw)
+    else:
+        raise RuntimeError("Unsupported operator: %s" % B.op.tag)
+
+    return s
+
+def schedule_pool_grad(outs):
+    """Schedule for pool_grad on mali
+    TCYTODO
+    Parameters
+    ----------
+    outs: Array of Tensor
+        The computation graph description of pool_grad
+        in the format of an array of tensors.
+
+    Returns
+    -------
+    s: Schedule
+        The computation schedule for pool_grad.
+    """
     outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
     s = te.create_schedule([x.op for x in outs])
 
-    def _schedule(Pool):
-        num_thread = 8
-        block_x = te.thread_axis("blockIdx.x")
-        block_y = te.thread_axis("blockIdx.y")
-        thread_x = te.thread_axis((0, num_thread), "threadIdx.x")
-        thread_y = te.thread_axis((0, num_thread), "threadIdx.y")
-        if Pool.op in s.outputs:
-            Out = Pool
-            OL = s.cache_write(Pool, "local")
+    def _schedule_pool_grad(op):
+        if op in s.outputs:
+            out = op
         else:
-            Out = outs[0].op.output(0)
-            s[Pool].set_scope("local")
-        if len(s[Out].op.axis) == 5:
-            Pool_in = Pool.op.input_tensors[0]
-            #Pool_inL = s.cache_read(Pool_in, "local", [Pool])
-            n,cp,hp,wp,bcn4 = s[Out].op.axis
-        else:
-            n,cp,hp,wp = s[Out].op.axis
-        by, ty = s[Out].split(n, factor=num_thread)
-        if layout == "NHWC":
-            bx, tx = s[Out].split(s[Out].op.axis[3], factor=num_thread)
-        elif layout == "NCHW4c":
-            bx, tx = s[Out].split(cp, factor=num_thread)
-        else:
-            bx, tx = s[Out].split(s[Out].op.axis[1], factor=num_thread)
-        if len(s[Out].op.axis) == 5:
-            s[Out].reorder(by, bx, ty, tx, hp, wp, bcn4)
-        else:
-            s[Out].reorder(by, bx, ty, tx)
-        s[Out].bind(ty, thread_y)
-        s[Out].bind(tx, thread_x)
-        s[Out].bind(by, block_y)
-        s[Out].bind(bx, block_x)
-        if Pool.op in s.outputs:
-            s[OL].compute_at(s[Out], tx)
-            PoolL = OL
-        else:
-            s[Pool].compute_at(s[Out], hp)
-            Pool.dtype = "float32"
-            PoolL = Pool
-        if len(s[Out].op.axis) == 5:
-            _, cp, h, w, bn4 = s[PoolL].op.axis
-            s[PoolL].reorder(cp, h, w, bn4)
-            s[PoolL].vectorize(bn4)
-            #_, cp, h, w, bn4 = s[Out].op.axis
-            #s[Out].reorder(cp, h, w, bn4)
-            s[Out].vectorize(bcn4)
+            out = outs[0].op.output(0)
+        fused = s[out].fuse(*s[out].op.axis)
+        num_thread = tvm.target.Target.current(allow_none=False).max_num_threads
+        bx, tx = s[out].split(fused, factor=num_thread)
+        s[out].bind(bx, te.thread_axis("blockIdx.x"))
+        s[out].bind(tx, te.thread_axis("threadIdx.x"))
 
+        if tag.COMM_REDUCE_IDX in op.input_tensors[0].op.tag:
+            max_pool_index = op.input_tensors[0]
+            s[max_pool_index].compute_at(s[out], tx)
 
-    scheduled_ops = []
+            pool_input = max_pool_index.op.input_tensors[0]
+            if isinstance(pool_input.op, tvm.te.ComputeOp):
+                # handle padding
+                s[pool_input].compute_inline()
+        if op not in s.outputs:
+            s[op].compute_at(s[out], tx)
 
-    def traverse(OP):
-        """Internal traverse function"""
-        # inline all one-to-one-mapping operators except the last stage (output)
-        if tag.is_broadcast(OP.tag):
-            if OP not in s.outputs:
-                s[OP].compute_inline()
-            for tensor in OP.input_tensors:
-                if isinstance(tensor.op, te.tensor.ComputeOp
-                              ) and tensor.op not in scheduled_ops:
-                    traverse(tensor.op)
-        # schedule global_pool
-        elif OP.tag.startswith("adaptive_pool"):
-            Pool = OP.output(0)
-            _schedule(Pool)
-        else:
-            raise RuntimeError("Unsupported operator: %s" % OP.tag)
+    def _callback(op):
+        if op.tag.startswith("pool_grad"):
+            _schedule_pool_grad(op)
 
-        scheduled_ops.append(OP)
+    traverse_inline(s, outs[0].op, _callback)
 
-    traverse(outs[0].op)
     return s
-
-@autotvm.register_topi_compute("adaptive_pool.mali")
-def adaptive_pool(_, data, out_dtype=None):
-   a=0
-   a=a+1
-   return a
-
-@autotvm.register_topi_schedule("adaptive_pool.mali")
-def _schedule_adaptive_pool(_, data, out_dtype=None):
-   a=0
-   a=a+1
-   return a

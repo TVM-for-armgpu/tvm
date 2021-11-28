@@ -411,6 +411,20 @@ def softmax_strategy_mali(attrs, inputs, out_type, target):
    )
    return strategy
 
+
+@schedule_pool.register("mali")
+def schedule_pool_mali(attrs, outs, target):
+    """schedule pooling ops for mali"""
+    with target:
+        return topi.mali.schedule_pool(outs, attrs.layout)
+
+
+@schedule_pool_grad.register("mali")
+def schedule_pool_grad_mali(attrs, outs, target):
+    """schedule pooling gradient ops for mali"""
+    with target:
+        return topi.mali.schedule_pool_grad(outs)
+
 @schedule_adaptive_pool.register("mali")
 def schedule_adaptive_pool_mali(attrs, outs, target):
     """schedule adaptive pooling ops for mali"""
