@@ -55,8 +55,6 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
     groups = attrs.groups
     layout = attrs.data_layout
     kernel_layout = attrs.kernel_layout
-    print(layout)
-    print(kernel_layout)
 
     if dilation_h < 1 or dilation_w < 1:
         raise ValueError("dilation should be positive value")
@@ -133,7 +131,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                             topi.mali.conv2d_nchw_winograd_nchwc_conv3x3_io),
                         wrap_topi_schedule(
                             topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io),
-                        name="conv2d_nchw_winograd_nchwc_io.mali",
+                        name="conv2d_nchw_winograd_NCHWc_io.mali",
                         plevel=15,
                     )
             elif re.match(r"OIHW\d*o", kernel_layout):
@@ -221,7 +219,7 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
                             topi.mali.conv2d_nchw_winograd_NCHWc_io, True, True),
                         wrap_topi_schedule(
                             topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io),
-                        name="conv2d_nchw_winograd_NCHWC_io.mali",
+                        name="conv2d_nchw_winograd_NCHWc_io.mali",
                         plevel=20,
                     )
                 else:
@@ -357,7 +355,7 @@ def conv2d_winograd_without_weight_transfrom_strategy_mali(attrs, inputs, out_ty
         assert len(
             kernel.shape) == 6, "Kernel must be packed into 6d-dim nchwc1i4o"
         strategy.add_implementation(
-            wrap_compute_conv2d(topi.mali.conv2d_nchw_winograd_nchwc_io,True,True),
+            wrap_compute_conv2d(topi.mali.conv2d_nchw_winograd_NCHWc_io,True,True),
             wrap_topi_schedule(
                 topi.mali.schedule_conv2d_nchw_winograd_NCHWc_io),
             name="conv2d_nchw_winograd_NCHWc_io.mali",
@@ -416,7 +414,7 @@ def softmax_strategy_mali(attrs, inputs, out_type, target):
 def schedule_pool_mali(attrs, outs, target):
     """schedule pooling ops for mali"""
     with target:
-        return topi.mali.schedule_pool(outs)
+        return topi.mali.schedule_pool(outs, attrs.layout)
 
 
 @schedule_pool_grad.register("mali")
@@ -429,4 +427,4 @@ def schedule_pool_grad_mali(attrs, outs, target):
 def schedule_adaptive_pool_mali(attrs, outs, target):
     """schedule adaptive pooling ops for mali"""
     with target:
-        return topi.mali.schedule_adaptive_pool(outs)
+        return topi.mali.schedule_adaptive_pool(outs, attrs.layout)

@@ -16,7 +16,6 @@
 # under the License.
 # pylint: disable=invalid-name,unused-variable,too-many-locals,len-as-condition
 """Schedule for reduce operators"""
-"""TODO reduction"""
 from __future__ import absolute_import as _abs
 import tvm
 from tvm import te
@@ -24,6 +23,7 @@ from .. import tag
 from .injective import schedule_injective_from_existing
 
 
+"""TODO reduction"""
 def _schedule_reduce(op, sch, is_idx_reduce=False):
     if is_idx_reduce:
         data_out = op.input_tensors[0]

@@ -5,7 +5,7 @@ from .. import tag
 from ..utils import traverse_inline
 
 
-def schedule_adaptive_pool(outs):
+def schedule_adaptive_pool(outs, layout):
     """Schedule for adaptive_pool.
 
     Parameters
@@ -19,23 +19,37 @@ def schedule_adaptive_pool(outs):
     s: Schedule
         The computation schedule for adaptive_pool.
     """
-    layout = "NCHW4c"
-    s = te.create_schedule(outs.op)
+    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
+    s = te.create_schedule([x.op for x in outs])
 
-    B = outs
+    B = outs[0]
     if tag.is_broadcast(B.op.tag):
         TBUF = s[B].op.input_tensors[0]
-        n, c, h, w, p4 = s[B].op.axis
+        if (layout == "NCHW"):
+            print("Pool NCHW")
+            n, c, h, w = s[B].op.axis
+            c, p4 = s[B].split(c, factor=4)
+        else:
+            print("Pool NCHW4C")
+            n, c, h, w, p4 = s[B].op.axis
         cpo, cpi = s[B].split(c, factor=1)
         s[B].bind(cpo, te.thread_axis("blockIdx.x"))
         s[B].bind(cpi, te.thread_axis("threadIdx.x"))
         s[B].reorder(cpo, cpi, n)
         s[B].vectorize(p4)
         s[TBUF].compute_at(s[B], n)
-        n, c, h, w, p4 = s[TBUF].op.axis
+        if (layout == "NCHW"):
+            n, c, h, w = s[TBUF].op.axis
+            c, p4 = s[TBUF].split(c, factor=4)
+        else:
+            n, c, h, w, p4 = s[TBUF].op.axis
         s[TBUF].vectorize(p4)
     elif B.op.tag.startswith("adaptive_pool"):
-        n, c, h, w, p4 = s[B].op.axis
+        if (layout == "NCHW"):
+            n, c, h, w = s[B].op.axis
+            c, p4 = s[B].split(c, factor=4)
+        else:
+            n, c, h, w, p4 = s[B].op.axis
         BL = s.cache_write(B, "local")
         cpo, cpi = s[B].split(c, factor=1)
         s[B].bind(cpo, te.thread_axis("blockIdx.x"))
@@ -43,7 +57,11 @@ def schedule_adaptive_pool(outs):
         s[B].reorder(cpo, cpi, n)
         s[B].vectorize(p4)
         s[BL].compute_at(s[B], n)
-        n, c, h, w, p4 = s[BL].op.axis
+        if (layout == "NCHW"):
+            n, c, h, w = s[BL].op.axis
+            c, p4 = s[BL].split(c, factor=4)
+        else:
+            n, c, h, w, p4 = s[BL].op.axis
         s[BL].reorder(c, h, w, n)
         s[BL].vectorize(p4)
 
@@ -53,7 +71,7 @@ def schedule_adaptive_pool(outs):
 
     return s
 
-def schedule_pool(outs):
+def schedule_pool(outs, layout):
     """Schedule for pool.
 
     Parameters
@@ -70,14 +88,19 @@ def schedule_pool(outs):
     s: Schedule
         The computation schedule for pool.
     """
-    layout = "NCHW4c"
-    s = te.create_schedule(outs.op)
+    outs = [outs] if isinstance(outs, te.tensor.Tensor) else outs
+    print(layout)
+    s = te.create_schedule(outs[0].op)
 
-    B = outs
+    B = outs[0]
     # inline all one-to-one-mapping operators except the last stage (output)
     if tag.is_broadcast(B.op.tag):    # avg - True, max - False
         TBUF = s[B].op.input_tensors[0]
-        n, c, h, w, p4 = s[B].op.axis
+        if (layout == "NCHW"):
+            n, c, h, w = s[B].op.axis
+            c, p4 = s[B].split(c, factor=4)
+        else:
+            n, c, h, w, p4 = s[B].op.axis
         cpo, cpi = s[B].split(c, factor=1)
         hpo, hpi = s[B].split(h, factor=1)
         wpo, wpi = s[B].split(w, factor=1)
@@ -92,12 +115,16 @@ def schedule_pool(outs):
         s[B].vectorize(p4)
 
         s[TBUF].compute_at(s[B], n)
-        n, c, h, w, p4 = s[TBUF].op.axis
-        dh, dw = s[TBUF].op.reduce_axis
+        if (layout == "NCHW"):
+            n, c, h, w = s[TBUF].op.axis
+            c, p4 = s[TBUF].split(c, factor=4)
+        else:
+            n, c, h, w, p4 = s[TBUF].op.axis
+        # dh, dw = s[TBUF].op.reduce_axis
         s[TBUF].reorder(c, h, w, n)
         s[TBUF].vectorize(p4)
-        s[TBUF].unroll(dh)
-        s[TBUF].unroll(dw)
+        # s[TBUF].unroll(dh)
+        # s[TBUF].unroll(dw)
     # schedule pool
     elif B.op.tag == 'pool_max':
         OL = s.cache_write(B, "local")
@@ -115,7 +142,11 @@ def schedule_pool(outs):
         s[B].vectorize(p4)
 
         s[OL].compute_at(s[B], n)
-        n, c, h, w, p4 = s[OL].op.axis
+        if (layout == "NCHW"):
+            n, c, h, w = s[OL].op.axis
+            c, p4 = s[OL].split(c, factor=4)
+        else:
+            n, c, h, w, p4 = s[OL].op.axis
         dh, dw = s[OL].op.reduce_axis
         s[OL].reorder(c, h, w, n)
         s[OL].vectorize(p4)

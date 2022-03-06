@@ -1380,9 +1380,9 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         strides, (tuple, list)) else (strides, strides)
     pt, pl, pb, pr = nn.get_pad_tuple(padding, (KH, KW))
 
-    assert (KH == 3 or KH == 4
-            or KH == 6) and (KW == 3 or KW == 4
-                             or KW == 6) and HSTR == 1 and WSTR == 1
+    # assert (KH == 3 or KH == 4
+    #         or KH == 6) and (KW == 3 or KW == 4
+    #                          or KW == 6) and HSTR == 1 and WSTR == 1
 
     def pack_n(n_e, n_p):
         return (n_e + n_p - 1) // n_p * n_p
@@ -1908,15 +1908,18 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
             weight_expr, tile_size=tile_size
         )
         #TODO results is not correct yet
-        weight_expr = relay.reshape(weight_expr,
-                                    newshape=(
-                                        CI,
-                                        idxd(CO, VC),
-                                        KH + tile_size - 1,
-                                        KW + tile_size - 1,
-                                        1,
-                                        VC,
-                                    ))
+        # print("relay.reshape")
+        # print(weight_expr)
+        # weight_expr = relay.reshape(weight_expr,
+        #                             newshape=(
+        #                                 CI,
+        #                                 idxd(CO, VC),
+        #                                 KH + tile_size - 1,
+        #                                 KW + tile_size - 1,
+        #                                 1,
+        #                                 VC,
+        #                             ))
+        # print(weight_expr)
         #weight_expr = relay.transpose(weight_expr, axes=[0, 1, 2, 4, 3])
         data_expr = relay.reshape(data_expr,
                                   newshape=(
