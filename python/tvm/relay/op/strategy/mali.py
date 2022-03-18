@@ -23,20 +23,21 @@ from .generic import *
 from .. import op as _op
 
 
+# injective schedule for mali
 @schedule_injective.register("mali")
 def schedule_injective_mali(attrs, outs, target):
     """schedule injective ops for mali"""
     with target:
         return topi.mali.schedule_injective(outs)
 
-# TCY TODO
+# TODO
 @schedule_reduce.register("mali")
 def schedule_reduce_mali(attrs, outs, target):
     """schedule reduction ops for mali"""
     with target:
         return topi.mali.schedule_reduce(outs)
 
-# TCY TODO
+# TODO
 @schedule_concatenate.register("mali")
 def schedule_concatenate_mali(attrs, outs, target):
     """schedule concatenate for mali"""
@@ -55,7 +56,6 @@ def conv2d_strategy_mali(attrs, inputs, out_type, target):
     groups = attrs.groups
     layout = attrs.data_layout
     kernel_layout = attrs.kernel_layout
-
     if dilation_h < 1 or dilation_w < 1:
         raise ValueError("dilation should be positive value")
 
@@ -398,6 +398,7 @@ def dense_strategy_mali(attrs, inputs, out_type, target):
     return strategy
 
 
+# new op register
 @softmax_strategy.register("mali")
 def softmax_strategy_mali(attrs, inputs, out_type, target):
    """softmax mali strategy"""

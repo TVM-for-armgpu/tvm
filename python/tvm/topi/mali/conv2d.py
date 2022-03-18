@@ -1380,6 +1380,7 @@ def conv2d_nchw_winograd_NCHWc_io(cfg, data, kernel, strides, padding, dilation,
         strides, (tuple, list)) else (strides, strides)
     pt, pl, pb, pr = nn.get_pad_tuple(padding, (KH, KW))
 
+    # commented: have problem when running resnet
     # assert (KH == 3 or KH == 4
     #         or KH == 6) and (KW == 3 or KW == 4
     #                          or KW == 6) and HSTR == 1 and WSTR == 1
@@ -1908,8 +1909,7 @@ def _alter_conv2d_layout(attrs, inputs, tinfos, out_type):
             weight_expr, tile_size=tile_size
         )
         #TODO results is not correct yet
-        # print("relay.reshape")
-        # print(weight_expr)
+        # there would be an auto reshape, so we don't need this step
         # weight_expr = relay.reshape(weight_expr,
         #                             newshape=(
         #                                 CI,
